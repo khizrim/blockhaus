@@ -54,31 +54,27 @@ export default function Win() {
           </Animated.View>
           <Animated.View entering={FadeInDown.delay(900)} style={{ alignItems: 'center', gap: 6 }}>
             <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: 26, color: c.text }}>
-              You made 96
+              Вы собрали 96
             </Text>
             <Body muted style={{ textAlign: 'center' }}>
-              The board is yours. Keep going for score, or start fresh.
+              Можно играть дальше на очки или начать новую партию.
             </Body>
           </Animated.View>
           <View style={{ flexDirection: 'row', gap: 24 }}>
             <View style={{ alignItems: 'center', gap: 4 }}>
-              <Label>Score</Label>
-              <Text style={{ fontFamily: font.tile, fontSize: 20, color: c.text }}>2,410</Text>
+              <Label>Очки</Label>
+              <Text style={{ fontFamily: font.tile, fontSize: 20, color: c.text }}>2 410</Text>
             </View>
             <View style={{ alignItems: 'center', gap: 4 }}>
-              <Label>Merges</Label>
+              <Label>Слияния</Label>
               <Text style={{ fontFamily: font.tile, fontSize: 20, color: c.text }}>260</Text>
-            </View>
-            <View style={{ alignItems: 'center', gap: 4 }}>
-              <Label>Time</Label>
-              <Text style={{ fontFamily: font.tile, fontSize: 20, color: c.text }}>14:32</Text>
             </View>
           </View>
         </View>
         <View style={{ gap: 10, marginTop: 20 }}>
-          <Button kind="primary" tone={8} size="lg" label="Keep going" onPress={() => router.back()} />
+          <Button kind="primary" tone={8} size="lg" label="Играть дальше" onPress={() => router.back()} />
           <Button
-            label="New game"
+            label="Новая игра"
             onPress={() => {
               router.dismissAll();
               router.replace({ pathname: '/game', params: { scene: 'early' } });

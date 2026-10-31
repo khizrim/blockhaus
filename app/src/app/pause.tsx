@@ -17,33 +17,33 @@ export default function Pause() {
 
   return (
     <Overlay onDismiss={() => router.back()}>
-      <Panel accent={3}>
+      <Panel>
         <Heading size={24} style={{ marginBottom: 18 }}>
-          Paused
+          Пауза
         </Heading>
         <View style={{ gap: 10 }}>
-          <Button kind="primary" size="lg" label="Resume" onPress={() => router.back()} />
-          <Button label="Restart" onPress={() => openScene('early')} />
+          <Button kind="primary" size="lg" label="Продолжить" onPress={() => router.back()} />
+          <Button label="Начать заново" onPress={() => openScene('early')} />
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Button style={{ flex: 1 }} label="How to play" onPress={() => router.push('/howto')} />
-            <Button style={{ flex: 1 }} label="Settings" onPress={() => router.push('/settings')} />
+            <Button style={{ flex: 1 }} label="Как играть" onPress={() => router.push('/howto')} />
+            <Button style={{ flex: 1 }} label="Настройки" onPress={() => router.push('/settings')} />
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 }}>
-            <Text style={{ fontFamily: font.bodySemi, fontSize: 15, color: c.text }}>Sound</Text>
-            <Toggle label="Sound" value={sound} onChange={setSound} />
+            <Text style={{ fontFamily: font.bodySemi, fontSize: 15, color: c.text }}>Звук</Text>
+            <Toggle label="Звук" value={sound} onChange={setSound} />
           </View>
-          <Button kind="ghost" label="Quit to menu" onPress={() => router.dismissTo('/')} />
+          <Button kind="ghost" label="Выйти в меню" onPress={() => router.dismissTo('/')} />
         </View>
 
         {/* Prototype only: jump between still positions and end screens. */}
         <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 2, borderColor: c.fold, gap: 8 }}>
-          <Label>Prototype scenes</Label>
+          <Label>Сцены прототипа</Label>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {scenes.map((s) => (
               <Chip key={s.key} label={s.title} on={s.key === (scene ?? 'play')} onPress={() => openScene(s.key)} />
             ))}
-            <Chip label="Win screen" onPress={() => router.replace('/win')} />
-            <Chip label="Game over" onPress={() => router.replace('/over')} />
+            <Chip label="Победа" onPress={() => router.replace('/win')} />
+            <Chip label="Проигрыш" onPress={() => router.replace('/over')} />
           </View>
         </View>
       </Panel>

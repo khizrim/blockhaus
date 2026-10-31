@@ -65,7 +65,7 @@ export default function Kit() {
           <Wordmark size={22} />
           <Text style={{ fontFamily: font.black, fontSize: 44, color: c.text }}>1,840</Text>
           <Heading>Poster heading</Heading>
-          <Body>Dela Gothic One for the name, headings and big numbers. Onest for text. Archivo, widened, stays on the tiles.</Body>
+          <Body>Dela Gothic One for the name, headings and every number, tiles included. Onest for text.</Body>
           <Label>Label · uppercase</Label>
         </Block>
 

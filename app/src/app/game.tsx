@@ -12,7 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { Field, type CellLook } from '@/components/Field';
-import { Arrow, IconButton, Label, Ladder, PauseIcon, Screen, TileBadge, Wordmark } from '@/components/ui';
+import { Arrow, IconButton, Label, PauseIcon, Screen, TileBadge } from '@/components/ui';
 import { N, pieceGrid, sceneByKey, type Piece } from '@/design/mock';
 import { useTheme } from '@/design/theme';
 import { font, pairs } from '@/design/tokens';
@@ -25,6 +25,8 @@ import { font, pairs } from '@/design/tokens';
 // On the web a drag would otherwise select the numbers.
 const noSelect = { userSelect: 'none' } as object;
 
+const SWEEP_LABEL = { left: 'Сдвиг влево', right: 'Сдвиг вправо', up: 'Сдвиг вверх', down: 'Сдвиг вниз' };
+
 type Hold = { slot: number; piece: Piece; x: number; y: number };
 
 export default function Game() {
@@ -36,7 +38,7 @@ export default function Game() {
   const [board, setBoard] = useState<number[]>(scene.board);
   const [tray, setTray] = useState<(Piece | null)[]>(scene.tray);
   const [sweeps, setSweeps] = useState(scene.sweeps);
-  const [hint, setHint] = useState('Drag a piece onto the board.');
+  const [hint, setHint] = useState('Перетащите фигуру на доску.');
   const [pops, setPops] = useState<Record<number, number>>({});
   const [lands, setLands] = useState<Record<number, number>>({});
   const [hold, setHold] = useState<Hold | null>(null);
@@ -57,9 +59,10 @@ export default function Game() {
   // Sizing: the board takes the width, but leaves the tray within thumb reach.
   const inner = Math.min(width, 440) - 32;
   const gap = Math.round(Math.min(7, Math.max(5, width * 0.015)));
-  const boardSize = Math.max(240, Math.min(inner, height - 390));
+  const boardSize = Math.max(240, Math.min(inner, height - 360));
   const cell = Math.floor((boardSize - gap) / N);
-  const trayCell = Math.min(26, Math.floor(inner / 3 / 4));
+  // Pieces in the tray at about half the board's cell, so they read as the same things.
+  const trayCell = Math.min(Math.floor(cell * 0.7), Math.floor(inner / 3 / 3.3));
 
   const best = Math.max(...board, 0);
 
@@ -108,7 +111,7 @@ export default function Game() {
     dy.value = withTiming(pageY - oy, { duration: 120 });
     lift.value = withSpring(1, { damping: 14, stiffness: 300 });
     setHold({ slot, piece: p, x: pageX, y: pageY });
-    setHint('Partners stay bright. Everything else steps back.');
+    setHint('Яркие плитки: с ними фигура сольётся.');
   };
 
   const move = (pageX: number, pageY: number) => {
@@ -140,10 +143,10 @@ export default function Game() {
         return nt.every((p) => !p || p.used) ? scene.tray.map((p) => (p ? { ...p, used: false } : p)) : nt;
       });
       lift.value = 0;
-      setHint('Placed. No rules run yet, so nothing merges.');
+      setHint('Фигура на месте. Правил пока нет, ничего не сливается.');
     } else {
       lift.value = withTiming(0, { duration: 160 });
-      setHint('No room there.');
+      setHint('Здесь не помещается.');
     }
     setHold(null);
     setTarget(null);
@@ -217,7 +220,7 @@ export default function Game() {
     sx.value = withSequence(withTiming(vx, { duration: 90 }), withTiming(0, back));
     sy.value = withSequence(withTiming(vy, { duration: 90 }), withTiming(0, back));
     setSweeps((s) => s - 1);
-    setHint(sweeps === 1 ? 'No sweeps left. Finishing this tray brings two more.' : 'Swept. The real slide comes with the rules.');
+    setHint(sweeps === 1 ? 'Сдвигов больше нет. Новый лоток даст ещё два.' : 'Сдвиг. Настоящее движение появится вместе с правилами.');
   };
 
   const tapCell = (i: number) => {
@@ -227,37 +230,24 @@ export default function Game() {
   return (
     <View style={[{ flex: 1 }, noSelect]}>
       <Screen>
-        {/* header */}
-        <View style={{ gap: 6 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Pressable onPress={() => router.back()} accessibilityLabel="Back to menu" hitSlop={8}>
-              <Wordmark size={16} />
-            </Pressable>
-            <IconButton
-              label="Pause"
-              size={38}
-              onPress={() => router.push({ pathname: '/pause', params: { scene: scene.key } })}>
+        {/* header: one row. The score is the hero, the best tile is the progress. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Pressable onPress={() => router.back()} accessibilityLabel="В меню" hitSlop={8}>
+            <Text
+              allowFontScaling={false}
+              style={{ fontFamily: font.black, fontSize: Math.min(48, width * 0.12), lineHeight: Math.min(56, width * 0.14), color: c.text }}>
+              {scene.score.toLocaleString('ru-RU')}
+            </Text>
+          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ alignItems: 'flex-end', gap: 3 }}>
+              <Label>лучшая</Label>
+              <TileBadge v={best} size={26} />
+            </View>
+            <IconButton label="Пауза" size={44} onPress={() => router.push({ pathname: '/pause', params: { scene: scene.key } })}>
               <PauseIcon color={c.text} />
             </IconButton>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-            <Text
-              allowFontScaling={false}
-              style={{ fontFamily: font.black, fontSize: Math.min(46, width * 0.11), lineHeight: Math.min(50, width * 0.12), color: c.text }}>
-              {scene.score.toLocaleString('en-US')}
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 14, paddingBottom: 4 }}>
-              <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                <Label>Merges</Label>
-                <Text style={{ fontFamily: font.tile, fontSize: 17, color: c.text }}>{scene.merges}</Text>
-              </View>
-              <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                <Label>Best</Label>
-                <TileBadge v={best} />
-              </View>
-            </View>
-          </View>
-          <Ladder best={best} />
         </View>
 
         {/* board */}
@@ -284,11 +274,11 @@ export default function Game() {
         {/* sweeps */}
         <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 12 }}>
           {(['left', 'down', 'up', 'right'] as const).map((d) => (
-            <IconButton key={d} label={`Sweep ${d}`} size={40} disabled={sweeps === 0} onPress={() => sweep(d)}>
+            <IconButton key={d} label={SWEEP_LABEL[d]} size={40} disabled={sweeps === 0} onPress={() => sweep(d)}>
               <Arrow dir={d} color={c.text} s={16} />
             </IconButton>
           ))}
-          <View style={{ flexDirection: 'row', gap: 4, marginLeft: 6 }} accessibilityLabel={`${sweeps} sweeps left`}>
+          <View style={{ flexDirection: 'row', gap: 4, marginLeft: 6 }} accessibilityLabel={`Сдвигов осталось: ${sweeps}`}>
             {[0, 1].map((k) => (
               <View
                 key={k}
@@ -308,7 +298,7 @@ export default function Game() {
         <View
           style={{
             marginTop: 'auto',
-            height: 96,
+            height: trayCell * 3 + 28,
             flexDirection: 'row',
             borderTopWidth: gap,
             borderBottomWidth: gap,
@@ -329,7 +319,7 @@ export default function Game() {
                 <Animated.View
                   key={p.used ? 'used' : 'live'}
                   entering={p.used ? undefined : FadeIn.duration(220)}
-                  style={{ opacity: p.used ? 0.1 : hold?.slot === slot ? 0 : 1 }}>
+                  style={{ opacity: p.used || hold?.slot === slot ? 0 : 1 }}>
                   <Field variant="piece" {...pieceGrid(p)} cell={trayCell} gap={gap} />
                 </Animated.View>
               ) : null}

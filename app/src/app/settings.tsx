@@ -18,16 +18,16 @@ export default function Settings() {
   return (
     <View style={{ flex: 1 }}>
     <Screen>
-      <TopBar title="Settings" onBack={() => router.back()} />
+      <TopBar title="Настройки" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={{ gap: 26, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <Section title="Look">
+        <Section title="Тема">
           <Segmented<ThemeMode>
             value={t.mode}
             onChange={t.setMode}
             options={[
-              { value: 'system', label: 'System' },
-              { value: 'light', label: 'Light' },
-              { value: 'dark', label: 'Dark' },
+              { value: 'system', label: 'Как в системе' },
+              { value: 'light', label: 'Светлая' },
+              { value: 'dark', label: 'Тёмная' },
             ]}
           />
           <View style={{ alignItems: 'center', paddingTop: 4 }}>
@@ -35,43 +35,43 @@ export default function Settings() {
           </View>
         </Section>
 
-        <Section title="Feel">
-          <Row label="Sound" note="Placement knocks and merge chimes">
-            <Toggle label="Sound" value={t.sound} onChange={t.setSound} />
+        <Section title="Ощущения">
+          <Row label="Звук" note="Стук фигур и звон слияний">
+            <Toggle label="Звук" value={t.sound} onChange={t.setSound} />
           </Row>
-          <Row label="Haptics" note="A tap when a piece lands or merges">
-            <Toggle label="Haptics" value={t.haptics} onChange={t.setHaptics} />
+          <Row label="Вибрация" note="Лёгкий толчок, когда фигура встаёт или сливается">
+            <Toggle label="Вибрация" value={t.haptics} onChange={t.setHaptics} />
           </Row>
-          <Row label="Hints" note="The line of help under the board">
-            <Toggle label="Hints" value={t.hints} onChange={t.setHints} />
+          <Row label="Подсказки" note="Строка помощи под доской">
+            <Toggle label="Подсказки" value={t.hints} onChange={t.setHints} />
           </Row>
         </Section>
 
-        <Section title="Progress">
-          <Row label="Best score" note="2,410 · best tile 96 · 37 games">
+        <Section title="Прогресс">
+          <Row label="Рекорд" note="2 410 очков, лучшая плитка 96, сыграно 37 партий">
             <View />
           </Row>
-          <Button kind="outline" label="Reset progress" onPress={() => setConfirm(true)} />
+          <Button kind="outline" label="Сбросить прогресс" onPress={() => setConfirm(true)} />
         </Section>
 
         <Text style={{ fontFamily: font.body, fontSize: 12, color: c.faint, textAlign: 'center' }}>
-          Blockhaus 0.1, visual prototype
+          Blockhaus 0.1, визуальный прототип
         </Text>
-        <Button kind="ghost" label="Design kit" onPress={() => router.push('/kit')} />
+        <Button kind="ghost" label="Дизайн-кит" onPress={() => router.push('/kit')} />
       </ScrollView>
     </Screen>
 
       {confirm ? (
         <View style={StyleSheet.absoluteFill}>
           <Overlay onDismiss={() => setConfirm(false)}>
-            <Panel accent={2}>
-              <Heading size={20}>Reset progress?</Heading>
+            <Panel>
+              <Heading size={20}>Сбросить прогресс?</Heading>
               <Body muted style={{ marginTop: 8 }}>
-                Your best score of 2,410, your best tile and 37 games of history will be erased. This can’t be undone.
+                Рекорд 2 410, лучшая плитка и история 37 партий будут удалены. Вернуть их не получится.
               </Body>
               <View style={{ gap: 10, marginTop: 18 }}>
-                <Button kind="danger" label="Erase progress" onPress={() => setConfirm(false)} />
-                <Button label="Keep it" onPress={() => setConfirm(false)} />
+                <Button kind="danger" label="Удалить прогресс" onPress={() => setConfirm(false)} />
+                <Button label="Отмена" onPress={() => setConfirm(false)} />
               </View>
             </Panel>
           </Overlay>

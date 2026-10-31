@@ -121,17 +121,16 @@ type BtnProps = {
   style?: ViewStyle;
 };
 
-/** Square-cornered, 2px ink outline. Primary fills; presses push the face down 2px
-    over a hard offset shadow, like a block being set into place. */
+/** Two kinds that matter: primary (a filled black block) and outline. Square
+    corners, no shadows. */
 export function Button({ label, onPress, kind = 'outline', tone, size = 'md', disabled, icon, style }: BtnProps) {
-  const { c } = useTheme();
+  const { c, isDark } = useTheme();
   const press = useSharedValue(0);
-  const face = useAnimatedStyle(() => ({ transform: [{ translateY: press.value * 3 }] }));
+  const face = useAnimatedStyle(() => ({ transform: [{ scale: 1 - press.value * 0.03 }] }));
   const lg = size === 'lg';
   const bg =
-    kind === 'primary' ? (tone ? c.tile[tone] : c.line) : kind === 'danger' ? c.tile[2] : kind === 'ghost' ? 'transparent' : c.canvas;
-  const fg = kind === 'primary' ? (tone ? c.ink[tone] : c.tile[3]) : kind === 'danger' ? '#FFFFFF' : c.text;
-  const hasShadow = kind !== 'ghost';
+    kind === 'primary' ? (tone ? c.tile[tone] : isDark ? '#000000' : c.line) : kind === 'danger' ? c.tile[2] : kind === 'ghost' ? 'transparent' : 'transparent';
+  const fg = kind === 'primary' ? (tone ? c.ink[tone] : '#FFFFFF') : kind === 'danger' ? '#FFFFFF' : c.text;
   return (
     <Pressable
       accessibilityRole="button"
@@ -141,9 +140,6 @@ export function Button({ label, onPress, kind = 'outline', tone, size = 'md', di
       onPressIn={() => (press.value = withTiming(1, { duration: 60 }))}
       onPressOut={() => (press.value = withSpring(0, { damping: 12, stiffness: 400 }))}
       style={[{ opacity: disabled ? 0.35 : 1 }, style]}>
-      {hasShadow ? (
-        <View style={[StyleSheet.absoluteFill, { top: 3, bottom: -3, backgroundColor: c.line }]} />
-      ) : null}
       <Animated.View
         style={[
           {
@@ -347,8 +343,14 @@ export function Toggle({ value, onChange, label }: { value: boolean; onChange: (
       accessibilityLabel={label}
       onPress={() => onChange(!value)}
       hitSlop={8}
-      style={{ width: 52, height: 28, backgroundColor: value ? c.tile[1] : c.canvas, borderWidth: 2, borderColor: c.stroke }}>
-      <Animated.View style={[{ position: 'absolute', left: 0, top: 0, width: 24, height: 24, backgroundColor: c.line }, knob]} />
+      style={{ width: 52, height: 28, backgroundColor: value ? c.stroke : 'transparent', borderWidth: 2, borderColor: c.stroke }}>
+      {/* Off: a hollow cell on the left. On: the track fills and the cell moves right, in the paper colour. */}
+      <Animated.View
+        style={[
+          { position: 'absolute', left: 2, top: 2, width: 20, height: 20, backgroundColor: value ? c.bg : 'transparent', borderWidth: value ? 0 : 2, borderColor: c.stroke },
+          knob,
+        ]}
+      />
     </Pressable>
   );
 }
@@ -373,8 +375,8 @@ export function Segmented<T extends string>({
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
             onPress={() => onChange(o.value)}
-            style={{ flex: 1, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.tile[3] : c.canvas }}>
-            <Text style={{ fontFamily: font.bodySemi, fontSize: 14, color: on ? c.ink[3] : c.text }}>{o.label}</Text>
+            style={{ flex: 1, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.stroke : c.bg }}>
+            <Text style={{ fontFamily: font.bodySemi, fontSize: 14, color: on ? c.bg : c.text }}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -400,7 +402,7 @@ export function TopBar({ title, onBack, close }: { title: string; onBack: () => 
   const { c } = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 18 }}>
-      <IconButton label={close ? 'Close' : 'Back'} onPress={onBack} size={38}>
+      <IconButton label={close ? 'Закрыть' : 'Назад'} onPress={onBack} size={38}>
         {close ? <CloseIcon color={c.text} s={14} /> : <Arrow dir="left" color={c.text} s={16} />}
       </IconButton>
       <Heading size={20}>{title}</Heading>

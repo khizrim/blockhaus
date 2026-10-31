@@ -29,7 +29,7 @@ const L1: Piece = { cells: [[0, 0, 1], [0, 1, 1], [1, 1, 1]] };
 export const scenes: Scene[] = [
   {
     key: 'play',
-    title: 'Mid game',
+    title: 'Середина',
     board: rows(
       '0 0 0 3 1 0',
       '0 2 0 6 3 0',
@@ -45,7 +45,7 @@ export const scenes: Scene[] = [
   },
   {
     key: 'early',
-    title: 'First tray',
+    title: 'Первый лоток',
     board: rows(
       '0 0 0 0 0 0',
       '0 0 1 0 0 0',
@@ -61,7 +61,7 @@ export const scenes: Scene[] = [
   },
   {
     key: 'late',
-    title: 'Crowded',
+    title: 'Тесно',
     board: rows(
       '48 24 6 12 2 2',
       '3 12 24 3 0 2',
@@ -77,7 +77,7 @@ export const scenes: Scene[] = [
   },
   {
     key: 'won',
-    title: 'Made 96',
+    title: '96 собрано',
     board: rows(
       '96 24 3 1 1 0',
       '12 6 12 0 0 2',

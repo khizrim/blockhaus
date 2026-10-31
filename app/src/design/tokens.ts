@@ -25,29 +25,31 @@ export type Palette = {
 };
 
 export const light: Palette = {
-  bg: '#E8E5DE',
-  canvas: '#F6F4EF',
+  bg: '#F3EFE4', // the poster's paper
+  canvas: '#FFFDF7',
   line: '#111215',
   stroke: '#111215',
   fold: 'rgba(17,18,21,0.2)',
   text: '#111215',
   muted: '#5D5F66',
   faint: '#9A9BA0',
-  scrim: 'rgba(232,229,222,0.86)',
+  scrim: 'rgba(243,239,228,0.88)',
   tile: ['', '#1F4FB2', '#D9342B', '#F4C21C', '#EC7A1F', '#1D8657', '#6B3DA3', '#D9468C', '#0E8C97'],
   ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF'],
 };
 
 export const dark: Palette = {
-  bg: '#141518',
-  canvas: '#26282D',
-  line: '#050506',
+  // Dark keeps the lines pure black and lifts the fields, so the thick gaps
+  // between fields still read: the board's whole look depends on them.
+  bg: '#1B1C20',
+  canvas: '#383A42',
+  line: '#000000',
   stroke: '#EEEDEA',
-  fold: 'rgba(0,0,0,0.35)',
+  fold: 'rgba(0,0,0,0.45)',
   text: '#EEEDEA',
   muted: '#A2A3A8',
   faint: '#66686E',
-  scrim: 'rgba(20,21,24,0.88)',
+  scrim: 'rgba(27,28,32,0.9)',
   tile: ['', '#3466D6', '#E5463C', '#F2C230', '#F08A33', '#26A06A', '#8455C4', '#E25C9C', '#18A3AE'],
   ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF'],
 };
@@ -79,10 +81,9 @@ export const font = {
   /** Dela Gothic One: the poster face. Wordmark, headings, big numbers. */
   wide: 'DelaGothicOne_400Regular',
   black: 'DelaGothicOne_400Regular',
-  /** Archivo at 110% width, for numbers on tiles (the board keeps its face). */
-  tile: 'ArchivoTile-ExtraBold',
-  /** Archivo at 90% width, for 3-digit tiles. */
-  narrow: 'ArchivoNarrow-ExtraBold',
+  /** Tile numbers use the poster face too: one display family across the app. */
+  tile: 'DelaGothicOne_400Regular',
+  narrow: 'DelaGothicOne_400Regular',
   /** Onest for everything you read. Both faces carry Cyrillic. */
   body: 'Onest_400Regular',
   bodyMedium: 'Onest_500Medium',

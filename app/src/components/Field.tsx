@@ -246,7 +246,7 @@ const Cell = memo(function Cell(p: CellProps) {
             style={{
               color: ink,
               fontFamily: long ? font.narrow : font.tile,
-              fontSize: cell * (long ? 0.32 : 0.4),
+              fontSize: cell * (long ? 0.27 : 0.38),
               includeFontPadding: false,
             }}>
             {v}

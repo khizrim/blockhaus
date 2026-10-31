@@ -10,7 +10,7 @@ export function Overlay({ children, onDismiss }: { children: ReactNode; onDismis
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <Animated.View entering={FadeIn.duration(180)} style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} accessibilityLabel="Close" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} accessibilityLabel="Закрыть" />
       </Animated.View>
       <Animated.View entering={ZoomIn.springify().damping(14).stiffness(220)} style={{ width: '100%', maxWidth: 340 }}>
         {children}

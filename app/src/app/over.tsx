@@ -29,37 +29,37 @@ export default function Over() {
 
   return (
     <Overlay>
-      <Panel accent={2}>
+      <Panel>
         <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
           <Field w={6} h={6} values={final.board} cell={17} gap={3} numbers={false} />
           <View style={{ flex: 1, gap: 4 }}>
             <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: 22, color: c.text }}>
-              No room left
+              Места нет
             </Text>
             <Body muted style={{ fontSize: 14, lineHeight: 19 }}>
-              None of the pieces fit anywhere.
+              Ни одна фигура из лотка не помещается.
             </Body>
           </View>
         </View>
 
         <View style={{ marginTop: 20, gap: 4 }}>
-          <Label>Score</Label>
+          <Label>Очки</Label>
           <Text allowFontScaling={false} style={{ fontFamily: font.black, fontSize: 48, lineHeight: 52, color: c.text }}>
-            {shown.toLocaleString('en-US')}
+            {shown.toLocaleString('ru-RU')}
           </Text>
         </View>
         <Animated.View entering={FadeInDown.delay(900)} style={{ flexDirection: 'row', gap: 20, marginTop: 6 }}>
           <View style={{ gap: 4 }}>
-            <Label>Best tile</Label>
+            <Label>Лучшая плитка</Label>
             <TileBadge v={48} />
           </View>
           <View style={{ gap: 4 }}>
-            <Label>Merges</Label>
+            <Label>Слияния</Label>
             <Text style={{ fontFamily: font.tile, fontSize: 17, color: c.text }}>{final.merges}</Text>
           </View>
           <View style={{ gap: 4 }}>
-            <Label>Best ever</Label>
-            <Text style={{ fontFamily: font.tile, fontSize: 17, color: c.text }}>2,410</Text>
+            <Label>Рекорд</Label>
+            <Text style={{ fontFamily: font.tile, fontSize: 17, color: c.text }}>2 410</Text>
           </View>
         </Animated.View>
 
@@ -67,13 +67,13 @@ export default function Over() {
           <Button
             kind="primary"
             size="lg"
-            label="Play again"
+            label="Сыграть ещё"
             onPress={() => {
               router.dismissAll();
               router.replace({ pathname: '/game', params: { scene: 'early' } });
             }}
           />
-          <Button label="Menu" onPress={() => router.dismissTo('/')} />
+          <Button label="В меню" onPress={() => router.dismissTo('/')} />
         </View>
       </Panel>
     </Overlay>

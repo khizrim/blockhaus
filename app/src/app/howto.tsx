@@ -34,28 +34,28 @@ function Eq({ a, b, w, h, cell = 40 }: { a: (number | null)[]; b: (number | null
 
 const PAGES: { title: string; text: string; art: () => ReactNode }[] = [
   {
-    title: 'Drop pieces',
-    text: 'Drag a piece from the tray onto any empty cells. Three pieces per tray; use them in any order.',
+    title: 'Ставьте фигуры',
+    text: 'Перетащите фигуру из лотка на свободные клетки. В лотке три фигуры, ставить можно в любом порядке.',
     art: () => <Eq w={3} h={2} a={[0, 0, 2, 0, 0, 0]} b={[1, 0, 2, 1, 0, 0]} />,
   },
   {
     title: '1 + 2 = 3',
-    text: 'A cell that lands beside its partner merges with it. A 1 pairs with a 2. Two 1s, or two 2s, just sit side by side.',
+    text: 'Клетка, вставшая рядом с парой, сливается с ней. Единица пара двойке. Две единицы или две двойки просто стоят рядом.',
     art: () => <Eq w={2} h={2} a={[1, 2, 1, 1]} b={[0, 3, 1, 1]} cell={44} />,
   },
   {
-    title: 'Equals double',
-    text: 'From 3 up, equal tiles merge into the next rung: 3 and 3 make 6, 6 and 6 make 12. Merges cascade.',
+    title: 'Равные удваиваются',
+    text: 'Начиная с тройки, равные плитки сливаются в следующую: 3 и 3 дают 6, 6 и 6 дают 12. Слияния идут цепочкой.',
     art: () => <Eq w={3} h={1} a={[3, 3, 6]} b={[0, 0, 12]} cell={44} />,
   },
   {
-    title: 'Sweep',
-    text: 'Twice per tray you can slide the whole board one way. Pairs that meet on the way combine.',
+    title: 'Сдвиг',
+    text: 'Дважды за лоток можно сдвинуть всю доску в одну сторону. Пары, встретившиеся по пути, сливаются.',
     art: () => <Eq w={3} h={3} a={[1, 0, 2, 0, 12, 0, 6, 0, 0]} b={[3, 0, 0, 12, 0, 0, 6, 0, 0]} cell={34} />,
   },
   {
-    title: 'Make 96',
-    text: 'Climb the ladder to 96 to win. The game ends when no piece in the tray fits. You can keep going past 96 for score.',
+    title: 'Соберите 96',
+    text: 'Дойдите по лесенке до 96, чтобы победить. Игра кончается, когда ни одна фигура из лотка не помещается. После 96 можно играть дальше на очки.',
     art: () => (
       <View style={{ alignItems: 'center' }}>
         <Ladder best={96} size={28} animate />
@@ -78,7 +78,7 @@ export default function HowTo() {
 
   return (
     <Screen>
-      <TopBar title="How to play" close onBack={() => router.back()} />
+      <TopBar title="Как играть" close onBack={() => router.back()} />
       <ScrollView
         ref={ref}
         horizontal
@@ -92,9 +92,6 @@ export default function HowTo() {
               {/* Only the visible card animates. */}
               {Math.abs(page - k) <= 0 ? p.art() : null}
             </View>
-            <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: 13, color: c.muted, letterSpacing: 1.4 }}>
-              {k + 1} / {PAGES.length}
-            </Text>
             <Heading size={26}>{p.title}</Heading>
             <Body>{p.text}</Body>
           </View>
@@ -110,7 +107,7 @@ export default function HowTo() {
         <Button
           kind="primary"
           size="lg"
-          label={last ? 'Got it' : 'Next'}
+          label={last ? 'Понятно' : 'Дальше'}
           onPress={() => (last ? router.back() : go(page + 1))}
         />
       </View>

@@ -19,7 +19,7 @@ npx expo start --web  # or open in a browser
 - `src/design/tokens.ts` colours (light/dark), fonts, `rank`/`pairs` helpers.
 - `src/design/mock.ts` hand-placed scenes (mid game, first tray, crowded, made 96).
 - Identity: poster menu (`src/brand/`), Dela Gothic One for display, Onest for text (both Cyrillic).
-- `assets/fonts/` Archivo instanced at fixed widths (110%, 90%) for tile numbers from the variable font, since React Native can't set `font-stretch`. OFL licence alongside.
+- Two font families only, both from @expo-google-fonts.
 
 ## What works without rules
 

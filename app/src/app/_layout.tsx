@@ -13,8 +13,6 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [loaded] = useFonts({
-    'ArchivoTile-ExtraBold': require('@/assets/fonts/ArchivoTile-ExtraBold.ttf'),
-    'ArchivoNarrow-ExtraBold': require('@/assets/fonts/ArchivoNarrow-ExtraBold.ttf'),
     // Poster identity: Dela Gothic One for display, Onest for text. Both have Cyrillic.
     Onest_400Regular,
     Onest_500Medium,
