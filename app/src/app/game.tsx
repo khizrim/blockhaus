@@ -1,70 +1,85 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, {
-  FadeIn,
-  useAnimatedStyle,
-  useSharedValue,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Field, type CellLook } from '@/components/Field';
 import { Arrow, IconButton, Label, PauseIcon, Screen, TileBadge } from '@/components/ui';
+import { pieceGrid } from '@/design/mock';
 import { dur, enter, exit, space, type } from '@/design/system';
-import { N, pieceGrid, sceneByKey, type Piece } from '@/design/mock';
 import { useTheme } from '@/design/theme';
-import { pairs } from '@/design/tokens';
+import engine, { type Dir, type Piece } from '@/game/engine';
+import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
 
-/* The game screen, fully drawn, with no rules behind it. Pieces can be picked
-   up and set down so the drag, the partner highlight, the ghost and the landing
-   can be judged by hand; nothing merges. Tapping a tile replays the merge pop;
-   the sweep buttons nudge the board and spend a sweep. */
+/* The game. The rules are the engine the prototype and the balance simulator
+   run; this screen only shows them. A placement lands first, then each merge
+   of the chain plays one beat after the last: the board steps through the
+   cascade while the marimba climbs. */
+
+const N = engine.N;
+const BEAT = 120; // ms between merges of a chain
 
 // On the web a drag would otherwise select the numbers.
 const noSelect = { userSelect: 'none' } as object;
 
-const SWEEP_LABEL = { left: 'Сдвиг влево', right: 'Сдвиг вправо', up: 'Сдвиг вверх', down: 'Сдвиг вниз' };
+const SWEEP_LABEL: Record<Dir, string> = { left: 'Сдвиг влево', right: 'Сдвиг вправо', up: 'Сдвиг вверх', down: 'Сдвиг вниз' };
 
-type Hold = { slot: number; piece: Piece; x: number; y: number };
+type Hold = { slot: number; piece: Piece };
 
 export default function Game() {
   const { c, hints } = useTheme();
-  const { scene: sceneKey } = useLocalSearchParams<{ scene?: string }>();
-  const scene = useMemo(() => sceneByKey(sceneKey), [sceneKey]);
+  const store = useGame();
+  const g = store.game;
   const { width, height } = useWindowDimensions();
 
-  const [board, setBoard] = useState<number[]>(scene.board);
-  const [tray, setTray] = useState<(Piece | null)[]>(scene.tray);
-  const [sweeps, setSweeps] = useState(scene.sweeps);
+  // What the board shows. Equal to the game's board at rest; during a chain it
+  // steps through the intermediate positions.
+  const [shown, setShown] = useState<number[]>(() => g.board.slice());
   const [hint, setHint] = useState('Перетащите фигуру на доску.');
   const [pops, setPops] = useState<Record<number, number>>({});
   const [lands, setLands] = useState<Record<number, number>>({});
   const [hold, setHold] = useState<Hold | null>(null);
   const [target, setTarget] = useState<{ gx: number; gy: number } | null>(null);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  useEffect(() => {
-    setBoard(scene.board);
-    setTray(scene.tray);
-    setSweeps(scene.sweeps);
-  }, [scene]);
+  const later = (ms: number, f: () => void) => timers.current.push(setTimeout(f, ms));
+  const settle = () => {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+  };
+  useEffect(() => settle, []);
 
+  // A new game, a loaded position or a restored save: show it as it is.
+  const lastGame = useRef(g);
   useEffect(() => {
-    if (scene.key !== 'won') return;
-    const t = setTimeout(() => router.push('/win'), 900);
-    return () => clearTimeout(t);
-  }, [scene.key]);
+    if (lastGame.current !== g) {
+      lastGame.current = g;
+      settle();
+      setShown(g.board.slice());
+      setHint('Перетащите фигуру на доску.');
+    }
+  }, [g, store.version]);
+  useEffect(() => {
+    if (store.ready) setShown(store.game.board.slice());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.ready]);
 
   // Sizing: the board takes the width, but leaves the tray within thumb reach.
   const inner = Math.min(width, 440) - 32;
   const gap = Math.round(Math.min(7, Math.max(5, width * 0.015)));
   const boardSize = Math.max(240, Math.min(inner, height - 380));
   const cell = Math.floor((boardSize - gap) / N);
-  // Pieces in the tray at about half the board's cell, so they read as the same things.
+  // Pieces in the tray at about two thirds of the board's cell, so they read as the same things.
   const trayCell = Math.min(Math.floor(cell * 0.7), Math.floor(inner / 3 / 3.3));
 
-  const best = Math.max(...board, 0);
+  /** After the animation of a move: the win, or the end, if either happened. */
+  const afterMove = (ms: number) => {
+    later(ms + 250, () => {
+      if (g.won && !store.winSeen) router.push('/win');
+      else if (g.over) router.push('/over');
+    });
+  };
 
   /* ---------- drag ---------- */
   const boardRef = useRef<ComponentRef<typeof View>>(null);
@@ -85,14 +100,9 @@ export default function Game() {
       const pad = gap / 2;
       const gx = Math.round((px - boardAt.current.x - pad) / cell);
       const gy = Math.round((py - boardAt.current.y - pad) / cell);
-      const ok = p.cells.every(([x, y]) => {
-        const bx = gx + x;
-        const by = gy + y;
-        return bx >= 0 && by >= 0 && bx < N && by < N && board[by * N + bx] === 0;
-      });
-      return ok ? { gx, gy } : null;
+      return engine.fits(g.board, p, gx, gy) ? { gx, gy } : null;
     },
-    [board, cell, gap],
+    [g, cell, gap],
   );
 
   const pieceOffset = (p: Piece) => {
@@ -102,17 +112,17 @@ export default function Game() {
   };
 
   const start = (slot: number, pageX: number, pageY: number) => {
-    const p = tray[slot];
-    if (!p || p.used) return;
+    const p = g.tray[slot];
+    if (!p || p.used || g.over) return;
     measureBoard();
     const { ox, oy } = pieceOffset(p);
     dx.value = pageX - ox;
     dy.value = pageY - oy + 20;
     dy.value = withTiming(pageY - oy, enter(dur.fast));
     lift.value = withTiming(1, enter(dur.fast));
-    setHold({ slot, piece: p, x: pageX, y: pageY });
+    setHold({ slot, piece: p });
     fx.pick();
-    setHint('Яркие плитки: с ними фигура сольётся.');
+    setHint('Яркие плитки сольются с фигурой.');
   };
 
   const move = (pageX: number, pageY: number) => {
@@ -128,51 +138,51 @@ export default function Game() {
     const h = holdRef.current;
     if (!h) return;
     const t = targetRef.current;
-    if (t) {
-      const next = board.slice();
-      const landed: Record<number, number> = {};
-      for (const [x, y, v] of h.piece.cells) {
-        const i = (t.gy + y) * N + t.gx + x;
-        next[i] = v;
-        landed[i] = Date.now();
-      }
-      setBoard(next);
-      setLands((l) => ({ ...l, ...landed }));
-      fx.place(h.piece.cells.length);
-      /* No rules yet, but the sound of a merge is previewed where one would
-         happen: each partner next to the landed piece pops and plays the note
-         of the value the merge would make, climbing like a chain. */
-      const pv = h.piece.cells[0][2];
-      const partners = board
-        .map((v, i) => ({ v, i }))
-        .filter(({ v, i }) => {
-          const x = i % N;
-          const y = (i / N) | 0;
-          return pairs(pv, v) && h.piece.cells.some(([cx, cy]) => Math.abs(t.gx + cx - x) + Math.abs(t.gy + cy - y) === 1);
-        });
-      if (partners.length) {
-        const made = pv < 3 ? 3 : pv * 2;
-        const chain = partners.map((_, k) => made * 2 ** k);
-        setTimeout(() => {
-          fx.cascade(chain);
-          partners.forEach(({ i }, k) => setTimeout(() => setPops((pp) => ({ ...pp, [i]: Date.now() })), k * 120));
-        }, 90);
-      }
-      const nt = tray.map((p, k) => (k === h.slot && p ? { ...p, used: true } : p));
-      // A spent tray comes back full, the way the real one will.
-      if (nt.every((p) => !p || p.used)) {
-        setTray(scene.tray.map((p) => (p ? { ...p, used: false } : p)));
-        setTimeout(fx.tray, 250);
-      } else setTray(nt);
-      lift.value = 0;
-      setHint('Фигура на месте. Правил пока нет, ничего не сливается.');
-    } else {
+    setHold(null);
+    setTarget(null);
+    if (!t) {
       lift.value = withTiming(0, exit(dur.fast));
       fx.invalid();
       setHint('Здесь не помещается.');
+      return;
     }
-    setHold(null);
-    setTarget(null);
+    lift.value = 0;
+    settle();
+    const before = g.board.slice();
+    const res = store.place(h.slot, t.gx, t.gy);
+    if (!res) return;
+
+    // Frame 0: the piece laid. Then one frame per merge of the chain.
+    const frame = before.slice();
+    h.piece.cells.forEach(([cx, cy, v]) => (frame[(t.gy + cy) * N + t.gx + cx] = v));
+    setShown(frame.slice());
+    const now = Date.now();
+    setLands((l) => ({ ...l, ...Object.fromEntries(res.laid.map((i) => [i, now])) }));
+    fx.place(h.piece.cells.length);
+
+    res.steps.forEach((s, k) => {
+      for (const a of s.absorbed) frame[a] = 0;
+      frame[s.anchor] = s.level;
+      const snap = frame.slice();
+      later(90 + k * BEAT, () => {
+        setShown(snap);
+        setPops((pp) => ({ ...pp, [s.anchor]: Date.now() }));
+        fx.merge(s.level);
+      });
+    });
+    const done = 90 + res.steps.length * BEAT;
+    later(done, () => setShown(g.board.slice()));
+
+    if (res.steps.length > 1) setHint(`Цепочка из ${res.steps.length} слияний, до ${res.steps[res.steps.length - 1].level}.`);
+    else if (res.steps.length === 1) setHint(`Слияние: ${res.steps[0].level}.`);
+    else setHint('Ставьте рядом с парой: 1 и 2, или две равные плитки от 3.');
+    if (res.refilled) {
+      later(done + 100, () => {
+        fx.tray();
+        setHint('Новый лоток и снова два сдвига.');
+      });
+    }
+    afterMove(done);
   };
 
   const holdRef = useRef<Hold | null>(null);
@@ -204,7 +214,7 @@ export default function Game() {
       const l: CellLook = { pop: pops[i], land: lands[i] };
       if (hold) {
         const pv = hold.piece.cells[0][2];
-        if (board[i] > 0 && !pairs(pv, board[i])) l.dim = true;
+        if (shown[i] > 0 && !engine.pairs(pv, shown[i])) l.dim = true;
         if (target) {
           const x = i % N;
           const y = (i / N) | 0;
@@ -212,64 +222,80 @@ export default function Game() {
           if (mine) l.ghost = mine[2];
           // A neighbour that pairs with the ghost gets the "about to be eaten" frame.
           else if (
-            board[i] > 0 &&
-            pairs(pv, board[i]) &&
-            hold.piece.cells.some(([cx, cy]) => Math.abs(target.gx + cx - x) + Math.abs(target.gy + cy - y) === 1)
+            shown[i] > 0 &&
+            hold.piece.cells.some(
+              ([cx, cy, v]) => engine.pairs(v, shown[i]) && Math.abs(target.gx + cx - x) + Math.abs(target.gy + cy - y) === 1,
+            )
           )
             l.absorb = true;
         }
       }
       return l;
     },
-    [board, hold, target, pops, lands],
+    [shown, hold, target, pops, lands],
   );
 
   const values = useMemo(() => {
-    if (!hold || !target) return board;
-    const v = board.slice();
+    if (!hold || !target) return shown;
+    const v = shown.slice();
     for (const [x, y, val] of hold.piece.cells) v[(target.gy + y) * N + target.gx + x] = val;
     return v;
-  }, [board, hold, target]);
+  }, [shown, hold, target]);
 
-  /* ---------- sweep: a nudge, not a slide ---------- */
+  /* ---------- sweep ---------- */
   const sx = useSharedValue(0);
   const sy = useSharedValue(0);
   const boardStyle = useAnimatedStyle(() => ({ transform: [{ translateX: sx.value }, { translateY: sy.value }] }));
-  const sweep = (dir: 'left' | 'right' | 'up' | 'down') => {
-    if (sweeps === 0) return;
+  const sweep = (dir: Dir) => {
+    if (g.sweeps === 0 || g.over) return;
+    settle();
+    const res = store.sweep(dir);
+    if (!res) {
+      fx.invalid();
+      setHint('В эту сторону ничего не сдвинется.');
+      return;
+    }
     const d = 8;
     const [vx, vy] = { left: [-d, 0], right: [d, 0], up: [0, -d], down: [0, d] }[dir];
     sx.value = withSequence(withTiming(vx, exit(dur.fast)), withTiming(0, enter(dur.base)));
     sy.value = withSequence(withTiming(vy, exit(dur.fast)), withTiming(0, enter(dur.base)));
-    setSweeps((s) => s - 1);
+    setShown(g.board.slice());
     fx.sweep();
-    setHint(sweeps === 1 ? 'Сдвигов больше нет. Новый лоток даст ещё два.' : 'Сдвиг. Настоящее движение появится вместе с правилами.');
-  };
-
-  const tapCell = (i: number) => {
-    if (board[i] <= 0) return;
-    setPops((p) => ({ ...p, [i]: Date.now() }));
-    // Tapping a tile plays the note its merge makes: a way to hear the ladder.
-    fx.merge(Math.max(3, board[i]));
+    res.made.forEach((m, k) =>
+      later(180 + k * BEAT, () => {
+        setPops((pp) => ({ ...pp, [m.at]: Date.now() }));
+        fx.merge(m.level);
+      }),
+    );
+    setHint(
+      g.sweeps === 0
+        ? 'Сдвигов больше нет. Новый лоток даст ещё два.'
+        : res.made.length
+          ? `Сдвиг: ${res.made.length === 1 ? 'одно слияние' : `${res.made.length} слияния`}.`
+          : 'Сдвиг. Остался ещё один.',
+    );
+    afterMove(180 + res.made.length * BEAT);
   };
 
   const sweepRow = (
     <View style={{ width: boardSize, flexDirection: 'row', alignItems: 'center', marginTop: space.md }}>
-      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm }} accessibilityLabel={`Сдвигов осталось: ${sweeps}`}>
+      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm }} accessibilityLabel={`Сдвигов осталось: ${g.sweeps}`}>
         <Label>Сдвиги</Label>
         {[0, 1].map((k) => (
-          <View key={k} style={{ width: 8, height: 8, backgroundColor: k < sweeps ? c.text : c.hair }} />
+          <View key={k} style={{ width: 8, height: 8, backgroundColor: k < g.sweeps ? c.text : c.hair }} />
         ))}
       </View>
       <View style={{ flexDirection: 'row', gap: space.sm }}>
         {(['left', 'down', 'up', 'right'] as const).map((d) => (
-          <IconButton key={d} quiet label={SWEEP_LABEL[d]} disabled={sweeps === 0} onPress={() => sweep(d)}>
+          <IconButton key={d} quiet label={SWEEP_LABEL[d]} disabled={g.sweeps === 0 || g.over} onPress={() => sweep(d)}>
             <Arrow dir={d} color={c.text} s={16} />
           </IconButton>
         ))}
       </View>
     </View>
   );
+
+  const best = Math.max(...shown, 0);
 
   return (
     <View style={[{ flex: 1 }, noSelect]}>
@@ -278,8 +304,8 @@ export default function Game() {
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
           <View>
             <Label meta>Очки</Label>
-            <Text allowFontScaling={false} style={[type.number, { color: c.text }]}>
-              {scene.score.toLocaleString('ru-RU')}
+            <Text allowFontScaling={false} style={[type.number, { color: c.text }]} accessibilityLabel={`Очки: ${g.score}`}>
+              {g.score.toLocaleString('ru-RU')}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.lg }}>
@@ -287,7 +313,7 @@ export default function Game() {
               <Label meta>Лучшая</Label>
               <TileBadge v={best} size={28} />
             </View>
-            <IconButton label="Пауза" onPress={() => router.push({ pathname: '/pause', params: { scene: scene.key } })}>
+            <IconButton label="Пауза" onPress={() => router.push('/pause')}>
               <PauseIcon color={c.text} />
             </IconButton>
           </View>
@@ -296,19 +322,13 @@ export default function Game() {
         {/* board, with its toolbar and the hint, centred in the free height */}
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: space.lg }}>
           <Animated.View style={boardStyle}>
-            <View ref={boardRef} onLayout={measureBoard} collapsable={false}>
+            <View ref={boardRef} onLayout={measureBoard} collapsable={false} accessibilityLabel="Доска">
               <Field w={N} h={N} values={values} cell={cell} gap={gap} look={look} />
-              {/* tap targets above the drawing */}
-              <View style={[StyleSheet.absoluteFill, { padding: gap / 2, flexDirection: 'row', flexWrap: 'wrap' }]}>
-                {board.map((_, i) => (
-                  <Pressable key={i} onPress={() => tapCell(i)} style={{ width: cell, height: cell }} />
-                ))}
-              </View>
             </View>
           </Animated.View>
           {sweepRow}
           {hints ? (
-            <Text style={[type.secondary, { width: boardSize, marginTop: space.md, minHeight: 20, color: c.muted }]}>{hint}</Text>
+            <Text style={[type.secondary, { width: boardSize, marginTop: space.md, minHeight: 40, color: c.muted }]}>{hint}</Text>
           ) : null}
         </View>
 
@@ -321,7 +341,7 @@ export default function Game() {
             borderWidth: 1,
             borderColor: c.hair,
           }}>
-          {tray.map((p, slot) => (
+          {g.tray.map((p, slot) => (
             <View
               key={slot}
               {...responders[slot].panHandlers}
@@ -335,9 +355,9 @@ export default function Game() {
               }}>
               {p ? (
                 <Animated.View
-                  key={p.used ? 'used' : 'live'}
+                  key={`${p.used ? 'used' : 'live'}-${JSON.stringify(p.cells)}`}
                   entering={p.used ? undefined : FadeIn.duration(dur.base)}
-                  style={{ opacity: p.used || hold?.slot === slot ? 0 : 1 }}>
+                  style={{ opacity: p.used || hold?.slot === slot ? 0 : g.over ? 0.35 : 1 }}>
                   <Field variant="piece" {...pieceGrid(p)} cell={trayCell} gap={gap} />
                 </Animated.View>
               ) : null}

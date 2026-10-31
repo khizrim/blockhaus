@@ -9,6 +9,7 @@ import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ThemeProvider, useTheme } from '@/design/theme';
+import { GameProvider } from '@/game/store';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -32,7 +33,9 @@ export default function RootLayout() {
       {/* Every animation follows the system's reduced-motion setting. */}
       <ReducedMotionConfig mode={ReduceMotion.System} />
       <ThemeProvider>
-        <Navigator />
+        <GameProvider>
+          <Navigator />
+        </GameProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

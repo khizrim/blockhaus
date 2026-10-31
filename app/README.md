@@ -31,3 +31,11 @@ npx expo start --web  # or open in a browser
 ## Sound
 
 All sounds are synthesised by `scripts/make-sounds.py` (numpy only) into `assets/sounds/*.wav`; there are no third-party samples. Pieces sound like painted wood (pick tick, a knock per piece size, two muffled taps when a drop does not fit, a felt slide for a sweep). Merges are a soft marimba climbing the C major pentatonic one step per rung, 3 = C5 up to 96 = C6, so a cascade audibly climbs. `src/sound/sfx.ts` plays them with the matching haptic, follows the Sound and Vibration settings, respects the silent switch and mixes with other apps' audio. Background music is one 53-second loop from `scripts/make-music.py` (22 kHz WAV so it loops without a gap): marimba, pad and bass in the same pentatonic, an octave below the merges. It has its own Music toggle, fades in and out and dims on pause. Settings → Прототип → Все звуки и музыка auditions everything.
+
+## Rules and saving
+
+The game runs `src/game/engine.js`, a verbatim copy of `prototype/engine.js` (the engine the tests and the balance simulator use; `npm test` at the repo root fails if the copy drifts). `src/game/store.tsx` holds the running game and the record, saved to AsyncStorage after every move. A placement shows the laid piece, then each merge of the chain one beat (120 ms) apart with its marimba note.
+
+## Playable link
+
+`scripts/build-playable.py` packs a web export into one self-contained HTML file (bundle, fonts and sounds inlined) that runs from any static host or a claude.ai artifact.

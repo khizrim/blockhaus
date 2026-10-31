@@ -9,6 +9,7 @@ import { Body, Button, Heading, Panel, TextLink } from '@/components/ui';
 import { dur, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font } from '@/design/tokens';
+import { useGame } from '@/game/store';
 
 import { Grow } from './marks';
 
@@ -18,8 +19,7 @@ import { Grow } from './marks';
    paper carries the page. Below the line: the name, the record, the actions. */
 
 const go = {
-  continue: () => router.push('/game'),
-  fresh: () => router.push({ pathname: '/game', params: { scene: 'early' } }),
+  play: () => router.push('/game'),
   howto: () => router.push('/howto'),
   settings: () => router.push('/settings'),
 };
@@ -29,6 +29,15 @@ export function PosterMenu() {
   const ins = useSafeAreaInsets();
   const { width: W, height: H } = useWindowDimensions();
   const [confirm, setConfirm] = useState(false);
+  const { game, stats, inProgress, newGame } = useGame();
+  const score = game.score.toLocaleString('ru-RU');
+  const fresh = () => {
+    newGame();
+    go.play();
+  };
+  const recordLine = stats.played || stats.best
+    ? `Рекорд ${stats.best.toLocaleString('ru-RU')} · лучшая плитка ${stats.bestTile}`
+    : 'Сложите 1 и 2, дойдите до 96';
 
   const L = 8; // poster line weight, on the 8pt grid
   const A = Math.round(Math.min(H * 0.44, W * 1.05)); // poster height
@@ -78,11 +87,17 @@ export function PosterMenu() {
           style={{ fontFamily: font.wide, fontSize: size, lineHeight: Math.round(size * 1.15), color: isDark ? c.tile[3] : c.text }}>
           blockhaus
         </Text>
-        <Text style={[type.secondary, { color: c.muted, marginTop: space.xs }]}>Рекорд 2 410 · лучшая плитка 96</Text>
+        <Text style={[type.secondary, { color: c.muted, marginTop: space.xs }]}>{recordLine}</Text>
 
         <View style={{ marginTop: 'auto', gap: space.md }}>
-          <Button kind="primary" size="lg" label="Продолжить" trailing="129" accessibilityLabel="Продолжить партию, 129 очков" onPress={go.continue} />
-          <Button label="Новая игра" onPress={() => setConfirm(true)} />
+          {inProgress ? (
+            <>
+              <Button kind="primary" size="lg" label="Продолжить" trailing={score} accessibilityLabel={`Продолжить партию, ${score} очков`} onPress={go.play} />
+              <Button label="Новая игра" onPress={() => setConfirm(true)} />
+            </>
+          ) : (
+            <Button kind="primary" size="lg" label="Играть" onPress={fresh} />
+          )}
           <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.xxl, marginTop: space.xs }}>
             <TextLink label="Как играть" onPress={go.howto} />
             <TextLink label="Настройки" onPress={go.settings} />
@@ -97,7 +112,7 @@ export function PosterMenu() {
             <Panel>
               <Heading>Начать новую игру?</Heading>
               <Body muted style={{ marginTop: space.sm }}>
-                Текущая партия на 129 очков пропадёт.
+                Текущая партия на {score} очков пропадёт.
               </Body>
               <View style={{ gap: space.md, marginTop: space.xl }}>
                 <Button
@@ -105,7 +120,7 @@ export function PosterMenu() {
                   label="Начать новую"
                   onPress={() => {
                     setConfirm(false);
-                    go.fresh();
+                    fresh();
                   }}
                 />
                 <Button label="Вернуться" onPress={() => setConfirm(false)} />

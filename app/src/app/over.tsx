@@ -7,16 +7,17 @@ import { Field } from '@/components/Field';
 import { fx } from '@/sound/sfx';
 import { Overlay } from '@/components/Overlay';
 import { Body, Button, Heading, Label, Panel, Stat, TileBadge } from '@/components/ui';
-import { sceneByKey } from '@/design/mock';
 import { dur, space, type, useCalm } from '@/design/system';
 import { useTheme } from '@/design/theme';
+import { useGame } from '@/game/store';
 
 /* Game over: the final board as a thumbnail, the score counting up once. */
 export default function Over() {
   const { c } = useTheme();
   const calm = useCalm();
-  const final = sceneByKey('late');
+  const { game: final, stats, newGame } = useGame();
   const target = final.score;
+  const record = target >= stats.best && target > 0;
   const [shown, setShown] = useState(calm ? target : 0);
   useEffect(() => fx.over(), []);
 
@@ -52,10 +53,10 @@ export default function Over() {
         </View>
         <Animated.View entering={FadeIn.delay(dur.slow).duration(dur.base)} style={{ flexDirection: 'row', gap: space.xxl, marginTop: space.lg }}>
           <Stat label="Лучшая плитка">
-            <TileBadge v={48} />
+            <TileBadge v={final.bestTile} />
           </Stat>
           <Stat label="Слияния" value={String(final.merges)} />
-          <Stat label="Рекорд" value="2 410" />
+          <Stat label={record ? 'Новый рекорд' : 'Рекорд'} value={stats.best.toLocaleString('ru-RU')} />
         </Animated.View>
 
         <View style={{ gap: space.md, marginTop: space.xl }}>
@@ -64,8 +65,8 @@ export default function Over() {
             size="lg"
             label="Сыграть ещё"
             onPress={() => {
-              router.dismissAll();
-              router.replace({ pathname: '/game', params: { scene: 'early' } });
+              newGame();
+              router.back();
             }}
           />
           <Button label="Выйти в меню" onPress={() => router.dismissTo('/')} />

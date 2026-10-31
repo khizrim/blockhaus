@@ -6,6 +6,7 @@ import { Overlay } from '@/components/Overlay';
 import { Body, Button, Heading, Panel, Row, Rule, Toggle } from '@/components/ui';
 import { space } from '@/design/system';
 import { useTheme } from '@/design/theme';
+import { useGame } from '@/game/store';
 import { dimMusic } from '@/sound/sfx';
 
 export default function Pause() {
@@ -14,10 +15,11 @@ export default function Pause() {
     dimMusic(true);
     return () => dimMusic(false);
   }, []);
+  const { game, newGame } = useGame();
   const [confirm, setConfirm] = useState(false);
   const restart = () => {
-    router.dismissAll();
-    router.replace({ pathname: '/game', params: { scene: 'early' } });
+    newGame();
+    router.back();
   };
 
   if (confirm) {
@@ -26,7 +28,7 @@ export default function Pause() {
         <Panel>
           <Heading>Начать заново?</Heading>
           <Body muted style={{ marginTop: space.sm }}>
-            Текущая партия на 129 очков пропадёт.
+            Текущая партия на {game.score.toLocaleString('ru-RU')} очков пропадёт.
           </Body>
           <View style={{ gap: space.md, marginTop: space.xl }}>
             <Button kind="primary" label="Начать заново" onPress={restart} />
@@ -43,7 +45,7 @@ export default function Pause() {
         <Heading>Пауза</Heading>
         <View style={{ gap: space.md, marginTop: space.xl }}>
           <Button kind="primary" size="lg" label="Продолжить" onPress={() => router.back()} />
-          <Button label="Начать заново" onPress={() => setConfirm(true)} />
+          <Button label="Начать заново" onPress={() => (game.moves > 0 ? setConfirm(true) : restart())} />
         </View>
         <View style={{ marginTop: space.lg }}>
           <Row label="Звук">

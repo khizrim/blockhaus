@@ -7,6 +7,7 @@ import { Body, Button, Heading, Label, Panel, Row, Rule, Screen, Segmented, Togg
 import { scenes } from '@/design/mock';
 import { space, type } from '@/design/system';
 import { useTheme, type ThemeMode } from '@/design/theme';
+import { useGame } from '@/game/store';
 
 /* Settings: a plain list. Sections are labelled, rows are 56 tall and split by
    hairlines, controls sit on the right. */
@@ -14,9 +15,14 @@ export default function Settings() {
   const t = useTheme();
   const { c } = t;
   const [confirm, setConfirm] = useState(false);
+  const { stats, resetProgress, loadPosition } = useGame();
+  const best = stats.best.toLocaleString('ru-RU');
   const openScene = (key: string) => {
+    const sc = scenes.find((x) => x.key === key);
+    if (!sc) return;
+    loadPosition(sc);
     router.dismissAll();
-    router.replace({ pathname: '/game', params: { scene: key } });
+    router.push('/game');
   };
 
   return (
@@ -55,8 +61,8 @@ export default function Settings() {
 
           <Section title="Прогресс">
             <List>
-              <Row label="Рекорд" note="Лучшая плитка 96, сыграно 37 партий">
-                <Text style={[type.bodyStrong, { color: c.text, fontVariant: ['tabular-nums'] }]}>2 410</Text>
+              <Row label="Рекорд" note={`Лучшая плитка ${stats.bestTile || '—'}, партий: ${stats.played}, побед: ${stats.wins}`}>
+                <Text style={[type.bodyStrong, { color: c.text, fontVariant: ['tabular-nums'] }]}>{best}</Text>
               </Row>
             </List>
             <Button kind="danger" label="Сбросить прогресс" onPress={() => setConfirm(true)} />
@@ -68,8 +74,7 @@ export default function Settings() {
               {scenes.map((s) => (
                 <Row key={s.key} label={s.title} onPress={() => openScene(s.key)} />
               ))}
-              <Row label="Экран победы" onPress={() => router.push('/win')} />
-              <Row label="Экран проигрыша" onPress={() => router.push('/over')} />
+              
               <Row label="Все звуки и музыка" onPress={() => router.push('/sounds')} />
               <Row label="Дизайн-кит" onPress={() => router.push('/kit')} />
             </List>
@@ -85,10 +90,13 @@ export default function Settings() {
             <Panel>
               <Heading>Сбросить прогресс?</Heading>
               <Body muted style={{ marginTop: space.sm }}>
-                Рекорд 2 410, лучшая плитка и история 37 партий будут удалены. Вернуть их не получится.
+                Рекорд {best}, лучшая плитка, счёт партий и текущая партия будут удалены. Вернуть их не получится.
               </Body>
               <View style={{ gap: space.md, marginTop: space.xl }}>
-                <Button kind="danger" label="Удалить прогресс" onPress={() => setConfirm(false)} />
+                <Button kind="danger" label="Удалить прогресс" onPress={() => {
+                  resetProgress();
+                  setConfirm(false);
+                }} />
                 <Button label="Оставить" onPress={() => setConfirm(false)} />
               </View>
             </Panel>
