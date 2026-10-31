@@ -1,14 +1,18 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Field, type CellLook } from '@/components/Field';
-import { Arrow, IconButton, Label, PauseIcon, Screen, TileBadge } from '@/components/ui';
+import { Overlay } from '@/components/Overlay';
+import { Body, Button, Heading, IconButton, Label, Panel, PauseIcon, Screen, TextLink, TileBadge } from '@/components/ui';
 import { pieceGrid } from '@/design/mock';
 import { dur, enter, exit, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
+import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Piece } from '@/game/engine';
+import { LESSONS } from '@/game/lessons';
+import { slideMoves, type Move } from '@/game/slide';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
 
@@ -23,7 +27,8 @@ const BEAT = 120; // ms between merges of a chain
 // On the web a drag would otherwise select the numbers.
 const noSelect = { userSelect: 'none' } as object;
 
-const SWEEP_LABEL: Record<Dir, string> = { left: 'Сдвиг влево', right: 'Сдвиг вправо', up: 'Сдвиг вверх', down: 'Сдвиг вниз' };
+const SWIPE = 24; // px of travel that counts as a swipe
+const SLIDE = dur.base; // ms for tiles to travel in a sweep
 
 type Hold = { slot: number; piece: Piece };
 
@@ -32,6 +37,17 @@ export default function Game() {
   const store = useGame();
   const g = store.game;
   const { width, height } = useWindowDimensions();
+  const { learn } = useLocalSearchParams<{ learn?: string }>();
+  const lesson = store.lesson === null ? null : LESSONS[store.lesson];
+  const [coach, setCoach] = useState<'task' | 'done' | 'retry'>('task');
+  const [final, setFinal] = useState(false);
+
+  // Opened to learn: start the first lesson once the save has loaded.
+  useEffect(() => {
+    if (store.ready && learn && store.lesson === null && !final) store.startLesson(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.ready, learn]);
+  useEffect(() => setCoach('task'), [store.lesson]);
 
   // What the board shows. Equal to the game's board at rest; during a chain it
   // steps through the intermediate positions.
@@ -41,6 +57,7 @@ export default function Game() {
   const [lands, setLands] = useState<Record<number, number>>({});
   const [hold, setHold] = useState<Hold | null>(null);
   const [target, setTarget] = useState<{ gx: number; gy: number } | null>(null);
+  const [sliding, setSliding] = useState<{ moves: Move[]; id: number } | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const later = (ms: number, f: () => void) => timers.current.push(setTimeout(f, ms));
@@ -75,10 +92,37 @@ export default function Game() {
 
   /** After the animation of a move: the win, or the end, if either happened. */
   const afterMove = (ms: number) => {
+    if (store.lesson !== null) return lessonCheck(ms);
     later(ms + 250, () => {
       if (g.won && !store.winSeen) router.push('/win');
       else if (g.over) router.push('/over');
     });
+  };
+
+  /** In a lesson: the step is done when its result is on the board; a move
+      that misses it puts the position back to try again. */
+  const lessonCheck = (ms: number) => {
+    const k = store.lesson;
+    if (k === null) return;
+    const L = LESSONS[k];
+    const pieceStep = L.tray.some((p) => !p.used);
+    // The engine refills a spent tray at random; a lesson keeps it empty.
+    if (pieceStep) g.tray = g.tray.map((p) => ({ ...p, used: true }));
+    later(ms + 150, () => {
+      if (L.goal(g)) {
+        setCoach('done');
+        later(1600, () => (k + 1 < LESSONS.length ? store.startLesson(k + 1) : setFinal(true)));
+      } else if (pieceStep || g.sweeps === 0) {
+        setCoach('retry');
+        later(1200, () => store.startLesson(k));
+      }
+    });
+  };
+
+  const skipLessons = () => {
+    settle();
+    setFinal(false);
+    store.finishLessons();
   };
 
   /* ---------- drag ---------- */
@@ -212,6 +256,10 @@ export default function Game() {
   const look = useCallback(
     (i: number): CellLook | undefined => {
       const l: CellLook = { pop: pops[i], land: lands[i] };
+      if (!hold && lesson?.hint && coach === 'task') {
+        const h = lesson.hint.find(([at]) => at === i);
+        if (h && shown[i] === 0) l.ghost = h[1];
+      }
       if (hold) {
         const pv = hold.piece.cells[0][2];
         if (shown[i] > 0 && !engine.pairs(pv, shown[i])) l.dim = true;
@@ -232,7 +280,7 @@ export default function Game() {
       }
       return l;
     },
-    [shown, hold, target, pops, lands],
+    [shown, hold, target, pops, lands, lesson, coach],
   );
 
   const values = useMemo(() => {
@@ -242,56 +290,107 @@ export default function Game() {
     return v;
   }, [shown, hold, target]);
 
-  /* ---------- sweep ---------- */
+  /* ---------- sweep: swipe the board ----------
+     While the finger moves the board leans a few points that way; on release
+     every tile slides to where the engine put it, and the merges pop where
+     two tiles met. */
   const sx = useSharedValue(0);
   const sy = useSharedValue(0);
   const boardStyle = useAnimatedStyle(() => ({ transform: [{ translateX: sx.value }, { translateY: sy.value }] }));
+
+  const shake = () => {
+    sx.value = withSequence(withTiming(6, { duration: 50 }), withTiming(-6, { duration: 80 }), withTiming(0, enter(dur.fast)));
+  };
+
   const sweep = (dir: Dir) => {
-    if (g.sweeps === 0 || g.over) return;
+    sx.value = withTiming(0, enter(dur.fast));
+    sy.value = withTiming(0, enter(dur.fast));
+    if (g.over) return;
+    if (g.sweeps === 0) {
+      fx.invalid();
+      shake();
+      setHint('Сдвигов не осталось. Новый лоток даст ещё два.');
+      return;
+    }
     settle();
+    const before = g.board.slice();
+    const moves = slideMoves(before, dir);
     const res = store.sweep(dir);
     if (!res) {
       fx.invalid();
+      shake();
       setHint('В эту сторону ничего не сдвинется.');
       return;
     }
-    const d = 8;
-    const [vx, vy] = { left: [-d, 0], right: [d, 0], up: [0, -d], down: [0, d] }[dir];
-    sx.value = withSequence(withTiming(vx, exit(dur.fast)), withTiming(0, enter(dur.base)));
-    sy.value = withSequence(withTiming(vy, exit(dur.fast)), withTiming(0, enter(dur.base)));
-    setShown(g.board.slice());
     fx.sweep();
+    setShown(new Array(N * N).fill(0));
+    setSliding({ moves, id: Date.now() });
+    later(SLIDE, () => {
+      setSliding(null);
+      setShown(g.board.slice());
+    });
     res.made.forEach((m, k) =>
-      later(180 + k * BEAT, () => {
+      later(SLIDE + k * BEAT, () => {
         setPops((pp) => ({ ...pp, [m.at]: Date.now() }));
         fx.merge(m.level);
       }),
     );
     setHint(
-      g.sweeps === 0
-        ? 'Сдвигов больше нет. Новый лоток даст ещё два.'
-        : res.made.length
-          ? `Сдвиг: ${res.made.length === 1 ? 'одно слияние' : `${res.made.length} слияния`}.`
-          : 'Сдвиг. Остался ещё один.',
+      res.made.length
+        ? `Сдвиг: ${res.made.length === 1 ? 'одно слияние' : `слияний: ${res.made.length}`}.`
+        : g.sweeps === 0
+          ? 'Это был последний сдвиг в этом лотке.'
+          : 'Сдвиг. В этом лотке остался ещё один.',
     );
-    afterMove(180 + res.made.length * BEAT);
+    afterMove(SLIDE + res.made.length * BEAT);
   };
 
+  const sweepRef = useRef(sweep);
+  sweepRef.current = sweep;
+  const swipe = useMemo(() => {
+    const axis = (dx: number, dy: number) => (Math.abs(dx) > Math.abs(dy) ? 'x' : 'y');
+    const lean = (d: number) => Math.max(-8, Math.min(8, d * 0.1));
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) + Math.abs(gs.dy) > 8,
+      onPanResponderMove: (_, gs) => {
+        if (axis(gs.dx, gs.dy) === 'x') {
+          sx.value = lean(gs.dx);
+          sy.value = 0;
+        } else {
+          sy.value = lean(gs.dy);
+          sx.value = 0;
+        }
+      },
+      onPanResponderRelease: (_, gs) => {
+        const x = axis(gs.dx, gs.dy) === 'x';
+        const d = x ? gs.dx : gs.dy;
+        if (Math.abs(d) < SWIPE) {
+          sx.value = withTiming(0, enter(dur.fast));
+          sy.value = withTiming(0, enter(dur.fast));
+          return;
+        }
+        sweepRef.current(x ? (d > 0 ? 'right' : 'left') : d > 0 ? 'down' : 'up');
+      },
+      onPanResponderTerminate: () => {
+        sx.value = withTiming(0, enter(dur.fast));
+        sy.value = withTiming(0, enter(dur.fast));
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const sweepRow = (
-    <View style={{ width: boardSize, flexDirection: 'row', alignItems: 'center', marginTop: space.md }}>
-      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm }} accessibilityLabel={`Сдвигов осталось: ${g.sweeps}`}>
+    <View style={{ width: boardSize, flexDirection: 'row', alignItems: 'center', minHeight: 44, marginTop: space.sm, gap: space.md }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }} accessibilityLabel={`Сдвигов осталось: ${g.sweeps}`}>
         <Label>Сдвиги</Label>
         {[0, 1].map((k) => (
-          <View key={k} style={{ width: 8, height: 8, backgroundColor: k < g.sweeps ? c.text : c.hair }} />
+          <View key={k} style={{ width: 16, height: 8, backgroundColor: k < g.sweeps ? c.text : 'transparent', borderWidth: 1, borderColor: k < g.sweeps ? c.text : c.hair }} />
         ))}
       </View>
-      <View style={{ flexDirection: 'row', gap: space.sm }}>
-        {(['left', 'down', 'up', 'right'] as const).map((d) => (
-          <IconButton key={d} quiet label={SWEEP_LABEL[d]} disabled={g.sweeps === 0 || g.over} onPress={() => sweep(d)}>
-            <Arrow dir={d} color={c.text} s={16} />
-          </IconButton>
-        ))}
-      </View>
+      <Text style={[type.secondary, { flex: 1, textAlign: 'right', color: c.muted }]} numberOfLines={1}>
+        {g.sweeps ? 'Смахните доску в любую сторону' : 'Вернутся с новым лотком'}
+      </Text>
     </View>
   );
 
@@ -321,13 +420,43 @@ export default function Game() {
 
         {/* board, with its toolbar and the hint, centred in the free height */}
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: space.lg }}>
-          <Animated.View style={boardStyle}>
-            <View ref={boardRef} onLayout={measureBoard} collapsable={false} accessibilityLabel="Доска">
+          {lesson ? (
+            <View style={{ width: boardSize, marginBottom: space.lg, minHeight: 104 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Label meta>{`Обучение · ${(store.lesson ?? 0) + 1} из ${LESSONS.length}`}</Label>
+                <TextLink label="Пропустить" onPress={skipLessons} />
+              </View>
+              <Heading level="heading">{coach === 'done' ? 'Получилось' : coach === 'retry' ? 'Ещё раз' : lesson.title}</Heading>
+              <Body muted small style={{ marginTop: space.xs }}>
+                {coach === 'done' ? lesson.done : coach === 'retry' ? 'Пары не вышло. Ставим заново.' : lesson.text}
+              </Body>
+            </View>
+          ) : null}
+          <Animated.View style={boardStyle} {...swipe.panHandlers}>
+            <View
+              ref={boardRef}
+              onLayout={measureBoard}
+              collapsable={false}
+              accessibilityLabel="Доска. Смахните, чтобы сдвинуть"
+              accessibilityActions={[
+                { name: 'left', label: 'Сдвиг влево' },
+                { name: 'right', label: 'Сдвиг вправо' },
+                { name: 'up', label: 'Сдвиг вверх' },
+                { name: 'down', label: 'Сдвиг вниз' },
+              ]}
+              onAccessibilityAction={(e) => sweep(e.nativeEvent.actionName as Dir)}>
               <Field w={N} h={N} values={values} cell={cell} gap={gap} look={look} />
+              {sliding ? (
+                <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                  {sliding.moves.map((m) => (
+                    <SlidingTile key={`${sliding.id}-${m.from}`} m={m} cell={cell} gap={gap} />
+                  ))}
+                </View>
+              ) : null}
             </View>
           </Animated.View>
-          {sweepRow}
-          {hints ? (
+          {lesson && lesson.sweeps === 0 ? <View style={{ minHeight: 44, marginTop: space.sm }} /> : sweepRow}
+          {hints && !lesson ? (
             <Text style={[type.secondary, { width: boardSize, marginTop: space.md, minHeight: 40, color: c.muted }]}>{hint}</Text>
           ) : null}
         </View>
@@ -366,11 +495,67 @@ export default function Game() {
         </View>
       </Screen>
 
+      {final ? (
+        <View style={StyleSheet.absoluteFill}>
+          <Overlay>
+            <Panel>
+              <Heading>Цель: собрать 96</Heading>
+              <Body muted style={{ marginTop: space.sm }}>
+                Лесенка: 3, 6, 12, 24, 48, 96. Партия кончается, когда ни одна фигура из лотка не встаёт на доску, так что держите место и пары.
+              </Body>
+              <View style={{ marginTop: space.xl }}>
+                <Button kind="primary" size="lg" label="Начать игру" onPress={skipLessons} />
+              </View>
+            </Panel>
+          </Overlay>
+        </View>
+      ) : null}
+
       {/* The lifted piece, above everything. No drop shadow: the lift reads
           from the scale-up and from the ghost on the board. */}
       <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0 }, dragStyle]}>
         {hold ? <Field variant="piece" {...pieceGrid(hold.piece)} cell={cell} gap={gap} /> : null}
       </Animated.View>
     </View>
+  );
+}
+
+/** A tile in flight during a sweep: drawn the way an isolated tile sits on the
+    board (its own fill inside the thick line), moving from its old cell to its
+    new one. */
+function SlidingTile({ m, cell, gap }: { m: Move; cell: number; gap: number }) {
+  const { c } = useTheme();
+  const pad = gap / 2;
+  const at = (i: number) => ({ x: pad + (i % N) * cell, y: pad + ((i / N) | 0) * cell });
+  const a = at(m.from);
+  const b = at(m.to);
+  const k = useSharedValue(0);
+  useEffect(() => {
+    k.value = withTiming(1, enter(SLIDE));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const st = useAnimatedStyle(() => ({
+    transform: [{ translateX: a.x + (b.x - a.x) * k.value }, { translateY: a.y + (b.y - a.y) * k.value }],
+  }));
+  const rk = rank(m.value);
+  return (
+    <Animated.View
+      style={[
+        { position: 'absolute', left: 0, top: 0, width: cell, height: cell, padding: pad, backgroundColor: c.line },
+        st,
+      ]}>
+      <View style={{ flex: 1, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center' }}>
+        <Text
+          allowFontScaling={false}
+          style={{
+            color: c.ink[rk],
+            fontFamily: font.tile,
+            fontSize: Math.max(12, Math.round(cell * (m.value >= 100 ? 0.28 : m.value >= 10 ? 0.34 : 0.4))),
+            fontVariant: ['tabular-nums'],
+          }}>
+          {m.value}
+        </Text>
+      </View>
+    </Animated.View>
   );
 }

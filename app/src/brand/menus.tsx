@@ -29,9 +29,10 @@ export function PosterMenu() {
   const ins = useSafeAreaInsets();
   const { width: W, height: H } = useWindowDimensions();
   const [confirm, setConfirm] = useState(false);
-  const { game, stats, inProgress, newGame } = useGame();
+  const { game, stats, inProgress, newGame, learned } = useGame();
   const score = game.score.toLocaleString('ru-RU');
   const fresh = () => {
+    if (!learned) return router.push({ pathname: '/game', params: { learn: '1' } });
     newGame();
     go.play();
   };

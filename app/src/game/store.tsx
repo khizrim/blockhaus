@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import engine, { type Dir, type Game, type Piece, type PlaceResult, type SweepResult } from './engine';
+import { LESSONS } from './lessons';
 
 /* The one running game and the player's record, shared by every screen and
    saved after every move, so closing the app never loses a game. */
@@ -12,7 +13,7 @@ const KEY = 'blockhaus:v1';
 const EMPTY: Stats = { best: 0, bestTile: 0, played: 0, wins: 0 };
 const FIELDS = ['board', 'tray', 'sweeps', 'score', 'merges', 'bestTile', 'moves', 'won', 'over'] as const;
 
-type Saved = { game: Pick<Game, (typeof FIELDS)[number]>; stats: Stats; winSeen: boolean };
+type Saved = { game: Pick<Game, (typeof FIELDS)[number]>; stats: Stats; winSeen: boolean; learned?: boolean };
 
 type Store = {
   ready: boolean;
@@ -24,6 +25,13 @@ type Store = {
   winSeen: boolean;
   /** A game worth continuing: started and not over. */
   inProgress: boolean;
+  /** The first-game lesson was finished or skipped. */
+  learned: boolean;
+  /** Index of the lesson on the board, or null in a normal game. */
+  lesson: number | null;
+  startLesson: (k: number) => void;
+  /** Leave the lessons for a fresh game. */
+  finishLessons: () => void;
   place: (slot: number, ox: number, oy: number) => PlaceResult | null;
   sweep: (dir: Dir) => SweepResult | null;
   newGame: () => void;
@@ -47,6 +55,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [stats, setStats] = useState<Stats>(EMPTY);
   const [winSeen, setWinSeen] = useState(false);
   const [ready, setReady] = useState(false);
+  const [learned, setLearned] = useState(false);
+  const [lesson, setLesson] = useState<number | null>(null);
+  const saved = useRef<Game | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(KEY)
@@ -56,6 +67,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         gRef.current = restore(s.game);
         setStats({ ...EMPTY, ...s.stats });
         setWinSeen(!!s.winSeen);
+        setLearned(!!s.learned || (s.stats?.played ?? 0) > 0);
       })
       .catch(() => {})
       .finally(() => {
@@ -67,10 +79,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
   // Save after every change once loaded.
   useEffect(() => {
     if (!ready) return;
-    const g = gRef.current;
+    // During the lesson the saved game is the one put aside, if any.
+    const g = lesson === null ? gRef.current : (saved.current ?? engine.newGame());
     const game = Object.fromEntries(FIELDS.map((f) => [f, g[f]])) as Saved['game'];
-    AsyncStorage.setItem(KEY, JSON.stringify({ game, stats, winSeen } satisfies Saved)).catch(() => {});
-  }, [ready, version, stats, winSeen]);
+    AsyncStorage.setItem(KEY, JSON.stringify({ game, stats, winSeen, learned } satisfies Saved)).catch(() => {});
+  }, [ready, version, stats, winSeen, learned, lesson]);
 
   const bump = () => setVersion((v) => v + 1);
 
@@ -90,12 +103,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const g = gRef.current;
       const res = engine.place(g, slot, ox, oy);
       if (res) {
-        if (g.over) record(g);
+        if (g.over && lesson === null) record(g);
         bump();
       }
       return res;
     },
-    [record],
+    [record, lesson],
   );
 
   const sweep = useCallback(
@@ -103,21 +116,49 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const g = gRef.current;
       const res = engine.sweep(g, dir);
       if (res) {
-        if (g.over) record(g);
+        if (g.over && lesson === null) record(g);
         bump();
       }
       return res;
     },
-    [record],
+    [record, lesson],
   );
 
   const newGame = useCallback(() => {
     const g = gRef.current;
-    if (!g.over) record(g);
+    if (!g.over && lesson === null) record(g);
+    setLesson(null);
+    saved.current = null;
     gRef.current = engine.newGame();
     setWinSeen(false);
     bump();
-  }, [record]);
+  }, [record, lesson]);
+
+  const startLesson = useCallback(
+    (k: number) => {
+      const L = LESSONS[k];
+      if (!L) return;
+      if (lesson === null) saved.current = gRef.current;
+      const g = engine.newGame();
+      g.board = L.board.slice();
+      g.tray = L.tray.map((p) => ({ cells: p.cells.map((c) => [...c] as [number, number, number]), used: p.used }));
+      g.sweeps = L.sweeps;
+      g.bestTile = Math.max(...g.board);
+      gRef.current = g;
+      setLesson(k);
+      bump();
+    },
+    [lesson],
+  );
+
+  const finishLessons = useCallback(() => {
+    setLearned(true);
+    setLesson(null);
+    gRef.current = saved.current && saved.current.moves > 0 && !saved.current.over ? saved.current : engine.newGame();
+    saved.current = null;
+    setWinSeen(false);
+    bump();
+  }, []);
 
   const value = useMemo<Store>(() => {
     const g = gRef.current;
@@ -132,13 +173,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
         bestTile: Math.max(stats.bestTile, g.bestTile),
       },
       winSeen,
-      inProgress: g.moves > 0 && !g.over,
+      inProgress: lesson === null && g.moves > 0 && !g.over,
+      learned,
+      lesson,
+      startLesson,
+      finishLessons,
       place,
       sweep,
       newGame,
       markWinSeen: () => setWinSeen(true),
       resetProgress: () => {
         setStats(EMPTY);
+        setLearned(false);
         gRef.current = engine.newGame();
         setWinSeen(false);
         bump();
@@ -159,7 +205,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         bump();
       },
     };
-  }, [ready, version, stats, winSeen, place, sweep, newGame]);
+  }, [ready, version, stats, winSeen, place, sweep, newGame, learned, lesson, startLesson, finishLessons]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

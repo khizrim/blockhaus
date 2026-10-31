@@ -59,6 +59,16 @@ export default function Settings() {
             </List>
           </Section>
 
+          <Section title="Помощь">
+            <List>
+              <Row label="Пройти обучение" note="Пять коротких шагов на настоящей доске" onPress={() => {
+                router.dismissAll();
+                router.push({ pathname: '/game', params: { learn: '1' } });
+              }} />
+              <Row label="Правила" onPress={() => router.push('/howto')} />
+            </List>
+          </Section>
+
           <Section title="Прогресс">
             <List>
               <Row label="Рекорд" note={`Лучшая плитка ${stats.bestTile || '—'}, партий: ${stats.played}, побед: ${stats.wins}`}>
