@@ -1,0 +1,8 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Logo renders correctly with default props 1`] = `
+<img
+  alt="Blockhaus"
+  style="display: flex; width: 340px;"
+/>
+`;

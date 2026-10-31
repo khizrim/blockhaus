@@ -1,0 +1,39 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Copyright matches snapshot 1`] = `
+<section
+  class="g-box g-flex"
+  style="column-gap: 12px; row-gap: 12px; align-items: center;"
+>
+  <span
+    class="g-text g-text_variant_code-2"
+  >
+    Made in 2024 by
+  </span>
+  <a
+    class="g-link g-link_view_normal"
+    href="https://github.com/friday-night-push/"
+    rel="noopener noreferrer"
+    target="_blank"
+  >
+    <img
+      alt=""
+    />
+  </a>
+  <span
+    class="g-text g-text_variant_code-2"
+  >
+    at
+  </span>
+  <a
+    class="g-link g-link_view_normal"
+    href="https://practicum.yandex.ru/middle-frontend/"
+    rel="noopener noreferrer"
+    target="_blank"
+  >
+    <img
+      alt=""
+    />
+  </a>
+</section>
+`;

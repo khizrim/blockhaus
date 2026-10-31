@@ -1,0 +1,26 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`OfflinePage match snapshot 1`] = `
+<section
+  class="g-box g-flex"
+  style="width: auto; min-height: 100vh; flex-direction: column; column-gap: 12px; row-gap: 12px; align-items: center; justify-content: center;"
+>
+  <section
+    class="g-box g-flex"
+    style="width: 100%; max-width: 380px; flex-direction: column; flex-grow: 1; column-gap: 32px; row-gap: 32px; align-items: center; justify-content: center;"
+  >
+    <span
+      class="g-text g-text_variant_display-1"
+      style="text-align: center;"
+    >
+      Uh-oh, Looks Like You’re Offline!
+    </span>
+    <span
+      class="g-text g-text_variant_body-1"
+      style="text-align: center;"
+    >
+      We’ll keep things cozy until you’re back online.
+    </span>
+  </section>
+</section>
+`;

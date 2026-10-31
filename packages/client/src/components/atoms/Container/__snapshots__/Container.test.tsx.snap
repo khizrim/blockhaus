@@ -1,0 +1,8 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Container renders correctly with default props 1`] = `
+<section
+  class="g-box g-flex"
+  style="column-gap: 12px; row-gap: 12px;"
+/>
+`;

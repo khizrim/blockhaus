@@ -1,0 +1,18 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Input renders correctly with default props 1`] = `
+<span
+  class="g-text-input g-text-input_view_normal g-text-input_size_xl g-text-input_pin_brick-brick"
+>
+  <span
+    class="g-text-input__content"
+  >
+    <input
+      class="g-text-input__control g-text-input__control_type_input"
+      name="test"
+      type="text"
+      value=""
+    />
+  </span>
+</span>
+`;

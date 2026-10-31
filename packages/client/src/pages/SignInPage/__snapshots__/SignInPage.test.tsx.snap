@@ -1,0 +1,167 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`SignInPage matches snapshot 1`] = `
+<section
+  class="g-box g-flex"
+  style="width: auto; min-height: 100vh; flex-direction: column; column-gap: 12px; row-gap: 12px; align-items: center; justify-content: center;"
+>
+  <section
+    class="g-box g-flex"
+    style="width: 100%; max-width: 380px; flex-direction: column; flex-grow: 1; column-gap: 32px; row-gap: 32px; align-items: center; justify-content: center;"
+  >
+    <img
+      alt="Blockhaus"
+      style="display: flex; width: 240px;"
+    />
+    <section
+      class="g-box g-flex"
+      style="flex-direction: column; column-gap: 12px; row-gap: 12px; align-items: center;"
+    >
+      <span
+        class="g-text g-text_variant_display-2"
+      >
+        Sign in
+      </span>
+      <span
+        class="g-text g-text_variant_subheader-2"
+        style="text-align: center;"
+      >
+        Back again? Just sign in to keep your results showing up on the leaderboards
+      </span>
+      <form
+        action="#"
+        style="width: 100%;"
+      >
+        <section
+          class="g-box g-flex"
+          style="width: 100%; flex-direction: column; column-gap: 16px; row-gap: 16px; align-items: center;"
+        >
+          <span
+            class="g-text-input g-text-input_view_normal g-text-input_size_xl g-text-input_pin_brick-brick"
+          >
+            <span
+              class="g-text-input__content"
+            >
+              <label
+                class="g-text-input__label"
+                for="g-:r0:"
+                style="max-width: calc(50% - 0px);"
+                title="Login"
+              >
+                Login
+              </label>
+              <input
+                class="g-text-input__control g-text-input__control_type_input"
+                id="g-:r0:"
+                name="login"
+                type="text"
+                value=""
+              />
+            </span>
+          </span>
+          <span
+            class="g-text-input g-text-input_view_normal g-text-input_size_xl g-text-input_pin_brick-brick"
+          >
+            <span
+              class="g-text-input__content"
+            >
+              <label
+                class="g-text-input__label"
+                for="g-:r3:"
+                style="max-width: calc(50% - 0px);"
+                title="Password"
+              >
+                Password
+              </label>
+              <input
+                class="g-text-input__control g-text-input__control_type_input"
+                id="g-:r3:"
+                name="password"
+                type="password"
+                value=""
+              />
+            </span>
+          </span>
+          <section
+            class="g-box g-flex"
+            style="flex-direction: row; column-gap: 8px; row-gap: 8px;"
+          >
+            <button
+              class="g-button g-button_view_action g-button_size_xl g-button_pin_brick-brick g-button_width_max"
+              type="submit"
+            >
+              <span
+                class="g-button__text"
+              >
+                Submit
+              </span>
+            </button>
+          </section>
+        </section>
+      </form>
+      <button
+        class="g-button g-button_view_outlined-action g-button_size_xl g-button_pin_brick-brick"
+        type="button"
+      >
+        <span
+          class="g-button__icon g-button__icon_side_start"
+        >
+          <span
+            class="g-button__icon-inner"
+          >
+            <svg
+              aria-hidden="true"
+              class="g-icon"
+              fill="currentColor"
+              height="16"
+              stroke="none"
+              width="16"
+              xmlns="http://www.w3.org/2000/svg"
+              xmlns:xlink="http://www.w3.org/1999/xlink"
+            >
+              <svg
+                fill="none"
+                viewBox="0 0 16 16"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  clip-rule="evenodd"
+                  d="M13.5 8a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0M6.136 5.103a.75.75 0 0 0-1.272.795l2.044 3.27c.223.357.342.77.342 1.192v1.14a.75.75 0 0 0 1.5 0v-1.14a3.75 3.75 0 0 0-.57-1.987zm5 .795a.75.75 0 1 0-1.272-.795L8.77 6.853a.75.75 0 0 0 1.272.795z"
+                  fill="currentColor"
+                  fill-rule="evenodd"
+                />
+              </svg>
+            </svg>
+          </span>
+        </span>
+        <span
+          class="g-button__text"
+        >
+          Auth with Yandex
+        </span>
+      </button>
+      <a
+        aria-disabled="false"
+        class="g-button g-button_view_flat g-button_size_xl g-button_pin_brick-brick"
+        href="/sign-up"
+      >
+        <span
+          class="g-button__text"
+        >
+          First time here? Sign up
+        </span>
+      </a>
+      <button
+        class="g-button g-button_view_flat g-button_size_xl g-button_pin_brick-brick"
+        type="button"
+      >
+        <span
+          class="g-button__text"
+        >
+          Go Back
+        </span>
+      </button>
+    </section>
+  </section>
+</section>
+`;
