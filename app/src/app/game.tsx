@@ -264,8 +264,15 @@ export default function Game() {
     setHold(null);
     setTarget(null);
     if (!t) {
-      // Back to its slot, the way it came, then it is the tray's again.
-      fx.invalid();
+      // Back to its slot, the way it came, then it is the tray's again. A
+      // warning only when it was let go over the board and did not fit there.
+      const px = Math.round((dx.value - boardAt.current.x) / cell);
+      const py = Math.round((dy.value - boardAt.current.y) / cell);
+      const w = Math.max(...h.piece.cells.map(([cx]) => cx)) + 1;
+      const hgt = Math.max(...h.piece.cells.map(([, cy]) => cy)) + 1;
+      const overBoard = px > -w && py > -hgt && px < N && py < N;
+      if (overBoard) fx.invalid();
+      else fx.putBack();
       setReturning(h.slot);
       setHeld(h.piece);
       dx.value = withTiming(origin.current.x, enter(dur.base));

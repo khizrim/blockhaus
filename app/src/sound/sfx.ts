@@ -1,6 +1,6 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { getMusic } from './music';
 
@@ -44,10 +44,19 @@ let hapticsOn = true;
 let musicOn = true;
 let ready = false;
 
+/* The audio session is set before anything plays, music included: with sound
+   off and music on, the defaults would play through the silent switch. */
+let moded = false;
+function mode() {
+  if (moded) return;
+  moded = true;
+  setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers', shouldPlayInBackground: false }).catch(() => {});
+}
+
 function init() {
   if (ready) return;
   ready = true;
-  setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers', shouldPlayInBackground: false }).catch(() => {});
+  mode();
   for (const name of SOUND_NAMES) {
     pool.set(name, { players: Array.from({ length: VOICES }, () => createAudioPlayer(SRC[name])), next: 0 });
   }
@@ -57,6 +66,7 @@ export function setFeedback(o: { sound: boolean; haptics: boolean; music: boolea
   soundOn = o.sound;
   hapticsOn = o.haptics;
   musicOn = o.music;
+  mode();
   if (soundOn) init();
   syncMusic();
 }
@@ -68,10 +78,20 @@ export function setFeedback(o: { sound: boolean; haptics: boolean; music: boolea
 
 const MUSIC_LEVEL = 0.35;
 let dimmed = false;
+let away = false;
 
 function syncMusic() {
-  getMusic().setVolume(musicOn ? (dimmed ? MUSIC_LEVEL * 0.35 : MUSIC_LEVEL) : 0, 600);
+  getMusic().setVolume(musicOn && !away ? (dimmed ? MUSIC_LEVEL * 0.35 : MUSIC_LEVEL) : 0, away ? 150 : 600);
 }
+
+/* Silent while the app is in the background or the browser tab is hidden,
+   and back when the player returns. */
+AppState.addEventListener('change', (s) => {
+  const next = s !== 'active';
+  if (next === away) return;
+  away = next;
+  syncMusic();
+});
 
 /** Lower the music while a screen like pause is open. */
 export function dimMusic(on: boolean) {
@@ -94,7 +114,7 @@ export function play(name: SoundName) {
   const p = v.players[v.next];
   v.next = (v.next + 1) % VOICES;
   try {
-    p.seekTo(0);
+    p.seekTo(0).catch(() => {});
     p.play();
   } catch {
     // Sound is a garnish: a failed play never reaches the game.
@@ -120,6 +140,8 @@ export const fx = {
     play(cells >= 3 ? 'place-3' : cells === 2 ? 'place-2' : 'place-1');
     buzz(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
   },
+  /** A piece let go off the board goes home: not a mistake, so no warning. */
+  putBack: () => play('pick'),
   invalid: () => {
     play('invalid');
     buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));

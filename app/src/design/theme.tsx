@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 
@@ -7,8 +8,10 @@ import { dark, light, type Palette } from './tokens';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 
-/* Prototype-only preferences. Nothing is persisted yet: the toggles exist so
-   the screens can be designed around them. */
+/* Preferences, kept on the device. Sound and music wait for the saved values
+   before they start, so a player who turned the music off never hears it
+   swell for a moment at launch. */
+const KEY = 'blockhaus:prefs';
 type Prefs = {
   mode: ThemeMode;
   setMode: (m: ThemeMode) => void;
@@ -33,7 +36,25 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [haptics, setHaptics] = useState(true);
   const [hints, setHints] = useState(true);
   const [music, setMusic] = useState(true);
-  useEffect(() => setFeedback({ sound, haptics, music }), [sound, haptics, music]);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem(KEY)
+      .then((raw) => {
+        const p = raw ? (JSON.parse(raw) as Partial<Record<'mode' | 'sound' | 'haptics' | 'hints' | 'music', unknown>>) : {};
+        if (p.mode === 'system' || p.mode === 'light' || p.mode === 'dark') setMode(p.mode);
+        if (typeof p.sound === 'boolean') setSound(p.sound);
+        if (typeof p.haptics === 'boolean') setHaptics(p.haptics);
+        if (typeof p.hints === 'boolean') setHints(p.hints);
+        if (typeof p.music === 'boolean') setMusic(p.music);
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
+  useEffect(() => {
+    if (!loaded) return;
+    setFeedback({ sound, haptics, music });
+    AsyncStorage.setItem(KEY, JSON.stringify({ mode, sound, haptics, hints, music })).catch(() => {});
+  }, [loaded, mode, sound, haptics, hints, music]);
   const isDark = mode === 'dark' || (mode === 'system' && system === 'dark');
   const value = useMemo(
     () => ({ mode, setMode, sound, setSound, haptics, setHaptics, hints, setHints, music, setMusic, isDark, c: isDark ? dark : light }),

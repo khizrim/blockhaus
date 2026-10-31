@@ -106,6 +106,7 @@ function nativeMusic(): Music {
   let mix = [1, 0]; // each player's share, for the crossfade
   let turn: ReturnType<typeof setTimeout> | null = null;
   let tick: ReturnType<typeof setInterval> | null = null;
+  let fade: ReturnType<typeof setInterval> | null = null;
   let running = false;
 
   const apply = () => players.forEach((p, k) => (p.volume = level * mix[k]));
@@ -119,14 +120,16 @@ function nativeMusic(): Music {
       b.seekTo(0);
       b.play();
       const t0 = Date.now();
-      const fade = setInterval(() => {
+      if (fade) clearInterval(fade);
+      fade = setInterval(() => {
         const k = Math.min(1, (Date.now() - t0) / (TAIL * 1000));
         // Equal power: the sum stays level through the fade.
         mix[cur] = Math.cos((k * Math.PI) / 2);
         mix[next] = Math.sin((k * Math.PI) / 2);
         apply();
         if (k === 1) {
-          clearInterval(fade);
+          if (fade) clearInterval(fade);
+          fade = null;
           a.pause();
           cur = next;
         }
@@ -148,6 +151,9 @@ function nativeMusic(): Music {
   const end = () => {
     running = false;
     if (turn) clearTimeout(turn);
+    // A crossfade cut short must not keep steering the volumes of the next start.
+    if (fade) clearInterval(fade);
+    fade = null;
     players.forEach((p) => p.pause());
   };
 
