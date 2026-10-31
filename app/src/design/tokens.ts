@@ -76,17 +76,17 @@ export function pairs(a: number, b: number): boolean {
 }
 
 export const font = {
-  /** Archivo at 125% width, for the wordmark and headings. */
-  wide: 'ArchivoWide-ExtraBold',
-  /** Archivo at 115% width, black, for the score and big numbers. */
-  black: 'ArchivoWide-Black',
-  /** Archivo at 110% width, for numbers on tiles. */
+  /** Dela Gothic One: the poster face. Wordmark, headings, big numbers. */
+  wide: 'DelaGothicOne_400Regular',
+  black: 'DelaGothicOne_400Regular',
+  /** Archivo at 110% width, for numbers on tiles (the board keeps its face). */
   tile: 'ArchivoTile-ExtraBold',
   /** Archivo at 90% width, for 3-digit tiles. */
   narrow: 'ArchivoNarrow-ExtraBold',
-  body: 'InstrumentSans_400Regular',
-  bodyMedium: 'InstrumentSans_500Medium',
-  bodySemi: 'InstrumentSans_600SemiBold',
+  /** Onest for everything you read. Both faces carry Cyrillic. */
+  body: 'Onest_400Regular',
+  bodyMedium: 'Onest_500Medium',
+  bodySemi: 'Onest_600SemiBold',
 };
 
 /** Mix colour `a` into `b` by `t` (0..1). Hex only. */

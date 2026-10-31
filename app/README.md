@@ -13,12 +13,13 @@ npx expo start --web  # or open in a browser
 
 ## What is here
 
-- `src/app/` screens (Expo Router): `index` menu, `game`, `pause`, `win`, `over`, `settings`, `howto`, `kit` (design kit).
+- `src/app/` screens (Expo Router): `index` poster menu, `game`, `pause`, `win`, `over`, `settings`, `howto`, `kit` (design kit).
 - `src/components/Field.tsx` the one renderer for every grid: board, tray pieces, cover, tutorial art. Same-value touching tiles form a field: thick lines between fields, thin folds inside.
 - `src/components/ui.tsx` buttons, toggles, ladder, wordmark, icons.
 - `src/design/tokens.ts` colours (light/dark), fonts, `rank`/`pairs` helpers.
 - `src/design/mock.ts` hand-placed scenes (mid game, first tray, crowded, made 96).
-- `assets/fonts/` Archivo instanced at fixed widths (125%, 115%, 110%, 90%) from the variable font, since React Native can't set `font-stretch`. OFL licence alongside.
+- Identity: poster menu (`src/brand/`), Dela Gothic One for display, Onest for text (both Cyrillic).
+- `assets/fonts/` Archivo instanced at fixed widths (110%, 90%) for tile numbers from the variable font, since React Native can't set `font-stretch`. OFL licence alongside.
 
 ## What works without rules
 

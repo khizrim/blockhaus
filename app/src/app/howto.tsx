@@ -34,7 +34,7 @@ function Eq({ a, b, w, h, cell = 40 }: { a: (number | null)[]; b: (number | null
 
 const PAGES: { title: string; text: string; art: () => ReactNode }[] = [
   {
-    title: 'DROP PIECES',
+    title: 'Drop pieces',
     text: 'Drag a piece from the tray onto any empty cells. Three pieces per tray; use them in any order.',
     art: () => <Eq w={3} h={2} a={[0, 0, 2, 0, 0, 0]} b={[1, 0, 2, 1, 0, 0]} />,
   },
@@ -44,17 +44,17 @@ const PAGES: { title: string; text: string; art: () => ReactNode }[] = [
     art: () => <Eq w={2} h={2} a={[1, 2, 1, 1]} b={[0, 3, 1, 1]} cell={44} />,
   },
   {
-    title: 'EQUALS DOUBLE',
+    title: 'Equals double',
     text: 'From 3 up, equal tiles merge into the next rung: 3 and 3 make 6, 6 and 6 make 12. Merges cascade.',
     art: () => <Eq w={3} h={1} a={[3, 3, 6]} b={[0, 0, 12]} cell={44} />,
   },
   {
-    title: 'SWEEP',
+    title: 'Sweep',
     text: 'Twice per tray you can slide the whole board one way. Pairs that meet on the way combine.',
     art: () => <Eq w={3} h={3} a={[1, 0, 2, 0, 12, 0, 6, 0, 0]} b={[3, 0, 0, 12, 0, 0, 6, 0, 0]} cell={34} />,
   },
   {
-    title: 'MAKE 96',
+    title: 'Make 96',
     text: 'Climb the ladder to 96 to win. The game ends when no piece in the tray fits. You can keep going past 96 for score.',
     art: () => (
       <View style={{ alignItems: 'center' }}>
@@ -78,7 +78,7 @@ export default function HowTo() {
 
   return (
     <Screen>
-      <TopBar title="HOW TO PLAY" close onBack={() => router.back()} />
+      <TopBar title="How to play" close onBack={() => router.back()} />
       <ScrollView
         ref={ref}
         horizontal
@@ -110,7 +110,7 @@ export default function HowTo() {
         <Button
           kind="primary"
           size="lg"
-          label={last ? 'GOT IT' : 'NEXT'}
+          label={last ? 'Got it' : 'Next'}
           onPress={() => (last ? router.back() : go(page + 1))}
         />
       </View>

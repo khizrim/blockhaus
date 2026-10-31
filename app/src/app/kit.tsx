@@ -27,7 +27,7 @@ export default function Kit() {
 
   return (
     <Screen>
-      <TopBar title="DESIGN KIT" onBack={() => router.back()} />
+      <TopBar title="Design kit" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={{ gap: 30, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <Block title="Rungs">
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -62,10 +62,10 @@ export default function Kit() {
         </Block>
 
         <Block title="Type">
-          <Wordmark size={15} />
+          <Wordmark size={22} />
           <Text style={{ fontFamily: font.black, fontSize: 44, color: c.text }}>1,840</Text>
-          <Heading>HEADING WIDE</Heading>
-          <Body>Instrument Sans for running text, hints and settings. Archivo, widened, for numbers and headings.</Body>
+          <Heading>Poster heading</Heading>
+          <Body>Dela Gothic One for the name, headings and big numbers. Onest for text. Archivo, widened, stays on the tiles.</Body>
           <Label>Label · uppercase</Label>
         </Block>
 
@@ -107,8 +107,8 @@ export default function Kit() {
         </Block>
 
         <Block title="Controls">
-          <Button kind="primary" size="lg" label="PRIMARY" />
-          <Button kind="primary" tone={8} size="lg" label="TONED" />
+          <Button kind="primary" size="lg" label="Primary" />
+          <Button kind="primary" tone={8} size="lg" label="Toned" />
           <Button label="Outline" />
           <Button kind="danger" label="Destructive" />
           <Button kind="ghost" label="Ghost link" />
@@ -133,7 +133,7 @@ export default function Kit() {
             ]}
           />
           <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-            <Glyph size={14} />
+            <Glyph size={40} />
             <TileBadge v={12} />
             <TileBadge v={96} size={30} />
           </View>

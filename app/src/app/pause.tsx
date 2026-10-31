@@ -22,7 +22,7 @@ export default function Pause() {
           Paused
         </Heading>
         <View style={{ gap: 10 }}>
-          <Button kind="primary" size="lg" label="RESUME" onPress={() => router.back()} />
+          <Button kind="primary" size="lg" label="Resume" onPress={() => router.back()} />
           <Button label="Restart" onPress={() => openScene('early')} />
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <Button style={{ flex: 1 }} label="How to play" onPress={() => router.push('/howto')} />

@@ -34,7 +34,7 @@ export default function Over() {
           <Field w={6} h={6} values={final.board} cell={17} gap={3} numbers={false} />
           <View style={{ flex: 1, gap: 4 }}>
             <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: 22, color: c.text }}>
-              NO ROOM LEFT
+              No room left
             </Text>
             <Body muted style={{ fontSize: 14, lineHeight: 19 }}>
               None of the pieces fit anywhere.
@@ -67,7 +67,7 @@ export default function Over() {
           <Button
             kind="primary"
             size="lg"
-            label="PLAY AGAIN"
+            label="Play again"
             onPress={() => {
               router.dismissAll();
               router.replace({ pathname: '/game', params: { scene: 'early' } });

@@ -18,7 +18,7 @@ export default function Settings() {
   return (
     <View style={{ flex: 1 }}>
     <Screen>
-      <TopBar title="SETTINGS" onBack={() => router.back()} />
+      <TopBar title="Settings" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={{ gap: 26, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         <Section title="Look">
           <Segmented<ThemeMode>

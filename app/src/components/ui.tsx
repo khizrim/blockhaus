@@ -42,7 +42,7 @@ export function Label({ children, style }: { children: ReactNode; style?: TextSt
   return (
     <Text
       allowFontScaling={false}
-      style={[{ fontFamily: font.bodySemi, fontSize: 11, letterSpacing: 1.1, textTransform: 'uppercase', color: c.muted }, style]}>
+      style={[{ fontFamily: font.bodyMedium, fontSize: 13, color: c.muted }, style]}>
       {children}
     </Text>
   );
@@ -60,7 +60,7 @@ export function Body({ children, style, muted }: { children: ReactNode; style?: 
 export function Heading({ children, size = 26, style }: { children: ReactNode; size?: number; style?: TextStyle }) {
   const { c } = useTheme();
   return (
-    <Text allowFontScaling={false} style={[{ fontFamily: font.wide, fontSize: size, color: c.text, letterSpacing: 0.2 }, style]}>
+    <Text allowFontScaling={false} style={[{ fontFamily: font.wide, fontSize: size, color: c.text, letterSpacing: -0.3 }, style]}>
       {children}
     </Text>
   );
@@ -68,29 +68,40 @@ export function Heading({ children, size = 26, style }: { children: ReactNode; s
 
 /* ---------- wordmark ---------- */
 
-/** The little four-block mark: red, yellow / yellow, blue. */
-export function Glyph({ size = 7 }: { size?: number }) {
-  const { c } = useTheme();
-  const s = size;
-  const t = Math.round(size * 0.57);
-  const g = Math.max(2, Math.round(size * 0.28));
+/** The mark: the menu poster in miniature. Two lines cross off-centre; blue,
+    red and yellow take the corners, the way the poster does at full size. */
+export function Glyph({ size = 16 }: { size?: number }) {
+  const { c, isDark } = useTheme();
+  const S = size;
+  const L = Math.max(2, Math.round(S * 0.11));
+  const vx = Math.round(S * 0.62);
+  const hy = Math.round(S * 0.4);
+  const bx = Math.round(S * 0.24);
+  const yb = Math.round(S * 0.78);
+  const field = isDark ? '#1C1D21' : '#F3EFE4';
+  const box = (l: number, t: number, w: number, h: number, bg: string) => (
+    <View style={{ position: 'absolute', left: l, top: t, width: w, height: h, backgroundColor: bg }} />
+  );
   return (
-    <View style={{ width: s + t + g, height: s + t + g }}>
-      <View style={{ position: 'absolute', left: 0, top: 0, width: s, height: t, backgroundColor: c.tile[2] }} />
-      <View style={{ position: 'absolute', left: s + g, top: 0, width: t, height: t, backgroundColor: c.tile[3] }} />
-      <View style={{ position: 'absolute', left: 0, top: t + g, width: s, height: s, backgroundColor: c.tile[3] }} />
-      <View style={{ position: 'absolute', left: s + g, top: t + g, width: t, height: s, backgroundColor: c.tile[1] }} />
+    <View style={{ width: S, height: S, backgroundColor: field, borderWidth: L / 2, borderColor: c.line, overflow: 'hidden' }}>
+      {box(0, 0, bx, hy, c.tile[1])}
+      {box(vx + L, 0, S, hy, c.tile[2])}
+      {box(vx + L, hy + L, S, yb - hy - L, c.tile[3])}
+      {box(vx, 0, L, S, c.line)}
+      {box(0, hy, S, L, c.line)}
+      {box(bx, 0, L, hy, c.line)}
+      {box(vx, yb, S, L, c.line)}
     </View>
   );
 }
 
-export function Wordmark({ size = 13 }: { size?: number }) {
+export function Wordmark({ size = 18 }: { size?: number }) {
   const { c } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: size * 0.6 }}>
-      <Glyph size={Math.round(size * 0.55)} />
-      <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: size, letterSpacing: size * 0.02, color: c.text }}>
-        Blockhaus
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: size * 0.45 }}>
+      <Glyph size={Math.round(size * 1.15)} />
+      <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: size, letterSpacing: -0.3, color: c.text, includeFontPadding: false }}>
+        blockhaus
       </Text>
     </View>
   );
@@ -118,8 +129,8 @@ export function Button({ label, onPress, kind = 'outline', tone, size = 'md', di
   const face = useAnimatedStyle(() => ({ transform: [{ translateY: press.value * 3 }] }));
   const lg = size === 'lg';
   const bg =
-    kind === 'primary' ? (tone ? c.tile[tone] : c.text) : kind === 'danger' ? c.tile[2] : kind === 'ghost' ? 'transparent' : c.canvas;
-  const fg = kind === 'primary' ? (tone ? c.ink[tone] : c.bg) : kind === 'danger' ? '#FFFFFF' : c.text;
+    kind === 'primary' ? (tone ? c.tile[tone] : c.line) : kind === 'danger' ? c.tile[2] : kind === 'ghost' ? 'transparent' : c.canvas;
+  const fg = kind === 'primary' ? (tone ? c.ink[tone] : c.tile[3]) : kind === 'danger' ? '#FFFFFF' : c.text;
   const hasShadow = kind !== 'ghost';
   return (
     <Pressable
@@ -155,7 +166,7 @@ export function Button({ label, onPress, kind = 'outline', tone, size = 'md', di
             color: fg,
             fontFamily: lg ? font.wide : font.bodySemi,
             fontSize: lg ? 17 : 15,
-            letterSpacing: lg ? 1.2 : 0.2,
+            letterSpacing: lg ? 0 : 0.2,
             textDecorationLine: kind === 'ghost' ? 'underline' : 'none',
           }}>
           {label}

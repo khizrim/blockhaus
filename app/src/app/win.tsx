@@ -54,7 +54,7 @@ export default function Win() {
           </Animated.View>
           <Animated.View entering={FadeInDown.delay(900)} style={{ alignItems: 'center', gap: 6 }}>
             <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: 26, color: c.text }}>
-              YOU MADE 96
+              You made 96
             </Text>
             <Body muted style={{ textAlign: 'center' }}>
               The board is yours. Keep going for score, or start fresh.
@@ -76,7 +76,7 @@ export default function Win() {
           </View>
         </View>
         <View style={{ gap: 10, marginTop: 20 }}>
-          <Button kind="primary" tone={8} size="lg" label="KEEP GOING" onPress={() => router.back()} />
+          <Button kind="primary" tone={8} size="lg" label="Keep going" onPress={() => router.back()} />
           <Button
             label="New game"
             onPress={() => {
