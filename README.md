@@ -17,7 +17,11 @@ A merge puzzle on a 6×6 board. Drag pieces from a tray of three onto the board;
 - `npm test`: engine tests (Node 18+, no dependencies).
 - `npm run sim`: plays seeded games with a greedy bot at three skill levels across the variants in `sim/variants.js`. Latest numbers and conclusions in `sim/RESULTS.md`.
 
+## App
+
+`app/` is the Expo app. Stage 1 (now): the full visual design with no rules wired in. See `app/README.md`.
+
 ## Next
 
-- Tune balance from play feedback.
-- Wrap in Expo and ship an Android build.
+- Sound design for the app.
+- Wire `prototype/engine.js` into the app; app icon and splash; Android build via EAS.
