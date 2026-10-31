@@ -89,21 +89,34 @@ test('the tray refills and sweeps reset once all three pieces are used', () => {
 
 test('reaching the goal tile wins', () => {
   const g = E.newGame({}, E.seeded(3));
-  g.board[idx(1, 0)] = 48; g.board[idx(0, 1)] = 48;
-  g.tray[0] = piece(48);
+  g.board[idx(1, 0)] = 96; g.board[idx(0, 1)] = 96;
+  g.tray[0] = piece(96);
   E.place(g, 0, 0, 0);
-  assert.equal(g.bestTile, 96);
+  assert.equal(g.bestTile, 192);
   assert.ok(g.won);
 });
 
-test('the game ends when nothing in hand fits', () => {
+test('the game ends when nothing in hand fits and no sweep helps', () => {
   const g = E.newGame({}, E.seeded(4));
   g.board.fill(3);
   g.board[idx(0, 0)] = 0;
   g.tray = [piece(1, [[0, 0], [1, 0]]), piece(2, [[0, 0], [0, 1]]), piece(1, [[0, 0], [1, 0]])];
+  g.sweeps = 0;
   assert.ok(!E.anyMove(g));
   g.tray[1] = piece(2);
   assert.ok(E.anyMove(g));
+});
+
+test('a sweep in hand that would move tiles keeps the game going', () => {
+  const g = E.newGame({}, E.seeded(4));
+  g.board.fill(3);
+  g.board[idx(0, 0)] = 0;
+  g.tray = [piece(1, [[0, 0], [1, 0]]), piece(2, [[0, 0], [0, 1]]), piece(1, [[0, 0], [1, 0]])];
+  g.sweeps = 1;
+  assert.ok(E.anyMove(g), 'the hole can be swept, so the game is not over');
+  // A full board of 6s and 12s that never pair: nothing slides, sweeps do not help.
+  for (let i = 0; i < g.board.length; i++) g.board[i] = ((i % 6) + ((i / 6) | 0)) % 2 ? 6 : 12;
+  assert.ok(!E.anyMove(g));
 });
 
 test('every tray holds both 1s and 2s', () => {
@@ -137,4 +150,34 @@ test('balanced trays keep 1-cells and 2-cells within the slack', () => {
 test('seeded games replay identically', () => {
   const a = E.newGame({}, E.seeded(42)), b = E.newGame({}, E.seeded(42));
   assert.deepEqual(a.tray, b.tray);
+});
+
+test('a chain of two merges earns a sweep, up to the cap', () => {
+  const g = E.newGame({}, E.seeded(9));
+  g.board = new Array(N * N).fill(0);
+  // 1 next to 2 makes 3, which meets the 3 beside it: two merges.
+  g.board[idx(1, 0)] = 2; g.board[idx(0, 1)] = 3;
+  g.tray = [piece(1), piece(1), piece(1)];
+  g.sweeps = 1;
+  const res = E.place(g, 0, 0, 0);
+  assert.equal(res.steps.length, 2);
+  assert.ok(res.bonus);
+  assert.equal(g.sweeps, 2);
+  g.sweeps = g.cfg.sweepsMax;
+  g.board[idx(4, 4)] = 2; g.board[idx(3, 5)] = 3;
+  const again = E.place(g, 1, 3, 4);
+  assert.equal(again.steps.length, 2);
+  assert.ok(!again.bonus);
+  assert.equal(g.sweeps, g.cfg.sweepsMax);
+});
+
+test('a piece limit ends the game after that many placements', () => {
+  const g = E.newGame({ pieceLimit: 2 }, E.seeded(11));
+  g.board = new Array(N * N).fill(0);
+  g.tray = [piece(3), piece(6), piece(12)];
+  E.place(g, 0, 0, 0);
+  assert.ok(!g.over);
+  E.place(g, 1, 3, 3);
+  assert.ok(g.over);
+  assert.equal(E.place(g, 2, 5, 5), null);
 });

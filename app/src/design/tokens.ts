@@ -1,0 +1,115 @@
+/* Design tokens, carried over from prototype/index.html.
+
+   The board reads as a Mondrian composition. Tiles of the same value that
+   touch form one "field", a single block of colour. Between fields runs a
+   thick black gap; inside a field only a thin fold marks where one cell ends
+   and the next begins, so a field still counts cell by cell. Empty space is a
+   field too.
+
+   Colour encodes the rung: primaries for 1, 2, 3 (the tiles that cover most of
+   the board), secondaries for the rarer rungs above. */
+
+export type Palette = {
+  bg: string; // the wall the panel hangs on
+  canvas: string; // empty field
+  line: string; // thick gaps between fields
+  stroke: string; // outlines of controls: ink on light, chalk on dark
+  fold: string; // thin folds inside a field
+  text: string;
+  muted: string;
+  faint: string;
+  scrim: string;
+  /** L1 surface: controls, cards, the tray. */
+  surface: string;
+  /** Hairline border of an L1 surface. */
+  hair: string;
+  /** Soft shadow colour for L2 (cards over a scrim). */
+  shadow: string;
+  /** Tile fill and number colour per rung, index 1..8. */
+  tile: string[];
+  ink: string[];
+};
+
+export const light: Palette = {
+  bg: '#F3EFE4', // the poster's paper
+  canvas: '#FFFDF7',
+  line: '#111215',
+  stroke: '#111215',
+  fold: 'rgba(17,18,21,0.2)',
+  text: '#111215',
+  muted: '#5D5F66',
+  faint: '#9A9BA0',
+  scrim: 'rgba(243,239,228,0.88)',
+  surface: '#FFFDF7',
+  hair: 'rgba(17,18,21,0.14)',
+  shadow: 'rgba(17,18,21,0.06)',
+  // 192, the goal, is the theme's own ink: a black tile with a yellow number here.
+  tile: ['', '#1F4FB2', '#D9342B', '#F4C21C', '#EC7A1F', '#1D8657', '#6B3DA3', '#D9468C', '#0E8C97', '#111215'],
+  ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#F4C21C'],
+};
+
+export const dark: Palette = {
+  // Dark keeps the lines pure black and lifts the fields, so the thick gaps
+  // between fields still read: the board's whole look depends on them.
+  bg: '#1B1C20',
+  canvas: '#383A42',
+  line: '#000000',
+  stroke: '#EEEDEA',
+  fold: 'rgba(0,0,0,0.45)',
+  text: '#EEEDEA',
+  muted: '#A2A3A8',
+  faint: '#66686E',
+  scrim: 'rgba(27,28,32,0.9)',
+  surface: '#26272C',
+  hair: 'rgba(238,237,234,0.14)',
+  shadow: 'rgba(0,0,0,0.3)',
+  // 192, the goal, is the theme's own ink: a paper tile with a black number here.
+  tile: ['', '#3466D6', '#E5463C', '#F2C230', '#F08A33', '#26A06A', '#8455C4', '#E25C9C', '#18A3AE', '#F3EFE4'],
+  ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#111215'],
+};
+
+export const LADDER = [1, 2, 3, 6, 12, 24, 48, 96, 192] as const;
+export const NAMES = ['', 'blue', 'red', 'yellow', 'orange', 'green', 'violet', 'magenta', 'teal', 'ink'];
+
+/** Rung of a value: 1→1, 2→2, 3→3, 6→4 … 96 → 8, 192 and above → 9. Same as engine.rank. */
+export function rank(v: number): number {
+  if (v <= 0) return 0;
+  if (v < 3) return v;
+  let r = 3;
+  let x = v;
+  while (x > 3 && r < 9) {
+    x /= 2;
+    r++;
+  }
+  return r;
+}
+
+/** Does `a` pair with `b`? 1 goes with 2, from 3 up only equals. Visual only. */
+export function pairs(a: number, b: number): boolean {
+  if (!a || !b) return false;
+  if (a + b === 3) return true;
+  return a >= 3 && a === b;
+}
+
+export const font = {
+  /** Dela Gothic One: the wordmark only. It is a logo, not a type style. */
+  wide: 'DelaGothicOne_400Regular',
+  /** Onest for everything else, in three weights: 400, 500, 600. */
+  body: 'Onest_400Regular',
+  bodyMedium: 'Onest_500Medium',
+  bodySemi: 'Onest_600SemiBold',
+  /** Numbers: tiles, the score. Onest 600; tiles use proportional figures so "12" stays tight. */
+  tile: 'Onest_600SemiBold',
+  black: 'Onest_600SemiBold',
+  narrow: 'Onest_600SemiBold',
+};
+
+/** Mix colour `a` into `b` by `t` (0..1). Hex only. */
+export function mix(a: string, b: string, t: number): string {
+  const p = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [r1, g1, b1] = p(a);
+  const [r2, g2, b2] = p(b);
+  const c = (x: number, y: number) => Math.round(x * t + y * (1 - t)).toString(16).padStart(2, '0');
+  return `#${c(r1, r2)}${c(g1, g2)}${c(b1, b2)}`;
+}
+

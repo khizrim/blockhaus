@@ -1,0 +1,86 @@
+# Builds an installable Android APK of the Expo app in app/ and publishes it
+# to the "android-latest" pre-release, so it can be downloaded on a phone.
+# Signed with the stock debug key: fine for sideloading tests, not for Google Play
+# (store builds go through EAS, see app/eas.json).
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['claude/**', main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/android-apk.yml'
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate native project
+        run: npx expo prebuild -p android --no-install --clean
+        env:
+          CI: 1
+
+      - name: Build release APK
+        working-directory: app/android
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon
+
+      - name: Collect APK
+        id: apk
+        run: |
+          short=$(git rev-parse --short HEAD)
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/app-release.apk out/blockhaus.apk
+          cp out/blockhaus.apk "out/blockhaus-$short.apk"
+          ls -la out
+          echo "short=$short" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blockhaus-apk-${{ steps.apk.outputs.short }}
+          path: app/out/blockhaus.apk
+
+      - name: Publish to the android-latest pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHORT: ${{ steps.apk.outputs.short }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          notes="Тестовая сборка для Android. Коммит $SHORT (ветка $BRANCH). Скачайте blockhaus.apk на телефоне и установите."
+          if gh release view android-latest >/dev/null 2>&1; then
+            gh release edit android-latest --prerelease --title "Blockhaus для Android (тест)" --notes "$notes"
+            git push -f origin "$SHA:refs/tags/android-latest"
+          else
+            gh release create android-latest --prerelease --target "$SHA" --title "Blockhaus для Android (тест)" --notes "$notes"
+          fi
+          gh release upload android-latest out/blockhaus.apk --clobber
