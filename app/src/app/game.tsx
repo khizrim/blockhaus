@@ -96,11 +96,22 @@ export default function Game() {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const later = (ms: number, f: () => void) => timers.current.push(setTimeout(f, ms));
-  const settle = () => {
+  const clearTimers = () => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
   };
-  useEffect(() => settle, []);
+  /* A new move ends the last one at once. Its pending frames are dropped, so
+     whatever they would have cleaned up (points in the air, tiles in flight,
+     a piece flying home) is cleared here too, or it stays stuck on the board. */
+  const settle = () => {
+    clearTimers();
+    setFlights([]);
+    setFloats([]);
+    setSliding(null);
+    setReturning(null);
+    setHeld(null);
+  };
+  useEffect(() => clearTimers, []);
 
   // A new game, a loaded position or a restored save: show it as it is.
   const lastGame = useRef(g);
