@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Field, type CellLook } from '@/components/Field';
 import { Overlay } from '@/components/Overlay';
@@ -23,7 +23,10 @@ import { fx } from '@/sound/sfx';
    cascade while the marimba climbs. */
 
 const N = engine.N;
-const BEAT = 120; // ms between merges of a chain
+const STEP = 150; // ms between merges of a chain
+const FLY = 110; // ms for an absorbed tile to fly into its partner
+const PLATE = 6; // px each sweep layer shows under the board
+const back = (d: number, k = 1.8) => ({ duration: d, easing: Easing.out(Easing.back(k)) });
 
 // On the web a drag would otherwise select the numbers.
 const noSelect = { userSelect: 'none' } as object;
@@ -32,6 +35,26 @@ const SWIPE = 24; // px of travel that counts as a swipe
 const SLIDE = dur.base; // ms for tiles to travel in a sweep
 
 type Hold = { slot: number; piece: Piece };
+
+/** The placement that merges the most, as [cell, value] pairs to hatch. */
+function bestMove(g: { board: number[]; tray: (Piece | null)[] }): [number, number][] | null {
+  let top: [number, number][] | null = null;
+  let most = 0;
+  for (const p of g.tray) {
+    if (!p || p.used) continue;
+    const { w, h } = engine.size(p);
+    for (let y = 0; y <= N - h; y++)
+      for (let x = 0; x <= N - w; x++) {
+        if (!engine.fits(g.board, p, x, y)) continue;
+        const n = engine.applyPlacement(g.board.slice(), p, x, y).steps.length;
+        if (n > most) {
+          most = n;
+          top = p.cells.map(([cx, cy, v]) => [(y + cy) * N + x + cx, v] as [number, number]);
+        }
+      }
+  }
+  return top;
+}
 
 export default function Game() {
   const { c, hints } = useTheme();
@@ -53,22 +76,21 @@ export default function Game() {
   // What the board shows. Equal to the game's board at rest; during a chain it
   // steps through the intermediate positions.
   const [shown, setShown] = useState<number[]>(() => g.board.slice());
-  /* Hints are not a permanent line any more: one surfaces when it helps (a
-     drop that does not fit, a sweep that cannot happen, a long pause, the
-     first pick of a game) and leaves on its own. */
-  const [toast, setToast] = useState<{ text: string; id: number } | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const setHint = (text: string, ms = 2600) => {
-    if (!hints) return;
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ text, id: Date.now() });
-    toastTimer.current = setTimeout(() => setToast(null), ms);
-  };
-  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* A hint is shown, not told: after a long pause the board hatches one good
+     move, once per game. */
+  const [nudge, setNudge] = useState<[number, number][] | null>(null);
   const idleShown = useRef(0);
+  const [flights, setFlights] = useState<{ id: string; m: Move; ms: number }[]>([]);
+  const [floats, setFloats] = useState<{ id: string; at: number; v: number }[]>([]);
+  const [returning, setReturning] = useState<number | null>(null);
   const [pops, setPops] = useState<Record<number, number>>({});
   const [lands, setLands] = useState<Record<number, number>>({});
   const [hold, setHold] = useState<Hold | null>(null);
+  const lastDir = useRef<Dir>('down');
+  // A new tray gets new keys so its pieces spring in; a spent piece keeps its key.
+  const trayId = useRef(0);
+  // The piece drawn in the drag layer: the held one, or one flying home.
+  const [held, setHeld] = useState<Piece | null>(null);
   const [target, setTarget] = useState<{ gx: number; gy: number } | null>(null);
   const [sliding, setSliding] = useState<{ moves: Move[]; id: number } | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -104,7 +126,7 @@ export default function Game() {
   /* The board takes what is left of the height after the fixed parts:
      header 64, the lesson card when there is one, the tray, and the 8pt
      paddings around them. Never wider than the screen, never under 240. */
-  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null ? 120 : 0) + trayCell * 3 + 32 + 48;
+  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null ? 120 : 0) + 18 + trayCell * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
 
@@ -143,11 +165,26 @@ export default function Game() {
     store.finishLessons();
   };
 
+  /** Points rise from where a merge happened. */
+  const float = (at: number, v: number) => {
+    const id = `${at}-${Date.now()}-${Math.random()}`;
+    setFloats((f) => [...f, { id, at, v }]);
+    later(800, () => setFloats((f) => f.filter((x) => x.id !== id)));
+  };
+  /** Big merges move the board: a small press, bigger for higher rungs. */
+  const bump = useSharedValue(1);
+  const thump = (v: number) => {
+    if (v < 12) return;
+    const k = v >= 96 ? 0.04 : v >= 48 ? 0.03 : v >= 24 ? 0.02 : 0.012;
+    bump.value = withSequence(withTiming(1 - k, { duration: 60 }), withTiming(1, back(260, 2.5)));
+  };
+
   /* ---------- drag ---------- */
   const boardRef = useRef<ComponentRef<typeof View>>(null);
   const boardAt = useRef({ x: 0, y: 0 });
   const measureBoard = () => boardRef.current?.measureInWindow((x, y) => (boardAt.current = { x, y }));
 
+  const origin = useRef({ x: 0, y: 0 });
   const dx = useSharedValue(0);
   const dy = useSharedValue(0);
   const lift = useSharedValue(0);
@@ -181,10 +218,11 @@ export default function Game() {
     dx.value = pageX - ox;
     dy.value = pageY - oy + 20;
     dy.value = withTiming(pageY - oy, enter(dur.fast));
-    lift.value = withTiming(1, enter(dur.fast));
+    lift.value = withTiming(1, back(220, 2.4));
+    origin.current = { x: pageX - ox, y: pageY - oy + 20 };
+    setNudge(null);
     setHold({ slot, piece: p });
     fx.pick();
-    if (g.moves < 2 && store.lesson === null) setHint('Яркие плитки сольются с фигурой.');
   };
 
   const move = (pageX: number, pageY: number) => {
@@ -203,9 +241,17 @@ export default function Game() {
     setHold(null);
     setTarget(null);
     if (!t) {
-      lift.value = withTiming(0, exit(dur.fast));
+      // Back to its slot, the way it came, then it is the tray's again.
       fx.invalid();
-      setHint('Здесь не помещается.');
+      setReturning(h.slot);
+      setHeld(h.piece);
+      dx.value = withTiming(origin.current.x, enter(dur.base));
+      dy.value = withTiming(origin.current.y, enter(dur.base));
+      lift.value = withSequence(withTiming(0.4, enter(dur.base)), withTiming(0, { duration: 0 }));
+      later(dur.base, () => {
+        setReturning(null);
+        setHeld(null);
+      });
       return;
     }
     lift.value = 0;
@@ -213,6 +259,7 @@ export default function Game() {
     const before = g.board.slice();
     const res = store.place(h.slot, t.gx, t.gy);
     if (!res) return;
+    if (res.refilled) trayId.current++;
 
     // Frame 0: the piece laid. Then one frame per merge of the chain.
     const frame = before.slice();
@@ -222,21 +269,32 @@ export default function Game() {
     setLands((l) => ({ ...l, ...Object.fromEntries(res.laid.map((i) => [i, now])) }));
     fx.place(h.piece.cells.length);
 
-    res.steps.forEach((s, k) => {
-      for (const a of s.absorbed) frame[a] = 0;
-      frame[s.anchor] = s.level;
+    /* The chain, one merge per step: the absorbed tile flies into its
+       partner, and on arrival the partner flashes, its number kicks, the note
+       plays, the haptic taps and the points float up, all on the same frame. */
+    res.steps.forEach((st, k) => {
+      const t0 = 90 + k * STEP;
+      const value = frame[st.absorbed[0]];
+      for (const a of st.absorbed) frame[a] = 0;
+      const mid = frame.slice();
+      frame[st.anchor] = st.level;
       const snap = frame.slice();
-      later(90 + k * BEAT, () => {
+      later(t0, () => {
+        setShown(mid);
+        setFlights((f) => [...f, ...st.absorbed.map((a) => ({ id: `${t0}-${a}-${Date.now()}`, m: { from: a, to: st.anchor, value, merges: true }, ms: FLY }))]);
+      });
+      later(t0 + FLY, () => {
         setShown(snap);
-        setPops((pp) => ({ ...pp, [s.anchor]: Date.now() }));
-        fx.merge(s.level);
+        setFlights((f) => f.filter((x) => !st.absorbed.some((a) => x.m.from === a)));
+        setPops((pp) => ({ ...pp, [st.anchor]: Date.now() }));
+        fx.merge(st.level);
+        float(st.anchor, st.level);
+        thump(st.level);
       });
     });
-    const done = 90 + res.steps.length * BEAT;
-    later(done, () => setShown(g.board.slice()));
-
-    if (res.steps.length >= 3 && store.lesson === null) later(done, () => setHint(`Цепочка ×${res.steps.length}, до ${res.steps[res.steps.length - 1].level}`, 1800));
-    if (res.refilled) later(done + 100, () => fx.tray());
+    const done = 90 + Math.max(0, res.steps.length - 1) * STEP + (res.steps.length ? FLY : 0);
+    later(done + 20, () => setShown(g.board.slice()));
+    if (res.refilled) later(done + 120, () => fx.tray());
     afterMove(done);
   };
 
@@ -267,6 +325,10 @@ export default function Game() {
   const look = useCallback(
     (i: number): CellLook | undefined => {
       const l: CellLook = { pop: pops[i], land: lands[i] };
+      if (!hold && nudge) {
+        const h = nudge.find(([at]) => at === i);
+        if (h && shown[i] === 0) l.ghost = h[1];
+      }
       if (!hold && lesson?.hint && coach === 'task') {
         const h = lesson.hint.find(([at]) => at === i);
         if (h && shown[i] === 0) l.ghost = h[1];
@@ -291,7 +353,7 @@ export default function Game() {
       }
       return l;
     },
-    [shown, hold, target, pops, lands, lesson, coach],
+    [shown, hold, target, pops, lands, lesson, coach, nudge],
   );
 
   const values = useMemo(() => {
@@ -307,7 +369,7 @@ export default function Game() {
      two tiles met. */
   const sx = useSharedValue(0);
   const sy = useSharedValue(0);
-  const boardStyle = useAnimatedStyle(() => ({ transform: [{ translateX: sx.value }, { translateY: sy.value }] }));
+  const boardStyle = useAnimatedStyle(() => ({ transform: [{ translateX: sx.value }, { translateY: sy.value }, { scale: bump.value }] }));
 
   const shake = () => {
     sx.value = withSequence(withTiming(6, { duration: 50 }), withTiming(-6, { duration: 80 }), withTiming(0, enter(dur.fast)));
@@ -320,17 +382,16 @@ export default function Game() {
     if (g.sweeps === 0) {
       fx.invalid();
       shake();
-      setHint('Сдвиги кончились. Новый лоток вернёт два.');
       return;
     }
     settle();
     const before = g.board.slice();
     const moves = slideMoves(before, dir);
+    lastDir.current = dir;
     const res = store.sweep(dir);
     if (!res) {
       fx.invalid();
       shake();
-      setHint('В эту сторону ничего не сдвинется.');
       return;
     }
     fx.sweep();
@@ -339,14 +400,20 @@ export default function Game() {
     later(SLIDE, () => {
       setSliding(null);
       setShown(g.board.slice());
+      // The board meets the wall it was pushed against.
+      const [ux, uy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
+      sx.value = withSequence(withTiming(ux * 5, { duration: 50 }), withTiming(0, back(240, 2.5)));
+      sy.value = withSequence(withTiming(uy * 5, { duration: 50 }), withTiming(0, back(240, 2.5)));
     });
     res.made.forEach((m, k) =>
-      later(SLIDE + k * BEAT, () => {
+      later(SLIDE + k * STEP, () => {
         setPops((pp) => ({ ...pp, [m.at]: Date.now() }));
         fx.merge(m.level);
+        float(m.at, m.level);
+        thump(m.level);
       }),
     );
-    afterMove(SLIDE + res.made.length * BEAT);
+    afterMove(SLIDE + res.made.length * STEP);
   };
 
   const sweepRef = useRef(sweep);
@@ -384,32 +451,24 @@ export default function Game() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // After a long pause in a normal game, one quiet reminder of the two moves.
+  // After a long pause in a normal game, hatch one move that merges.
   useEffect(() => {
-    if (idleTimer.current) clearTimeout(idleTimer.current);
-    if (store.lesson !== null || g.over || hold || idleShown.current >= 2) return;
-    idleTimer.current = setTimeout(() => {
+    if (!hints || store.lesson !== null || g.over || hold || idleShown.current >= 1) return;
+    const id = setTimeout(() => {
+      const m = bestMove(g);
+      if (!m) return;
       idleShown.current++;
-      setHint(
-        g.sweeps
-          ? 'Ставьте фигуру рядом с парой: 1 к 2, равные от тройки. Или смахните доску.'
-          : 'Ставьте фигуру рядом с парой: 1 к 2, равные от тройки.',
-        4000,
-      );
-    }, 12000);
-    return () => {
-      if (idleTimer.current) clearTimeout(idleTimer.current);
-    };
+      setNudge(m);
+      later(3000, () => setNudge(null));
+    }, 15000);
+    return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store.version, hold, store.lesson]);
-  useEffect(
-    () => () => {
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-    },
-    [],
-  );
+  }, [store.version, hold, store.lesson, hints]);
 
-  const best = Math.max(...shown, 0);
+  // While tiles are in flight the board under them is empty; keep the last best.
+  const bestRef = useRef(0);
+  if (!sliding) bestRef.current = Math.max(...shown, 0);
+  const best = bestRef.current;
 
   return (
     <View style={[{ flex: 1 }, noSelect]}>
@@ -423,10 +482,9 @@ export default function Game() {
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.lg }}>
-            <Sweeps n={g.sweeps} />
             <View style={{ alignItems: 'flex-end', gap: space.xs }}>
               <Label meta>Лучшая</Label>
-              <TileBadge v={best} size={28} />
+              <BestTile v={best} />
             </View>
             <IconButton label="Пауза" onPress={() => router.push('/pause')}>
               <PauseIcon color={c.text} />
@@ -469,32 +527,24 @@ export default function Game() {
                   ))}
                 </View>
               ) : null}
+              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                {flights.map((f) => (
+                  <SlidingTile key={f.id} m={f.m} cell={cell} gap={gap} ms={f.ms} />
+                ))}
+                {floats.map((f) => (
+                  <Float key={f.id} at={f.at} v={f.v} cell={cell} gap={gap} />
+                ))}
+              </View>
             </View>
           </Animated.View>
-          {toast ? (
-            <Animated.View
-              key={toast.id}
-              entering={FadeIn.duration(dur.base)}
-              exiting={FadeOut.duration(dur.fast)}
-              pointerEvents="none"
-              accessibilityLiveRegion="polite"
-              style={{
-                position: 'absolute',
-                bottom: space.sm,
-                maxWidth: boardSize - space.xxl,
-                paddingHorizontal: space.lg,
-                paddingVertical: space.sm,
-                backgroundColor: c.surface,
-                borderWidth: 1,
-                borderColor: c.hair,
-                shadowColor: c.shadow,
-                shadowOpacity: 1,
-                shadowRadius: 16,
-                shadowOffset: { width: 0, height: 4 },
-              }}>
-              <Text style={[type.secondary, { color: c.text, textAlign: 'center' }]}>{toast.text}</Text>
-            </Animated.View>
-          ) : null}
+          {/* The sweeps are the board's thickness: one layer under it per
+              sweep left. A sweep pulls a layer out the way the board went; a
+              new tray slides them back in. */}
+          <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: boardSize, alignItems: 'center' }}>
+            {[0, 1].map((k) => (
+              <Plate key={k} on={g.sweeps > k} k={k} dir={lastDir.current} width={boardSize - 2 * (k + 1) * space.sm} />
+            ))}
+          </View>
         </View>
 
         {/* tray: an L1 surface with three slots */}
@@ -519,12 +569,12 @@ export default function Game() {
                 borderColor: c.hair,
               }}>
               {p ? (
-                <Animated.View
-                  key={`${p.used ? 'used' : 'live'}-${JSON.stringify(p.cells)}`}
-                  entering={p.used ? undefined : FadeIn.duration(dur.base)}
-                  style={{ opacity: p.used || hold?.slot === slot ? 0 : g.over ? 0.35 : 1 }}>
+                <TrayPiece
+                  key={`${trayId.current}-${slot}-${JSON.stringify(p.cells)}`}
+                  delay={slot * 70}
+                  opacity={p.used || hold?.slot === slot || returning === slot ? 0 : g.over ? 0.35 : 1}>
                   <Field variant="piece" {...pieceGrid(p)} cell={trayCell} gap={gap} />
-                </Animated.View>
+                </TrayPiece>
               ) : null}
             </View>
           ))}
@@ -550,7 +600,7 @@ export default function Game() {
       {/* The lifted piece, above everything. No drop shadow: the lift reads
           from the scale-up and from the ghost on the board. */}
       <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0 }, dragStyle]}>
-        {hold ? <Field variant="piece" {...pieceGrid(hold.piece)} cell={cell} gap={gap} /> : null}
+        {hold || held ? <Field variant="piece" {...pieceGrid((hold?.piece ?? held)!)} cell={cell} gap={gap} /> : null}
       </Animated.View>
     </View>
   );
@@ -559,7 +609,7 @@ export default function Game() {
 /** A tile in flight during a sweep: drawn the way an isolated tile sits on the
     board (its own fill inside the thick line), moving from its old cell to its
     new one. */
-function SlidingTile({ m, cell, gap }: { m: Move; cell: number; gap: number }) {
+function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap: number; ms?: number }) {
   const { c } = useTheme();
   const pad = gap / 2;
   const at = (i: number) => ({ x: pad + (i % N) * cell, y: pad + ((i / N) | 0) * cell });
@@ -567,7 +617,7 @@ function SlidingTile({ m, cell, gap }: { m: Move; cell: number; gap: number }) {
   const b = at(m.to);
   const k = useSharedValue(0);
   useEffect(() => {
-    k.value = withTiming(1, enter(SLIDE));
+    k.value = withTiming(1, ms === SLIDE ? enter(ms) : { duration: ms, easing: Easing.in(Easing.quad) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const st = useAnimatedStyle(() => ({
@@ -596,41 +646,97 @@ function SlidingTile({ m, cell, gap }: { m: Move; cell: number; gap: number }) {
   );
 }
 
-/** Sweeps left in this tray, as two charges in the header. A spent charge
-    empties; a fresh tray fills both again with a short grow. */
-function Sweeps({ n }: { n: number }) {
+
+/** The best tile, drawn as a tile of the board: its fill inside the line. */
+function BestTile({ v }: { v: number }) {
   const { c } = useTheme();
+  const size = 36;
+  const rk = rank(v);
+  const k = useSharedValue(1);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) return void (first.current = false);
+    k.value = withSequence(withTiming(1.3, { duration: 0 }), withTiming(1, back(320, 2.4)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [v]);
+  const st = useAnimatedStyle(() => ({ transform: [{ scale: k.value }] }));
   return (
-    <View style={{ alignItems: 'flex-end', gap: space.xs }} accessibilityLabel={`Сдвигов осталось: ${n} из 2. Смахните доску, чтобы сдвинуть`}>
-      <Label meta style={{ color: n ? c.muted : c.faint }}>Сдвиги</Label>
-      <View style={{ flexDirection: 'row', gap: space.xs, height: 28, alignItems: 'center' }}>
-        {[0, 1].map((k) => (
-          <Charge key={k} on={k < n} />
-        ))}
+    <Animated.View
+      accessibilityLabel={v ? `Лучшая плитка ${v}` : 'Лучшей плитки пока нет'}
+      style={[{ width: size, height: size, padding: 3, backgroundColor: c.line }, st]}>
+      <View style={{ flex: 1, backgroundColor: v ? c.tile[rk] : c.canvas, alignItems: 'center', justifyContent: 'center' }}>
+        {v ? (
+          <Text allowFontScaling={false} style={{ fontFamily: font.tile, fontSize: v >= 10 ? 14 : 16, color: c.ink[rk], fontVariant: ['tabular-nums'] }}>
+            {v}
+          </Text>
+        ) : null}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
-function Charge({ on }: { on: boolean }) {
+/** One sweep layer under the board. */
+function Plate({ on, k, dir, width }: { on: boolean; k: number; dir: Dir; width: number }) {
   const { c } = useTheme();
-  const s = useSharedValue(1);
+  const x = useSharedValue(0);
+  const y = useSharedValue(0);
+  const o = useSharedValue(on ? 1 : 0);
   const first = useRef(true);
   useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
+    if (first.current) return void (first.current = false);
+    if (on) {
+      x.value = 0;
+      y.value = -PLATE * 2;
+      y.value = withDelay(k * 80, withTiming(0, back(300, 2.2)));
+      o.value = withDelay(k * 80, withTiming(1, { duration: 120 }));
+    } else {
+      const [ux, uy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
+      x.value = withTiming(ux * 80, { duration: 220, easing: Easing.in(Easing.quad) });
+      y.value = withTiming(uy * 24, { duration: 220, easing: Easing.in(Easing.quad) });
+      o.value = withTiming(0, { duration: 220 });
     }
-    s.value = withSequence(withTiming(on ? 0.6 : 1.15, { duration: 0 }), withTiming(1, enter(dur.base)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on]);
-  const st = useAnimatedStyle(() => ({ transform: [{ scale: s.value }] }));
+  const st = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateX: x.value }, { translateY: y.value }] }));
+  return <Animated.View style={[{ width, height: PLATE, marginTop: k ? 2 : 4, backgroundColor: c.line }, st]} />;
+}
+
+/** "+N" rising from the cell where a merge happened. */
+function Float({ at, v, cell, gap }: { at: number; v: number; cell: number; gap: number }) {
+  const { c } = useTheme();
+  const k = useSharedValue(0);
+  useEffect(() => {
+    k.value = withTiming(1, { duration: 760, easing: Easing.out(Easing.cubic) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const pad = gap / 2;
+  const st = useAnimatedStyle(() => ({
+    opacity: k.value < 0.6 ? 1 : 1 - (k.value - 0.6) / 0.4,
+    transform: [{ translateY: -k.value * cell * 0.7 }, { scale: 0.8 + Math.min(1, k.value * 4) * 0.2 }],
+  }));
   return (
     <Animated.View
       style={[
-        { width: 16, height: 28, backgroundColor: on ? c.text : 'transparent', borderWidth: on ? 0 : 1, borderColor: c.hair },
+        { position: 'absolute', left: pad + (at % N) * cell, top: pad + ((at / N) | 0) * cell - cell * 0.3, width: cell, alignItems: 'center' },
         st,
-      ]}
-    />
+      ]}>
+      <Text
+        allowFontScaling={false}
+        style={{ fontFamily: font.tile, fontSize: Math.round(cell * (v >= 24 ? 0.34 : 0.28)), color: c.text, textShadowColor: c.canvas, textShadowRadius: 4 }}>
+        {`+${v}`}
+      </Text>
+    </Animated.View>
   );
+}
+
+/** A tray piece. New ones spring in one after another. Own shared values, not
+    `entering`, so Safari keeps their size. */
+function TrayPiece({ delay, opacity, children }: { delay: number; opacity: number; children: React.ReactNode }) {
+  const k = useSharedValue(0);
+  useEffect(() => {
+    k.value = withDelay(delay, withTiming(1, back(300, 2.2)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const st = useAnimatedStyle(() => ({ transform: [{ scale: 0.4 + k.value * 0.6 }], opacity: Math.min(1, k.value * 2) * opacity }));
+  return <Animated.View style={st}>{children}</Animated.View>;
 }

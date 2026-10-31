@@ -1,6 +1,7 @@
 import { memo, useEffect, useId } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import Animated, {
+  Easing,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -160,23 +161,32 @@ const Cell = memo(function Cell(p: CellProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* Feedback without shrinking the tile: the fill never moves, so the board's
+     lines never show through. A merge flashes the tile and kicks its number
+     up; a landing flashes softer and drops the number into place. Timed to
+     land with the sound and the haptic of the same event. */
+  const flash = useSharedValue(0);
+  const num = useSharedValue(1);
+  const drop = useSharedValue(0);
+  const kick = { duration: 280, easing: Easing.out(Easing.back(2.2)) };
+
   useEffect(() => {
     if (!look?.pop) return;
-    scale.value = withSequence(
-      withTiming(0.85, { duration: 0 }),
-      withTiming(1, enter(dur.base)),
-    );
+    flash.value = withSequence(withTiming(0.6, { duration: 0 }), withTiming(0, { duration: 320, easing: Easing.out(Easing.quad) }));
+    num.value = withSequence(withTiming(1.55, { duration: 0 }), withTiming(1, kick));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [look?.pop]);
 
   useEffect(() => {
     if (!look?.land) return;
-    scale.value = withSequence(withTiming(0.92, { duration: 0 }), withTiming(1, enter(dur.base)));
-    opacity.value = withSequence(withTiming(0.6, { duration: 0 }), withTiming(1, enter(dur.base)));
+    flash.value = withSequence(withTiming(0.35, { duration: 0 }), withTiming(0, { duration: 240, easing: Easing.out(Easing.quad) }));
+    drop.value = withSequence(withTiming(-0.18, { duration: 0 }), withTiming(0, kick));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [look?.land]);
 
   const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }], opacity: opacity.value }));
+  const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
+  const numStyle = useAnimatedStyle(() => ({ transform: [{ translateY: drop.value * cell }, { scale: num.value }] }));
 
   let fill = v > 0 ? c.tile[rk] : c.canvas;
   let ink = v > 0 ? c.ink[rk] : 'transparent';
@@ -240,18 +250,21 @@ const Cell = memo(function Cell(p: CellProps) {
             <View style={[StyleSheet.absoluteFill, { borderWidth: 2, borderColor: c.line }]} />
           </View>
         ) : null}
+        {v > 0 ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF' }, flashStyle]} /> : null}
         {p.numbers && v > 0 ? (
-          <Text
-            allowFontScaling={false}
-            style={{
-              color: ink,
-              fontFamily: font.tile,
-              fontSize: Math.max(12, Math.round(cell * (long ? 0.28 : v >= 10 ? 0.34 : 0.4))),
-              fontVariant: ['tabular-nums'],
-              includeFontPadding: false,
-            }}>
-            {v}
-          </Text>
+          <Animated.View style={numStyle}>
+            <Text
+              allowFontScaling={false}
+              style={{
+                color: ink,
+                fontFamily: font.tile,
+                fontSize: Math.max(12, Math.round(cell * (long ? 0.28 : v >= 10 ? 0.34 : 0.4))),
+                fontVariant: ['tabular-nums'],
+                includeFontPadding: false,
+              }}>
+              {v}
+            </Text>
+          </Animated.View>
         ) : null}
         {/* Where two lines meet at an inside corner of a field, the joint square
             belongs to the line, or the line steps sideways there. */}
