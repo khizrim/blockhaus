@@ -23,7 +23,7 @@ export default function Win() {
       <Panel>
         <Animated.View
           entering={FadeInDown.delay(dur.base).duration(dur.slow).easing(Easing.out(Easing.cubic)).withInitialValues({ opacity: 0, transform: [{ translateY: 8 }] })}
-          style={{ alignSelf: 'flex-start' }}>
+          style={{ alignSelf: 'flex-start', width: 96, height: 96 }}>
           <Field w={1} h={1} values={[Math.max(96, game.bestTile)]} cell={96} gap={8} variant="piece" />
         </Animated.View>
         <Heading style={{ marginTop: space.xl }}>Вы собрали {Math.max(96, game.bestTile)}</Heading>
