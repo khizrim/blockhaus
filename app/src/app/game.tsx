@@ -598,7 +598,7 @@ export default function Game() {
             <Panel>
               <Heading>Цель: собрать 96</Heading>
               <Body muted style={{ marginTop: space.sm }}>
-                Лесенка: 3, 6, 12, 24, 48, 96. Партия кончается, когда ни одна фигура из лотка не встаёт на доску, так что держите место и пары.
+                Лесенка: 3, 6, 12, 24, 48, 96. Партия кончается, когда ни одна фигура из лотка не встаёт на доску и сдвиг уже не помогает. Держите место и пары.
               </Body>
               <View style={{ marginTop: space.xl }}>
                 <Button kind="primary" size="lg" label="Начать игру" onPress={skipLessons} />
