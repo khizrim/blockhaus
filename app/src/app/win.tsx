@@ -12,7 +12,7 @@ import { dur, space } from '@/design/system';
 
 /* The win. One tile, the 192, is the picture: the only colour on the card. */
 export default function Win() {
-  const { game, markWinSeen, newGame } = useGame();
+  const { game, markWinSeen, newGame, mode } = useGame();
   useEffect(() => {
     fx.win();
     markWinSeen();
@@ -33,7 +33,7 @@ export default function Win() {
         </View>
         <Heading style={{ marginTop: space.xl }}>Вы собрали {Math.max(192, game.bestTile)}</Heading>
         <Body muted style={{ marginTop: space.sm }}>
-          Партия выиграна. Можно продолжить на очки или начать новую.
+          {mode === 'daily' ? 'Игра дня выиграна. Доиграйте её до конца, чтобы записать результат.' : 'Партия выиграна. Можно продолжить на очки или начать новую.'}
         </Body>
         <Animated.View entering={FadeIn.delay(dur.slow).duration(dur.base)} style={{ flexDirection: 'row', gap: space.xxl, marginTop: space.xl }}>
           <Stat label="Очки" value={game.score.toLocaleString('ru-RU')} />
@@ -42,13 +42,15 @@ export default function Win() {
         </Animated.View>
         <View style={{ gap: space.md, marginTop: space.xl }}>
           <Button kind="primary" size="lg" label="Играть дальше" onPress={() => router.back()} />
-          <Button
-            label="Новая игра"
-            onPress={() => {
-              newGame();
-              router.back();
-            }}
-          />
+          {mode === 'daily' ? null : (
+            <Button
+              label="Новая игра"
+              onPress={() => {
+                newGame();
+                router.back();
+              }}
+            />
+          )}
         </View>
       </Panel>
     </Overlay>

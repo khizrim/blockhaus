@@ -9,13 +9,21 @@ import { Overlay } from '@/components/Overlay';
 import { Body, Button, Heading, Label, Panel, Stat, TileBadge } from '@/components/ui';
 import { dur, space, type, useCalm } from '@/design/system';
 import { useTheme } from '@/design/theme';
+import { dayLabel, plural, shareOrCopy, shareText } from '@/game/daily';
 import { useGame } from '@/game/store';
 
 /* Game over: the final board as a thumbnail, the score counting up once. */
 export default function Over() {
   const { c } = useTheme();
   const calm = useCalm();
-  const { game: final, stats, newGame } = useGame();
+  const { game: final, stats, newGame, mode, daily, streak } = useGame();
+  const isDaily = mode === 'daily';
+  const [shareNote, setShareNote] = useState<string | null>(null);
+  const share = async () => {
+    if (!daily.result) return;
+    const r = await shareOrCopy(shareText(daily.key, daily.result, streak.count));
+    setShareNote(r === 'copied' ? 'Результат скопирован' : r === 'failed' ? 'Не получилось поделиться' : null);
+  };
   const target = final.score;
   const record = target >= stats.best && target > 0;
   const [shown, setShown] = useState(calm ? target : 0);
@@ -37,9 +45,9 @@ export default function Over() {
       <Panel>
         <View style={{ flexDirection: 'row', gap: space.lg, alignItems: 'center' }}>
           <View style={{ flex: 1 }}>
-            <Heading>Места нет</Heading>
+            <Heading>{isDaily ? `Игра дня, ${dayLabel(daily.key)}` : 'Места нет'}</Heading>
             <Body muted small style={{ marginTop: space.xs }}>
-              Ни одна фигура из лотка не помещается на доску.
+              {isDaily ? 'Сыграна. Новая раскладка завтра.' : 'Ни одна фигура из лотка не помещается на доску.'}
             </Body>
           </View>
           <Field w={6} h={6} values={final.board} cell={12} gap={2} numbers={false} />
@@ -56,19 +64,28 @@ export default function Over() {
             <TileBadge v={final.bestTile} />
           </Stat>
           <Stat label="Слияния" value={String(final.merges)} />
-          <Stat label={record ? 'Новый рекорд' : 'Рекорд'} value={stats.best.toLocaleString('ru-RU')} />
+          {isDaily ? (
+            <Stat label="Серия" value={`${streak.count} ${plural(streak.count, 'день', 'дня', 'дней')}`} />
+          ) : (
+            <Stat label={record ? 'Новый рекорд' : 'Рекорд'} value={stats.best.toLocaleString('ru-RU')} />
+          )}
         </Animated.View>
 
         <View style={{ gap: space.md, marginTop: space.xl }}>
-          <Button
-            kind="primary"
-            size="lg"
-            label="Сыграть ещё"
-            onPress={() => {
-              newGame();
-              router.back();
-            }}
-          />
+          {isDaily ? (
+            <Button kind="primary" size="lg" label="Поделиться" onPress={share} />
+          ) : (
+            <Button
+              kind="primary"
+              size="lg"
+              label="Сыграть ещё"
+              onPress={() => {
+                newGame();
+                router.back();
+              }}
+            />
+          )}
+          {shareNote ? <Body muted small style={{ textAlign: 'center' }}>{shareNote}</Body> : null}
           <Button label="Выйти в меню" onPress={() => router.dismissTo('/')} />
         </View>
       </Panel>

@@ -12,6 +12,7 @@ import { dur, enter, exit, HIT, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Piece } from '@/game/engine';
+import { dayLabel } from '@/game/daily';
 import { LESSONS } from '@/game/lessons';
 import { slideMoves, type Move } from '@/game/slide';
 import { useGame } from '@/game/store';
@@ -64,7 +65,8 @@ export default function Game() {
   const store = useGame();
   const g = store.game;
   const { width, height } = useWindowDimensions();
-  const { learn } = useLocalSearchParams<{ learn?: string }>();
+  const { learn, daily } = useLocalSearchParams<{ learn?: string; daily?: string }>();
+  const isDaily = store.mode === 'daily';
   const lesson = store.lesson === null ? null : LESSONS[store.lesson];
   const [coach, setCoach] = useState<'task' | 'done'>('task');
   /** Right after the lessons: the goal stands in the lesson line for the whole first game,
@@ -73,6 +75,16 @@ export default function Game() {
   // The lesson on the board now, for timers that outlive a render (skip from pause).
   const lessonNow = useRef(store.lesson);
   lessonNow.current = store.lesson;
+
+  // Opened for the game of the day: put it on the board; leaving the screen
+  // puts the free game back.
+  useEffect(() => {
+    if (store.ready && daily) store.startDaily();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.ready, daily]);
+  const leaveDaily = useRef(store.leaveDaily);
+  leaveDaily.current = store.leaveDaily;
+  useEffect(() => () => leaveDaily.current(), []);
 
   // Opened to learn: start the first lesson once the save has loaded.
   useEffect(() => {
@@ -148,7 +160,7 @@ export default function Game() {
   /* The board takes what is left of the height after the fixed parts:
      header ~64, the lesson card when there is one, the tray, and the 8pt
      paddings around them. Never wider than the screen, never under 240. */
-  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || goalLine ? LESSON_H + space.lg : 0) + 18 + trayMax * 3 + 32 + 48;
+  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || goalLine || isDaily ? LESSON_H + space.lg : 0) + 18 + trayMax * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
   /* One column for the whole screen: the header, the lesson, the board and
@@ -574,14 +586,14 @@ export default function Game() {
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: step }}>
           {/* One line above the board, nothing else: the move in plain words,
               then the rule it proved as a formula. The way out of the lessons is in pause. */}
-          {lesson || goalLine ? (
+          {lesson || goalLine || isDaily ? (
             <View style={{ width: col, marginBottom: step, height: LESSON_H, justifyContent: 'center' }}>
               <Text
                 accessibilityRole="header"
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 style={[type.title, { color: c.text }]}>
-                {lesson ? (coach === 'task' ? lesson.title : lesson.done) : 'Цель: 192'}
+                {lesson ? (coach === 'task' ? lesson.title : lesson.done) : isDaily ? `Игра дня, ${dayLabel(store.daily.key)}` : 'Цель: 192'}
               </Text>
             </View>
           ) : null}

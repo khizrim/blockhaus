@@ -9,6 +9,7 @@ import { Body, Button, Heading, Panel, TextLink } from '@/components/ui';
 import { dur, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font } from '@/design/tokens';
+import { dayLabel, shareOrCopy, shareText } from '@/game/daily';
 import { useGame } from '@/game/store';
 
 import { Grow } from './marks';
@@ -29,7 +30,14 @@ export function PosterMenu() {
   const ins = useSafeAreaInsets();
   const { width: W, height: H } = useWindowDimensions();
   const [confirm, setConfirm] = useState(false);
-  const { game, stats, inProgress, newGame, learned } = useGame();
+  const { game, stats, inProgress, newGame, learned, daily, streak } = useGame();
+  const [dailyNote, setDailyNote] = useState<string | null>(null);
+  const openDaily = () => router.push({ pathname: '/game', params: { daily: '1' } });
+  const shareDaily = async () => {
+    if (!daily.result) return;
+    const r = await shareOrCopy(shareText(daily.key, daily.result, streak.count));
+    setDailyNote(r === 'copied' ? 'Результат скопирован' : r === 'failed' ? 'Не получилось поделиться' : null);
+  };
   const score = game.score.toLocaleString('ru-RU');
   const fresh = () => {
     if (!learned) return router.push({ pathname: '/game', params: { learn: '1' } });
@@ -99,6 +107,24 @@ export function PosterMenu() {
           ) : (
             <Button kind="primary" size="lg" label="Играть" onPress={fresh} />
           )}
+          {/* The game of the day: the same deal for everyone, once a day. */}
+          {learned ? (
+            daily.done ? (
+              <Button
+                label="Поделиться игрой дня"
+                trailing={daily.result!.score.toLocaleString('ru-RU')}
+                accessibilityLabel={`Поделиться игрой дня, ${daily.result!.score} очков`}
+                onPress={shareDaily}
+              />
+            ) : (
+              <Button
+                label={daily.started ? 'Продолжить игру дня' : 'Игра дня'}
+                trailing={streak.count > 0 ? `серия ${streak.count}` : dayLabel(daily.key)}
+                onPress={openDaily}
+              />
+            )
+          ) : null}
+          {dailyNote ? <Text style={[type.secondary, { color: c.muted, textAlign: 'center' }]}>{dailyNote}</Text> : null}
           <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.xxl, marginTop: space.xs }}>
             <TextLink label="Как играть" onPress={go.howto} />
             <TextLink label="Настройки" onPress={go.settings} />

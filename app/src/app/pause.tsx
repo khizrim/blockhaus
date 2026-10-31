@@ -15,7 +15,7 @@ export default function Pause() {
     dimMusic(true);
     return () => dimMusic(false);
   }, []);
-  const { game, newGame, lesson, finishLessons } = useGame();
+  const { game, newGame, lesson, finishLessons, mode } = useGame();
   const [confirm, setConfirm] = useState(false);
   const restart = () => {
     newGame();
@@ -45,7 +45,8 @@ export default function Pause() {
         <Heading>Пауза</Heading>
         <View style={{ gap: space.md, marginTop: space.xl }}>
           <Button kind="primary" size="lg" label="Продолжить" onPress={() => router.back()} />
-          <Button label="Начать заново" onPress={() => (game.moves > 0 ? setConfirm(true) : restart())} />
+          {/* The game of the day is one run: no restart. */}
+          {mode === 'daily' ? null : <Button label="Начать заново" onPress={() => (game.moves > 0 ? setConfirm(true) : restart())} />}
         </View>
         <View style={{ marginTop: space.lg }}>
           <Row label="Звук">
