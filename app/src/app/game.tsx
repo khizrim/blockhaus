@@ -16,6 +16,7 @@ import { LESSONS } from '@/game/lessons';
 import { slideMoves, type Move } from '@/game/slide';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
+import { TileNum } from '@/components/TileNum';
 
 /* The game. The rules are the engine the prototype and the balance simulator
    run; this screen only shows them. A placement lands first, then each merge
@@ -33,6 +34,8 @@ const noSelect = { userSelect: 'none' } as object;
 
 const SWIPE = 24; // px of travel that counts as a swipe
 const SLIDE = dur.base; // ms for tiles to travel in a sweep
+/** The lesson block: meta line 16, title 24, a 4pt step, one line of result 20. */
+const LESSON_H = 64;
 
 type Hold = { slot: number; piece: Piece };
 
@@ -133,13 +136,17 @@ export default function Game() {
   const inner = Math.min(width, 440) - 32;
   const gap = Math.round(Math.min(7, Math.max(5, width * 0.015)));
   // Tray cells follow the width (three slots, a three-cell piece in each with room).
-  const trayCell = Math.max(24, Math.min(40, Math.floor(inner / 3 / 3.3)));
+  const trayMax = Math.max(24, Math.min(40, Math.floor(inner / 3 / 3.3)));
   /* The board takes what is left of the height after the fixed parts:
      header 64, the lesson card when there is one, the tray, and the 8pt
      paddings around them. Never wider than the screen, never under 240. */
-  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null ? 120 : 0) + 18 + trayCell * 3 + 32 + 48;
+  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null ? LESSON_H + space.lg : 0) + 18 + trayMax * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
+  /* One column for the whole screen: the header, the lesson, the board and
+     the tray share the board's left and right edges. */
+  const col = cell * N + gap;
+  const trayCell = Math.min(trayMax, Math.floor(col / 3 / 3.3));
 
   /** After the animation of a move: the win, or the end, if either happened. */
   const afterMove = (ms: number) => {
@@ -506,7 +513,7 @@ export default function Game() {
 
   return (
     <View style={[{ flex: 1 }, noSelect]}>
-      <Screen>
+      <Screen style={{ width: col }}>
         {/* header without labels: the score leads; the best tile and pause are
             two squares of one size on the right */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -521,10 +528,10 @@ export default function Game() {
           </View>
         </View>
 
-        {/* the board, centred in the free height; a hint floats over its foot when there is one */}
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: space.lg }}>
+        {/* the board sits on the tray at a fixed step; the free height goes above the lesson, under the header */}
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', paddingTop: space.lg, paddingBottom: space.xl }}>
           {lesson ? (
-            <View style={{ width: boardSize, marginBottom: space.lg, minHeight: 104 }}>
+            <View style={{ width: col, marginBottom: space.lg, minHeight: LESSON_H }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Label meta>{`Обучение · ${(store.lesson ?? 0) + 1} из ${LESSONS.length}`}</Label>
                 {/* Quiet on purpose: a way out, not the main thing on screen. */}
@@ -576,9 +583,9 @@ export default function Game() {
           {/* The sweeps are the board's thickness: one layer under it per
               sweep left. A sweep pulls a layer out the way the board went; a
               new tray slides them back in. */}
-          <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: boardSize, alignItems: 'center' }}>
+          <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: col, alignItems: 'center' }}>
             {[0, 1].map((k) => (
-              <Plate key={k} on={g.sweeps > k} k={k} dir={lastDir.current} width={boardSize - 2 * (k + 1) * space.sm} />
+              <Plate key={k} on={g.sweeps > k} k={k} dir={lastDir.current} width={col - 2 * (k + 1) * space.sm} />
             ))}
           </View>
         </View>
@@ -684,16 +691,7 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
         st,
       ]}>
       <View style={{ flex: 1, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center' }}>
-        <Text
-          allowFontScaling={false}
-          style={{
-            color: c.ink[rk],
-            fontFamily: font.tile,
-            fontSize: Math.max(12, Math.round(cell * (m.value >= 100 ? 0.28 : m.value >= 10 ? 0.34 : 0.4))),
-            fontVariant: ['tabular-nums'],
-          }}>
-          {m.value}
-        </Text>
+        <TileNum v={m.value} color={c.ink[rk]} size={Math.max(12, Math.round(cell * (m.value >= 100 ? 0.28 : m.value >= 10 ? 0.34 : 0.4)))} />
       </View>
     </Animated.View>
   );
@@ -719,9 +717,7 @@ function BestTile({ v }: { v: number }) {
       style={[{ width: size, height: size, padding: 3, backgroundColor: c.line }, st]}>
       <View style={{ flex: 1, backgroundColor: v ? c.tile[rk] : c.canvas, alignItems: 'center', justifyContent: 'center' }}>
         {v ? (
-          <Text allowFontScaling={false} style={{ fontFamily: font.tile, fontSize: v >= 100 ? 14 : v >= 10 ? 17 : 20, color: c.ink[rk] }}>
-            {v}
-          </Text>
+          <TileNum v={v} color={c.ink[rk]} size={v >= 100 ? 14 : v >= 10 ? 17 : 20} />
         ) : null}
       </View>
     </Animated.View>

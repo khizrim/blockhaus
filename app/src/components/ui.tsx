@@ -7,6 +7,7 @@ import { dur, enter, exit, HIT, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, LADDER, rank } from '@/design/tokens';
 import { fx } from '@/sound/sfx';
+import { TileNum } from './TileNum';
 
 /* ---------- screen shell ---------- */
 
@@ -278,9 +279,7 @@ export function Ladder({ best, size = 24, animate }: { best: number; size?: numb
                 borderWidth: on ? 0 : 1,
                 borderColor: c.hair,
               }}>
-              <Text allowFontScaling={false} style={{ fontFamily: font.tile, fontSize: Math.max(12, Math.round(size * 0.5)), color: on ? c.ink[rk] : c.faint }}>
-                {v}
-              </Text>
+              <TileNum v={v} color={on ? c.ink[rk] : c.faint} size={Math.max(12, Math.round(size * 0.5))} />
             </View>
           </Rung>
         );
@@ -306,9 +305,7 @@ export function TileBadge({ v, size = 24 }: { v: number; size?: number }) {
   const rk = rank(v);
   return (
     <View style={{ minWidth: size + space.sm, height: size, paddingHorizontal: space.xs, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center' }}>
-      <Text allowFontScaling={false} style={{ fontFamily: font.tile, fontSize: Math.max(12, Math.round(size * 0.55)), color: c.ink[rk], fontVariant: ['tabular-nums'] }}>
-        {v}
-      </Text>
+      <TileNum v={v} color={c.ink[rk]} size={Math.max(12, Math.round(size * 0.55))} />
     </View>
   );
 }

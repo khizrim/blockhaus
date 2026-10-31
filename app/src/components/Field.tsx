@@ -13,6 +13,7 @@ import Svg, { Defs, Pattern, Rect } from 'react-native-svg';
 import { dur, enter } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, mix, rank } from '@/design/tokens';
+import { TileNum } from './TileNum';
 
 /* The one drawing used everywhere: the board, pieces in the tray, the logo,
    tutorial diagrams. Tiles of one value that touch read as one field. Each
@@ -253,17 +254,7 @@ const Cell = memo(function Cell(p: CellProps) {
         {v > 0 ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF' }, flashStyle]} /> : null}
         {p.numbers && v > 0 ? (
           <Animated.View style={numStyle}>
-            <Text
-              allowFontScaling={false}
-              style={{
-                color: ink,
-                fontFamily: font.tile,
-                fontSize: Math.max(12, Math.round(cell * (long ? 0.28 : v >= 10 ? 0.34 : 0.4))),
-                fontVariant: ['tabular-nums'],
-                includeFontPadding: false,
-              }}>
-              {v}
-            </Text>
+            <TileNum v={v} color={ink} size={Math.max(12, Math.round(cell * (long ? 0.28 : v >= 10 ? 0.34 : 0.4)))} />
           </Animated.View>
         ) : null}
         {/* Where two lines meet at an inside corner of a field, the joint square

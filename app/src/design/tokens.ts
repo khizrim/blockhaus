@@ -96,7 +96,7 @@ export const font = {
   body: 'Onest_400Regular',
   bodyMedium: 'Onest_500Medium',
   bodySemi: 'Onest_600SemiBold',
-  /** Numbers: tiles, the score. Onest 600 with tabular figures. */
+  /** Numbers: tiles, the score. Onest 600; tiles use proportional figures so "12" stays tight. */
   tile: 'Onest_600SemiBold',
   black: 'Onest_600SemiBold',
   narrow: 'Onest_600SemiBold',
