@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { ScrollView, Text, View } from 'react-native';
 
-import { Button, Label, Row, Rule, Screen, TopBar } from '@/components/ui';
+import { Button, Label, Row, Rule, Screen, Toggle, TopBar } from '@/components/ui';
 import { space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { fx, play, type SoundName } from '@/sound/sfx';
@@ -51,14 +51,24 @@ const GROUPS: { title: string; items: { name: SoundName; label: string; note: st
 ];
 
 export default function Sounds() {
-  const { c, sound } = useTheme();
+  const { c, sound, music, setMusic } = useTheme();
   return (
     <Screen>
-      <TopBar title="Звуки" onBack={() => router.back()} />
+      <TopBar title="Звуки и музыка" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={{ gap: space.xxl, paddingBottom: space.xl }} showsVerticalScrollIndicator={false}>
         {!sound ? (
           <Text style={[type.secondary, { color: c.tile[2] }]}>Звук выключен в настройках, здесь ничего не будет слышно.</Text>
         ) : null}
+
+        <View style={{ gap: space.sm }}>
+          <Label>Музыка</Label>
+          <Text style={[type.secondary, { color: c.muted }]}>
+            Петля 53 секунды в до-мажорной пентатонике, октавой ниже слияний. Играет в фоне, пока включена в настройках; на паузе затихает.
+          </Text>
+          <Row label="Музыка в фоне" note="Включить или выключить">
+            <Toggle label="Музыка" value={music} onChange={setMusic} />
+          </Row>
+        </View>
 
         <View style={{ gap: space.sm }}>
           <Label>Цепочки</Label>

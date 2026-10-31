@@ -1,14 +1,19 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { Overlay } from '@/components/Overlay';
 import { Body, Button, Heading, Panel, Row, Rule, Toggle } from '@/components/ui';
 import { space } from '@/design/system';
 import { useTheme } from '@/design/theme';
+import { dimMusic } from '@/sound/sfx';
 
 export default function Pause() {
-  const { sound, setSound } = useTheme();
+  const { sound, setSound, music, setMusic } = useTheme();
+  useEffect(() => {
+    dimMusic(true);
+    return () => dimMusic(false);
+  }, []);
   const [confirm, setConfirm] = useState(false);
   const restart = () => {
     router.dismissAll();
@@ -43,6 +48,10 @@ export default function Pause() {
         <View style={{ marginTop: space.lg }}>
           <Row label="Звук">
             <Toggle label="Звук" value={sound} onChange={setSound} />
+          </Row>
+          <Rule />
+          <Row label="Музыка">
+            <Toggle label="Музыка" value={music} onChange={setMusic} />
           </Row>
           <Rule />
           <Row label="Как играть" onPress={() => router.push('/howto')} />

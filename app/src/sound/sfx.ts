@@ -39,6 +39,7 @@ const pool = new Map<SoundName, { players: AudioPlayer[]; next: number }>();
 
 let soundOn = true;
 let hapticsOn = true;
+let musicOn = true;
 let ready = false;
 
 function init() {
@@ -50,14 +51,72 @@ function init() {
   }
 }
 
-export function setFeedback(o: { sound: boolean; haptics: boolean }) {
+export function setFeedback(o: { sound: boolean; haptics: boolean; music: boolean }) {
   soundOn = o.sound;
   hapticsOn = o.haptics;
+  musicOn = o.music;
   if (soundOn) init();
+  syncMusic();
+}
+
+/* ---------- background music ----------
+   One quiet loop (scripts/make-music.py), in the same key as the merge notes.
+   It fades in and out instead of starting or stopping dead, and drops to a
+   murmur on the pause screen. */
+
+const MUSIC_LEVEL = 0.35;
+let music: AudioPlayer | null = null;
+let musicTarget = 0;
+let fadeTimer: ReturnType<typeof setInterval> | null = null;
+let dimmed = false;
+
+function fadeTo(target: number, ms = 600) {
+  if (!music) return;
+  musicTarget = target;
+  if (fadeTimer) clearInterval(fadeTimer);
+  const p = music;
+  const from = p.volume;
+  const t0 = Date.now();
+  if (target > 0 && !p.playing) {
+    try {
+      p.play();
+    } catch {}
+  }
+  fadeTimer = setInterval(() => {
+    const k = Math.min(1, (Date.now() - t0) / ms);
+    p.volume = from + (target - from) * k;
+    if (k === 1) {
+      if (fadeTimer) clearInterval(fadeTimer);
+      fadeTimer = null;
+      if (musicTarget === 0) p.pause();
+    }
+  }, 30);
+}
+
+function syncMusic() {
+  if (musicOn && !music) {
+    music = createAudioPlayer(require('../../assets/sounds/music.wav'));
+    music.loop = true;
+    music.volume = 0;
+  }
+  if (!music) return;
+  fadeTo(musicOn ? (dimmed ? MUSIC_LEVEL * 0.35 : MUSIC_LEVEL) : 0);
+}
+
+/** Lower the music while a screen like pause is open. */
+export function dimMusic(on: boolean) {
+  dimmed = on;
+  syncMusic();
+}
+
+/** Browsers refuse audio until the first tap; every tap retries the music. */
+function kickMusic() {
+  if (musicOn && music && !music.playing) syncMusic();
 }
 
 /** Play one sound, regardless of the haptic. */
 export function play(name: SoundName) {
+  kickMusic();
   if (!soundOn) return;
   init();
   const v = pool.get(name);

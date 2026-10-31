@@ -41,6 +41,9 @@ export default function Settings() {
               <Row label="Звук" note="Стук фигур и звон слияний">
                 <Toggle label="Звук" value={t.sound} onChange={t.setSound} />
               </Row>
+              <Row label="Музыка" note="Тихая мелодия в фоне, в тон слияниям">
+                <Toggle label="Музыка" value={t.music} onChange={t.setMusic} />
+              </Row>
               <Row label="Вибрация" note="Лёгкий толчок, когда фигура встаёт">
                 <Toggle label="Вибрация" value={t.haptics} onChange={t.setHaptics} />
               </Row>
@@ -67,7 +70,7 @@ export default function Settings() {
               ))}
               <Row label="Экран победы" onPress={() => router.push('/win')} />
               <Row label="Экран проигрыша" onPress={() => router.push('/over')} />
-              <Row label="Все звуки" onPress={() => router.push('/sounds')} />
+              <Row label="Все звуки и музыка" onPress={() => router.push('/sounds')} />
               <Row label="Дизайн-кит" onPress={() => router.push('/kit')} />
             </List>
           </Section>
