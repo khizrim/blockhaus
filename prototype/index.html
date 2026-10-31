@@ -221,50 +221,22 @@
 
 <div id="over" role="dialog" aria-modal="true">
   <div>
-    <h2>No room left</h2>
+    <h2 id="overtitle">No room left</h2>
     <p id="overtext"></p>
+    <button id="keep" type="button" hidden>Keep going</button>
     <button id="retry" type="button">Play again</button>
   </div>
 </div>
 
+<script src="engine.js"></script>
 <script>
 'use strict';
-const N = 6;
+/* Rules live in engine.js, shared with the tests and the balance simulator.
+   This file is the page: drawing, dragging, sound. */
+const E = window.BlockhausEngine;
+const { N, idx, pairs, rank, fits } = E;
 
-/* ---- shapes -------------------------------------------------------------
-   Weighted by repetition rather than filtered: singles and dominoes stay
-   common, three-cell shapes turn up often enough to be interesting.
-
-   Piece size is what decides how far a run can go — a placement lays all its
-   cells at once while a merge clears one, so the board drowns at a rate the
-   piece sets. Measured over six hundred runs, this mix costs about a third of
-   the median run against singles and dominoes alone (29 moves against 44), and
-   takes the median best tile from 24 down to 12. The ninetieth percentile tile
-   holds at 48, so a good run still climbs; it is the average one that shortens.
-*/
-const SHAPES = [
-  [[0,0]], [[0,0]],
-  [[0,0],[1,0]], [[0,0],[1,0]], [[0,0],[1,0]],
-  [[0,0],[0,1]], [[0,0],[0,1]], [[0,0],[0,1]],
-  [[0,0],[1,0],[2,0]], [[0,0],[0,1],[0,2]],
-  [[0,0],[1,0],[0,1]], [[0,0],[1,0],[1,1]],
-  [[0,0],[0,1],[1,1]], [[1,0],[0,1],[1,1]],
-];
-
-const board = new Array(N * N).fill(0);
-let tray = [], score = 0, merges = 0, bestTile = 0, soundOn = true;
-
-/* Sweeps: the one piece of movement in the game, and the reason a corner
-   strategy can exist at all. Placement alone leaves every merged tile where it
-   was made, so growing a 24 means manufacturing a second 12 in the cell next
-   door — and a cell has four neighbours, which caps a cascade at four rungs.
-   2048's depth never came from its merge rule; it came from being able to pin
-   the big tile in a corner and slide everything into it. One sweep per tray,
-   so it stays a decision. */
-let sweeps = 2;
-// Two, not one. Bigger shapes cost run length and sweeps buy some of it back,
-// and at two the move is present often enough to actually be learned.
-const SWEEPS_PER_TRAY = 2;
+let g = null, soundOn = true;
 
 const $ = s => document.querySelector(s);
 const boardEl = $('#board'), trayEl = $('#tray'), flyers = $('#flyers');
@@ -300,69 +272,6 @@ function tone(freq, dur, type, gain) {
 const knock = () => tone(150, 0.11, 'triangle', 0.16);
 const chime = lvl => tone(330 * Math.pow(1.1892, Math.min(rank(lvl), 10)), 0.42, 'sine', 0.2);
 const buzz  = () => tone(110, 0.1, 'sawtooth', 0.05);
-
-/* ---- rules --------------------------------------------------------------
-   Lay a piece. If one of its cells lands beside a tile it pairs with, those
-   two become one tile a step higher; the rest of the piece just stays.      */
-const idx = (x, y) => y * N + x;
-const neighbours = i => {
-  const x = i % N, y = (i / N) | 0, out = [];
-  if (x > 0) out.push(i - 1);
-  if (x < N - 1) out.push(i + 1);
-  if (y > 0) out.push(i - N);
-  if (y < N - 1) out.push(i + N);
-  return out;
-};
-/* Threes' own economy. A 1 will not pair with another 1, nor a 2 with a 2:
-   the low cards only combine with each other, into a 3, and equals merge only
-   from 3 upward. That asymmetry is what clogs a Threes board — a drift of 1s
-   is dead weight until a 2 turns up. With 1+1=2 the board had endless
-   liquidity and simply never filled. */
-const pairs = (a, b) => (a === 1 && b === 2) || (a === 2 && b === 1) || (a >= 3 && a === b);
-const merged = (a, b) => (a >= 3 ? a * 2 : 3);
-const rank = v => (v === 1 ? 1 : v === 2 ? 2 : Math.min(8, 3 + Math.round(Math.log2(v / 3))));
-function fits(b, shape, ox, oy) {
-  return shape.every(([dx, dy]) => {
-    const x = ox + dx, y = oy + dy;
-    return x >= 0 && y >= 0 && x < N && y < N && b[idx(x, y)] === 0;
-  });
-}
-/** Applies a placement to `b` and returns the merge steps it caused. */
-function apply(b, shape, ox, oy, value) {
-  const laid = shape.map(([dx, dy]) => idx(ox + dx, oy + dy));
-  for (const i of laid) b[i] = value;
-
-  const steps = [];
-  // EVERY cell of the piece that lands beside a partner merges with it, and a
-  // tile that merges keeps going: the 3 it just became may itself sit next to
-  // a 3, and that pair makes a 6.
-  //
-  // Without that cascade the ladder had no second rung. A 3 can only be made
-  // by a 1 meeting a 2, and the tray only ever deals 1s and 2s, so two 3s
-  // could never be brought together and every 3 was permanent litter. Twelve
-  // merges in a row all produced 3s and then clogged the board.
-  //
-  // It also puts the planning in: to reach a 6 you have to drop a 1 beside a 2
-  // that is already beside a 3.
-  const taken = new Set();
-  const frontier = [...laid];
-
-  while (frontier.length) {
-    const i = frontier.shift();
-    if (b[i] === 0) continue;
-    const partner = neighbours(i).find(n => !taken.has(n) && b[n] !== 0 && pairs(b[i], b[n]));
-    if (partner === undefined) continue;
-
-    taken.add(partner);
-    const lvl = merged(b[i], b[partner]);
-    steps.push({ absorbed: [partner], anchor: i, level: lvl });
-    b[partner] = 0;
-    b[i] = lvl;
-    // The upgraded tile gets another look: this is the chain.
-    frontier.push(i);
-  }
-  return { laid, steps };
-}
 
 /* ---- rendering ---------------------------------------------------------- */
 /* Fields: tiles of one value that touch read as one block of colour. Each
@@ -403,6 +312,8 @@ LADDER.forEach((v, k) => {
 });
 
 function paint() {
+  const { board, score, merges, bestTile, sweeps } = g;
+  const SWEEPS_PER_TRAY = g.cfg.sweepsPerTray;
   for (let i = 0; i < N * N; i++) {
     const v = board[i], c = cells[i], el = c.firstChild;
     const x = i % N, y = (i / N) | 0;
@@ -442,25 +353,25 @@ function paint() {
 /* A piece is a single field: one block of its colour with folds between its
    cells and the thick line all round, the same drawing as on the board. */
 function pieceEl(p, size) {
-  const w = Math.max(...p.shape.map(c => c[0])) + 1;
-  const h = Math.max(...p.shape.map(c => c[1])) + 1;
+  const { w, h } = E.size(p);
   const el = document.createElement('div');
   el.className = 'piece';
   el.style.gridTemplateColumns = `repeat(${w}, ${size}px)`;
   el.style.setProperty('--s', size + 'px');
-  const has = new Set(p.shape.map(([x, y]) => x + ',' + y));
-  const t = rank(p.value);
+  const at = new Map(p.cells.map(([x, y, v]) => [x + ',' + y, v]));
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const c = document.createElement('div');
-    if (has.has(x + ',' + y)) {
+    const v = at.get(x + ',' + y);
+    if (v) {
       c.className = 'pcell';
       const b = document.createElement('b');
+      const t = rank(v);
       b.style.setProperty('--c', `var(--t${t})`);
       b.style.setProperty('--f', `var(--t${t}f)`);
-      b.textContent = p.value;
+      b.textContent = v;
       // Outer edges carry the full line, since there is no neighbour to share it.
       b.style.setProperty('--hg', 'var(--gap)');
-      edges(b, (dx, dy) => has.has((x + dx) + ',' + (y + dy)));
+      edges(b, (dx, dy) => at.get((x + dx) + ',' + (y + dy)) === v);
       c.appendChild(b);
     } else { c.className = 'pcell off'; }
     el.appendChild(c);
@@ -470,7 +381,7 @@ function pieceEl(p, size) {
 
 function drawTray() {
   trayEl.innerHTML = '';
-  tray.forEach((p, slot) => {
+  g.tray.forEach((p, slot) => {
     const holder = document.createElement('div');
     holder.className = 'slot';
     if (p) {
@@ -483,113 +394,57 @@ function drawTray() {
   });
 }
 
-/* ---- tray generation ----------------------------------------------------
-   1s and 2s in equal measure, because every merge eats exactly one of each.
-
-   The deck used to deal 65% 1s, and there is no other way to spend a 1, so
-   thirty surplus 1s piled up on the board for every hundred cells played with
-   nothing they could ever pair with. Sweeping the share of 2s across six
-   hundred runs put the peak exactly on half, which is where the arithmetic
-   says it has to be: 30% of 2s gave a median run of 26 moves, 50% gave 47.  */
-function draw() {
-  return { shape: SHAPES[(Math.random() * SHAPES.length) | 0], value: Math.random() < 0.5 ? 2 : 1, used: false };
-}
-
-function refill() {
-  tray = [draw(), draw(), draw()];
-
-  // Never hand over a tray that is all one value. Drawn independently, three
-  // 1s come up better than a quarter of the time, and a tray of 1s is close to
-  // a dead turn when the board is short of 2s. Guaranteeing a mixed tray took
-  // the median run from 47 moves to 64 and the median best tile from 24 to 48.
-  if (tray.every(p => p.value === tray[0].value)) {
-    tray[(Math.random() * tray.length) | 0].value = tray[0].value === 1 ? 2 : 1;
-  }
-
-  sweeps = SWEEPS_PER_TRAY;
-  drawTray();
-}
-
 /* ---- sweeping -----------------------------------------------------------
    A 2048 slide: everything shifts one way, and pairs that meet on the way
-   combine. It also settles the question that dogged every earlier version of
-   these rules — where a merged tile ends up — because in a slide it lands at
-   the end of the travel, with nothing arbitrary about it. */
-function lanes(dir) {
-  const out = [];
-  for (let a = 0; a < N; a++) {
-    const lane = [];
-    for (let b = 0; b < N; b++) {
-      if (dir === 'left') lane.push(a * N + b);
-      else if (dir === 'right') lane.push(a * N + (N - 1 - b));
-      else if (dir === 'up') lane.push(b * N + a);
-      else lane.push((N - 1 - b) * N + a);
-    }
-    out.push(lane);
-  }
-  return out;
-}
-
+   combine. */
 function doSweep(dir) {
-  if (held) return;
-  if (sweeps <= 0) {
+  if (held || g.over) return;
+  if (g.sweeps <= 0) {
     // Say why nothing happened, and what brings it back.
     $('#hint').textContent = 'No sweeps left — finishing this tray brings two more.';
     buzz();
     return;
   }
-
-  const before = board.join();
-  const made = [];
-
-  for (const lane of lanes(dir)) {
-    const vals = lane.map(i => board[i]).filter(v => v !== 0);
-    const out = [];
-    for (let k = 0; k < vals.length; k++) {
-      if (k + 1 < vals.length && pairs(vals[k], vals[k + 1])) {
-        const lvl = merged(vals[k], vals[k + 1]);
-        made.push({ at: lane[out.length], level: lvl });
-        out.push(lvl);
-        k++;
-      } else out.push(vals[k]);
-    }
-    lane.forEach((i, k) => { board[i] = out[k] ?? 0; });
-  }
-
-  if (board.join() === before) { buzz(); return; }
-
-  sweeps--;
-  merges += made.length;
-  for (const m of made) { score += m.level; bestTile = Math.max(bestTile, m.level); }
+  const wasWon = g.won;
+  const res = E.sweep(g, dir);
+  if (!res) { buzz(); return; }
   paint();
 
-  if (made.length) {
-    made.forEach((m, k) => setTimeout(() => {
+  if (res.made.length) {
+    res.made.forEach((m, k) => setTimeout(() => {
       chime(m.level);
       const c = cells[m.at];
       c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop');
     }, k * 110));
   } else knock();
 
-  $('#hint').textContent = sweeps > 0
-    ? `${sweeps} sweep left this tray.`
+  $('#hint').textContent = g.sweeps > 0
+    ? `${g.sweeps} sweep left this tray.`
     : 'Last sweep spent — finishing this tray brings two more.';
 
-  if (!anyMove()) {
-    $('#overtext').textContent = `${score.toLocaleString('en-US')} points, ${merges} merges, best tile ${bestTile || '—'}.`;
-    $('#over').classList.add('on');
+  afterMove(wasWon);
+}
+
+/* The goal is the top of the ladder. Making it is a win, said once; the run
+   can carry on past it for score. */
+function afterMove(wasWon) {
+  if (g.over) {
+    showDialog(g.won ? 'Board full' : 'No room left',
+      `${g.score.toLocaleString('en-US')} points, ${g.merges} merges, best tile ${g.bestTile || '—'}.`,
+      false);
+  } else if (g.won && !wasWon) {
+    setTimeout(() => showDialog(`You made ${g.cfg.goal}!`,
+      `${g.score.toLocaleString('en-US')} points in ${g.moves} moves. Keep going for a higher tile, or start over.`,
+      true), 500);
   }
 }
 
-function anyMove() {
-  return tray.some(p => {
-    if (!p || p.used) return false;
-    const w = Math.max(...p.shape.map(c => c[0])) + 1;
-    const h = Math.max(...p.shape.map(c => c[1])) + 1;
-    for (let y = 0; y <= N - h; y++) for (let x = 0; x <= N - w; x++)
-      if (fits(board, p.shape, x, y)) return true;
-    return false;
-  });
+function showDialog(title, text, canContinue) {
+  $('#overtitle').textContent = title;
+  $('#overtext').textContent = text;
+  $('#keep').hidden = !canContinue;
+  $('#retry').textContent = canContinue ? 'New game' : 'Play again';
+  $('#over').classList.add('on');
 }
 
 /* ---- dragging ----------------------------------------------------------- */
@@ -603,10 +458,10 @@ function clearMarks() {
   for (const c of cells) c.classList.remove('ghost', 'absorb', 'bad');
 }
 
-/** Lights every tile the held value could merge with. */
+/** Lights every tile the held piece could merge with. */
 function markPartners(value) {
   for (let i = 0; i < N * N; i++) {
-    cells[i].classList.toggle('partner', board[i] !== 0 && pairs(value, board[i]));
+    cells[i].classList.toggle('partner', g.board[i] !== 0 && value.some(v => pairs(v, g.board[i])));
   }
 }
 
@@ -618,13 +473,13 @@ function preview(ox, oy) {
   clearMarks();
   target = null;
   const p = held.piece;
-  if (!fits(board, p.shape, ox, oy)) {
+  if (!fits(g.board, p, ox, oy)) {
     $('#hint').textContent = 'No room there.';
     return;
   }
   target = { ox, oy };
-  const sim = board.slice();
-  const { laid, steps } = apply(sim, p.shape, ox, oy, p.value);
+  const sim = g.board.slice();
+  const { laid, steps } = E.applyPlacement(sim, p, ox, oy);
   for (const i of laid) cells[i].classList.add('ghost');
 
   if (steps.length) {
@@ -643,15 +498,15 @@ function preview(ox, oy) {
 }
 
 function startDrag(ev, slot) {
-  const p = tray[slot];
-  if (!p || p.used) return;
+  const p = g.tray[slot];
+  if (!p || p.used || g.over) return;
   held = { slot, piece: p };
   heldEl = ev.currentTarget;
   heldEl.classList.add('held');
   boardEl.classList.add('holding');
-  boardEl.style.setProperty('--gc', `var(--t${rank(p.value)})`);
+  boardEl.style.setProperty('--gc', `var(--t${rank(p.cells[0][2])})`);
 
-  markPartners(p.value);
+  markPartners([...new Set(p.cells.map(c => c[2]))]);
 
   const s = cellSize();
   dragEl.innerHTML = '';
@@ -664,8 +519,7 @@ function startDrag(ev, slot) {
 function moveDrag(ev) {
   if (!held) return;
   const p = held.piece, s = cellSize();
-  const w = Math.max(...p.shape.map(c => c[0])) + 1;
-  const h = Math.max(...p.shape.map(c => c[1])) + 1;
+  const { w, h } = E.size(p);
   // Hangs well clear above the fingertip, so neither the thumb nor the piece
   // itself covers the cells being targeted.
   const left = ev.clientX - (w * s) / 2;
@@ -696,32 +550,23 @@ function endDrag() {
     return;
   }
 
-  const { laid, steps } = apply(board, p.shape, target.ox, target.oy, p.value);
-  tray[slot].used = true;
+  const wasWon = g.won;
+  const { laid, steps } = E.place(g, slot, target.ox, target.oy);
   held = null; heldEl = null; target = null;
 
   knock();
   paint();
   for (const i of laid) { cells[i].classList.remove('land'); void cells[i].offsetWidth; cells[i].classList.add('land'); }
 
-  if (steps.length) {
-    merges += steps.length;
-    for (const st of steps) { score += st.level; bestTile = Math.max(bestTile, st.level); }
-    steps.forEach((st, k) => setTimeout(() => {
-      chime(st.level);
-      const c = cells[st.anchor];
-      c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop');
-    }, k * 140));
-    paint();
-  }
+  steps.forEach((st, k) => setTimeout(() => {
+    chime(st.level);
+    const c = cells[st.anchor];
+    c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop');
+  }, k * 140));
 
-  if (tray.every(t => t.used)) refill(); else drawTray();
+  drawTray();
   $('#hint').textContent = 'Drag a piece onto the board. Swipe to sweep.';
-
-  if (!anyMove()) {
-    $('#overtext').textContent = `${score.toLocaleString('en-US')} points, ${merges} merges, best tile ${bestTile || '—'}.`;
-    $('#over').classList.add('on');
-  }
+  afterMove(wasWon);
 }
 
 /* Swipe anywhere on the board to sweep. Dragging starts on a tray piece, so
@@ -757,14 +602,15 @@ window.addEventListener('pointerup', endDrag);
 window.addEventListener('pointercancel', endDrag);
 
 function reset() {
-  board.fill(0); score = 0; merges = 0; bestTile = 0; sweeps = SWEEPS_PER_TRAY;
+  g = E.newGame();
   $('#over').classList.remove('on');
-  refill(); paint();
+  drawTray(); paint();
   clearPartners();
   $('#hint').textContent = 'Drag a piece onto the board. Swipe to sweep.';
 }
 $('#again').onclick = reset;
 $('#retry').onclick = reset;
+$('#keep').onclick = () => $('#over').classList.remove('on');
 $('#sound').onclick = e => {
   soundOn = !soundOn;
   e.target.textContent = soundOn ? 'Sound on' : 'Sound off';
