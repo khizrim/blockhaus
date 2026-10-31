@@ -52,6 +52,10 @@
     balancedTray: 0,
     // Chance that a single comes as a 3 instead of a 1 or 2.
     threeChance: 0,
+    // A placement whose chain makes at least this many merges earns a sweep
+    // (0 = never), up to sweepsMax in hand. Earned sweeps outlast the tray.
+    chainBonus: 0,
+    sweepsMax: 2,
     goal: 192,
   };
 
@@ -269,10 +273,12 @@
     p.used = true;
     g.moves++;
     score(g, res.steps.map(s => s.level));
+    res.bonus = !!g.cfg.chainBonus && res.steps.length >= g.cfg.chainBonus && g.sweeps < g.cfg.sweepsMax;
+    if (res.bonus) g.sweeps++;
     res.refilled = false;
     if (g.tray.every(t => t.used)) {
       g.tray = dealTray(g.cfg, g.board, g.rng);
-      g.sweeps = g.cfg.sweepsPerTray;
+      g.sweeps = Math.max(g.sweeps, g.cfg.sweepsPerTray);
       res.refilled = true;
     }
     g.over = !anyMove(g);
@@ -321,7 +327,8 @@
     [S.single, 3], [S.domH, 3], [S.domV, 3],
     [S.triH, 0.5], [S.triV, 0.5], [S.l1, 0.5], [S.l2, 0.5], [S.l3, 0.5], [S.l4, 0.5],
   ];
-  const DEFAULTS = { ...ORIGINAL, dealer: 'need', shapes: SHIPPED_SHAPES };
+  // A chain of two or more merges earns a sweep, up to three in hand.
+  const DEFAULTS = { ...ORIGINAL, dealer: 'need', shapes: SHIPPED_SHAPES, chainBonus: 2, sweepsMax: 3 };
 
   return {
     N, SHAPES: S, ORIGINAL, DEFAULTS, ORIGINAL_SHAPES,

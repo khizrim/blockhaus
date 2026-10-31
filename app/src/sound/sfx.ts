@@ -162,6 +162,11 @@ export const fx = {
     buzz(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft));
   },
   tray: () => play('tray'),
+  /** A chain earned a sweep. */
+  bonus: () => {
+    play('toggle-on');
+    buzz(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
+  },
   win: () => {
     play('win');
     buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));

@@ -151,3 +151,22 @@ test('seeded games replay identically', () => {
   const a = E.newGame({}, E.seeded(42)), b = E.newGame({}, E.seeded(42));
   assert.deepEqual(a.tray, b.tray);
 });
+
+test('a chain of two merges earns a sweep, up to the cap', () => {
+  const g = E.newGame({}, E.seeded(9));
+  g.board = new Array(N * N).fill(0);
+  // 1 next to 2 makes 3, which meets the 3 beside it: two merges.
+  g.board[idx(1, 0)] = 2; g.board[idx(0, 1)] = 3;
+  g.tray = [piece(1), piece(1), piece(1)];
+  g.sweeps = 1;
+  const res = E.place(g, 0, 0, 0);
+  assert.equal(res.steps.length, 2);
+  assert.ok(res.bonus);
+  assert.equal(g.sweeps, 2);
+  g.sweeps = g.cfg.sweepsMax;
+  g.board[idx(4, 4)] = 2; g.board[idx(3, 5)] = 3;
+  const again = E.place(g, 1, 3, 4);
+  assert.equal(again.steps.length, 2);
+  assert.ok(!again.bonus);
+  assert.equal(g.sweeps, g.cfg.sweepsMax);
+});

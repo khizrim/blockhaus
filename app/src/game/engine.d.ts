@@ -8,7 +8,7 @@ export type Step = { absorbed: number[]; anchor: number; level: number };
 export type Config = Record<string, unknown>;
 
 export type Game = {
-  cfg: Config & { goal: number; sweepsPerTray: number };
+  cfg: Config & { goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number };
   rng: () => number;
   board: number[];
   tray: Piece[];
@@ -21,7 +21,7 @@ export type Game = {
   over: boolean;
 };
 
-export type PlaceResult = { laid: number[]; steps: Step[]; refilled: boolean };
+export type PlaceResult = { laid: number[]; steps: Step[]; refilled: boolean; /** The chain earned a sweep. */ bonus: boolean };
 export type SweepResult = { made: { at: number; level: number }[]; moved: boolean };
 export type Dir = 'left' | 'right' | 'up' | 'down';
 

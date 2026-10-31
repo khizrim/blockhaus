@@ -111,8 +111,11 @@ export default function Game() {
   /* A new move ends the last one at once. Its pending frames are dropped, so
      whatever they would have cleaned up (points in the air, tiles in flight,
      a piece flying home) is cleared here too, or it stays stuck on the board. */
+  /** An earned sweep waits under the board until its chain has played out. */
+  const [bonusHeld, setBonusHeld] = useState(false);
   const settle = () => {
     clearTimers();
+    setBonusHeld(false);
     setFlights([]);
     setFloats([]);
     setSliding(null);
@@ -341,6 +344,15 @@ export default function Game() {
     const done = 90 + Math.max(0, res.steps.length - 1) * STEP + (res.steps.length ? FLY : 0);
     later(done + 20, () => setShown(g.board.slice()));
     if (res.refilled) later(done + 120, () => fx.tray());
+    // A chain of two or more earns a sweep: its layer slides in under the
+    // board as the last merge lands, with its own two rising ticks.
+    if (res.bonus) {
+      setBonusHeld(true);
+      later(done, () => {
+        setBonusHeld(false);
+        fx.bonus();
+      });
+    }
     afterMove(done);
   };
 
@@ -608,8 +620,8 @@ export default function Game() {
               sweep left. A sweep pulls a layer out the way the board went; a
               new tray slides them back in. */}
           <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: col, alignItems: 'center' }}>
-            {[0, 1].map((k) => (
-              <Plate key={k} on={g.sweeps > k} k={k} dir={lastDir.current} width={col - 2 * (k + 1) * space.sm} />
+            {Array.from({ length: g.cfg.sweepsMax }, (_, k) => k).map((k) => (
+              <Plate key={k} on={g.sweeps - (bonusHeld ? 1 : 0) > k} k={k} dir={lastDir.current} width={col - 2 * (k + 1) * space.sm} />
             ))}
           </View>
         </View>
