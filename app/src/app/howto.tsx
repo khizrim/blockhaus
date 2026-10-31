@@ -1,34 +1,37 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentRef, type ReactNode } from 'react';
-import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { Field } from '@/components/Field';
 import { Arrow, Body, Button, Heading, Ladder, Screen, TopBar } from '@/components/ui';
 import { useTheme } from '@/design/theme';
-import { font } from '@/design/tokens';
+import { space } from '@/design/system';
 
 /* How to play: five cards, each a tiny board drawn with the real renderer.
    The result of each card pops on a loop so the cause and effect read. */
 
-function useBeat(ms = 1800) {
-  const [n, setN] = useState(1);
+/* The result pops once, shortly after the card shows. Tap the art to replay.
+   No loops: a repeating animation is noise next to the text. */
+function useBeat(ms = 600) {
+  const [n, setN] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setN((k) => k + 1), ms);
-    return () => clearInterval(id);
+    const id = setTimeout(() => setN(1), ms);
+    return () => clearTimeout(id);
   }, [ms]);
-  return n;
+  return [n, () => setN((k) => k + 1)] as const;
 }
 
 function Eq({ a, b, w, h, cell = 40 }: { a: (number | null)[]; b: (number | null)[]; w: number; h: number; cell?: number }) {
   const { c } = useTheme();
-  const beat = useBeat();
+  const [beat, replay] = useBeat();
   const changed = (i: number) => a[i] !== b[i] && (b[i] ?? 0) > 0;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+    <Pressable onPress={replay} accessibilityRole="button" accessibilityLabel="Показать ещё раз"
+      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.lg }}>
       <Field w={w} h={h} values={a} cell={cell} gap={6} />
-      <Arrow dir="right" color={c.text} s={18} />
-      <Field w={w} h={h} values={b} cell={cell} gap={6} look={(i) => (changed(i) ? { pop: beat } : undefined)} />
-    </View>
+      <Arrow dir="right" color={c.muted} s={16} />
+      <Field w={w} h={h} values={b} cell={cell} gap={6} look={(i) => (changed(i) && beat ? { pop: beat } : undefined)} />
+    </Pressable>
   );
 }
 
@@ -87,21 +90,21 @@ export default function HowTo() {
         onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / pageW))}
         style={{ flexGrow: 0 }}>
         {PAGES.map((p, k) => (
-          <View key={p.title} style={{ width: pageW, gap: 22, paddingTop: 12 }}>
-            <View style={{ height: 200, alignItems: 'center', justifyContent: 'center', backgroundColor: c.canvas, borderWidth: 2, borderColor: c.stroke }}>
+          <View key={p.title} style={{ width: pageW, paddingTop: space.sm }}>
+            <View style={{ height: 208, alignItems: 'center', justifyContent: 'center', backgroundColor: c.surface, borderWidth: 1, borderColor: c.hair, marginBottom: space.xl }}>
               {/* Only the visible card animates. */}
               {Math.abs(page - k) <= 0 ? p.art() : null}
             </View>
-            <Heading size={26}>{p.title}</Heading>
-            <Body>{p.text}</Body>
+            <Heading>{p.title}</Heading>
+            <Body style={{ marginTop: space.sm }}>{p.text}</Body>
           </View>
         ))}
       </ScrollView>
 
-      <View style={{ marginTop: 'auto', gap: 16 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+      <View style={{ marginTop: 'auto', gap: space.lg }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.sm }} accessibilityLabel={`Шаг ${page + 1} из ${PAGES.length}`}>
           {PAGES.map((_, k) => (
-            <View key={k} style={{ width: k === page ? 22 : 10, height: 10, backgroundColor: k === page ? c.text : 'transparent', borderWidth: 2, borderColor: c.text }} />
+            <View key={k} style={{ width: k === page ? 24 : 8, height: 8, backgroundColor: k === page ? c.text : c.hair }} />
           ))}
         </View>
         <Button

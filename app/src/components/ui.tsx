@@ -1,35 +1,27 @@
 import { useEffect, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type TextStyle, type ViewStyle } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+import { Pressable, Text, View, type TextStyle, type ViewStyle } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { dur, enter, exit, HIT, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, LADDER, rank } from '@/design/tokens';
 
 /* ---------- screen shell ---------- */
 
-export function Screen({ children, style, center }: { children: ReactNode; style?: ViewStyle; center?: boolean }) {
+export function Screen({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   const { c } = useTheme();
   const ins = useSafeAreaInsets();
   return (
     <View
-      style={[
-        {
-          flex: 1,
-          backgroundColor: c.bg,
-          paddingTop: ins.top + 12,
-          paddingBottom: ins.bottom + 16,
-          paddingLeft: Math.max(16, ins.left),
-          paddingRight: Math.max(16, ins.right),
-        },
-        center && { alignItems: 'center' },
-      ]}>
+      style={{
+        flex: 1,
+        backgroundColor: c.bg,
+        paddingTop: ins.top + space.sm,
+        paddingBottom: ins.bottom + space.lg,
+        paddingLeft: Math.max(space.lg, ins.left),
+        paddingRight: Math.max(space.lg, ins.right),
+      }}>
       <View style={[{ flex: 1, width: '100%', maxWidth: 440, alignSelf: 'center' }, style]}>{children}</View>
     </View>
   );
@@ -37,30 +29,21 @@ export function Screen({ children, style, center }: { children: ReactNode; style
 
 /* ---------- type ---------- */
 
-export function Label({ children, style }: { children: ReactNode; style?: TextStyle }) {
+/** Section label and small captions: 14 medium, muted. */
+export function Label({ children, style, meta }: { children: ReactNode; style?: TextStyle; meta?: boolean }) {
   const { c } = useTheme();
-  return (
-    <Text
-      allowFontScaling={false}
-      style={[{ fontFamily: font.bodyMedium, fontSize: 13, color: c.muted }, style]}>
-      {children}
-    </Text>
-  );
+  return <Text style={[meta ? type.meta : type.secondaryStrong, { color: c.muted }, style]}>{children}</Text>;
 }
 
-export function Body({ children, style, muted }: { children: ReactNode; style?: TextStyle; muted?: boolean }) {
+export function Body({ children, style, muted, small }: { children: ReactNode; style?: TextStyle; muted?: boolean; small?: boolean }) {
   const { c } = useTheme();
-  return (
-    <Text style={[{ fontFamily: font.body, fontSize: 15, lineHeight: 22, color: muted ? c.muted : c.text }, style]}>
-      {children}
-    </Text>
-  );
+  return <Text style={[small ? type.secondary : type.body, { color: muted ? c.muted : c.text }, style]}>{children}</Text>;
 }
 
-export function Heading({ children, size = 26, style }: { children: ReactNode; size?: number; style?: TextStyle }) {
+export function Heading({ children, level = 'title', style }: { children: ReactNode; level?: 'title' | 'heading'; style?: TextStyle }) {
   const { c } = useTheme();
   return (
-    <Text allowFontScaling={false} style={[{ fontFamily: font.wide, fontSize: size, color: c.text, letterSpacing: -0.3 }, style]}>
+    <Text accessibilityRole="header" style={[type[level], { color: c.text }, style]}>
       {children}
     </Text>
   );
@@ -68,29 +51,29 @@ export function Heading({ children, size = 26, style }: { children: ReactNode; s
 
 /* ---------- wordmark ---------- */
 
-/** The mark: the menu poster in miniature. Two lines cross off-centre; blue,
-    red and yellow take the corners, the way the poster does at full size. */
+/** The mark: the menu poster in miniature. */
 export function Glyph({ size = 16 }: { size?: number }) {
-  const { c, isDark } = useTheme();
+  const { c } = useTheme();
   const S = size;
-  const L = Math.max(2, Math.round(S * 0.11));
-  const vx = Math.round(S * 0.62);
-  const hy = Math.round(S * 0.4);
-  const bx = Math.round(S * 0.24);
-  const yb = Math.round(S * 0.78);
-  const field = isDark ? '#1C1D21' : '#F3EFE4';
+  const L = Math.max(2, Math.round(S * 0.08));
+  const v1 = Math.round(S * 0.62);
+  const hl = Math.round(S * 0.6);
+  const hr = Math.round(S * 0.38);
+  const vs = Math.round(S * 0.22);
+  const hb = Math.round(S * 0.78);
   const box = (l: number, t: number, w: number, h: number, bg: string) => (
     <View style={{ position: 'absolute', left: l, top: t, width: w, height: h, backgroundColor: bg }} />
   );
   return (
-    <View style={{ width: S, height: S, backgroundColor: field, borderWidth: L / 2, borderColor: c.line, overflow: 'hidden' }}>
-      {box(0, 0, bx, hy, c.tile[1])}
-      {box(vx + L, 0, S, hy, c.tile[2])}
-      {box(vx + L, hy + L, S, yb - hy - L, c.tile[3])}
-      {box(vx, 0, L, S, c.line)}
-      {box(0, hy, S, L, c.line)}
-      {box(bx, 0, L, hy, c.line)}
-      {box(vx, yb, S, L, c.line)}
+    <View style={{ width: S, height: S, backgroundColor: c.bg, borderWidth: L, borderColor: c.line, overflow: 'hidden' }}>
+      {box(v1 + L, 0, S, hr, c.tile[2])}
+      {box(0, hl + L, vs, S, c.tile[3])}
+      {box(v1 + L, hb + L, S, S, c.tile[1])}
+      {box(v1, 0, L, S, c.line)}
+      {box(0, hl, v1, L, c.line)}
+      {box(v1, hr, S, L, c.line)}
+      {box(vs, hl, L, S, c.line)}
+      {box(v1, hb, S, L, c.line)}
     </View>
   );
 }
@@ -98,9 +81,9 @@ export function Glyph({ size = 16 }: { size?: number }) {
 export function Wordmark({ size = 18 }: { size?: number }) {
   const { c } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: size * 0.45 }}>
-      <Glyph size={Math.round(size * 1.15)} />
-      <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: size, letterSpacing: -0.3, color: c.text, includeFontPadding: false }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Math.round(size * 0.4) }}>
+      <Glyph size={Math.round(size * 1.1)} />
+      <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: size, color: c.text, includeFontPadding: false }}>
         blockhaus
       </Text>
     </View>
@@ -112,97 +95,98 @@ export function Wordmark({ size = 18 }: { size?: number }) {
 type BtnProps = {
   label: string;
   onPress?: () => void;
-  kind?: 'primary' | 'outline' | 'ghost' | 'danger';
-  /** Tile colour for a primary button, by rung. Default: ink. */
-  tone?: number;
+  /** primary: ink fill. secondary: L1 surface with a hairline. ghost: text only.
+      danger: secondary with red text, for destructive steps. */
+  kind?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
   size?: 'md' | 'lg';
   disabled?: boolean;
-  icon?: ReactNode;
+  /** Right-aligned extra, e.g. the score on Continue. */
+  trailing?: string;
   style?: ViewStyle;
+  accessibilityLabel?: string;
 };
 
-/** Two kinds that matter: primary (a filled black block) and outline. Square
-    corners, no shadows. */
-export function Button({ label, onPress, kind = 'outline', tone, size = 'md', disabled, icon, style }: BtnProps) {
+export function Button({ label, onPress, kind = 'secondary', size = 'md', disabled, trailing, style, accessibilityLabel }: BtnProps) {
   const { c, isDark } = useTheme();
+  const k = kind === 'outline' ? 'secondary' : kind;
   const press = useSharedValue(0);
-  const face = useAnimatedStyle(() => ({ transform: [{ scale: 1 - press.value * 0.03 }] }));
-  const lg = size === 'lg';
-  const bg =
-    kind === 'primary' ? (tone ? c.tile[tone] : isDark ? '#000000' : c.line) : kind === 'danger' ? c.tile[2] : kind === 'ghost' ? 'transparent' : 'transparent';
-  const fg = kind === 'primary' ? (tone ? c.ink[tone] : '#FFFFFF') : kind === 'danger' ? '#FFFFFF' : c.text;
+  const face = useAnimatedStyle(() => ({ opacity: 1 - press.value * 0.25 }));
+  const primary = k === 'primary';
+  const bg = primary ? (isDark ? c.text : c.line) : k === 'ghost' ? 'transparent' : c.surface;
+  const fg = primary ? c.bg : k === 'danger' ? c.tile[2] : c.text;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      onPressIn={() => (press.value = withTiming(1, { duration: 60 }))}
-      onPressOut={() => (press.value = withSpring(0, { damping: 12, stiffness: 400 }))}
-      style={[{ opacity: disabled ? 0.35 : 1 }, style]}>
+      onPressIn={() => (press.value = withTiming(1, enter(dur.fast)))}
+      onPressOut={() => (press.value = withTiming(0, exit(dur.fast)))}
+      style={[{ opacity: disabled ? 0.4 : 1 }, style]}>
       <Animated.View
         style={[
           {
-            minHeight: lg ? 58 : 46,
-            paddingHorizontal: lg ? 22 : 16,
-            borderWidth: kind === 'ghost' ? 0 : 2,
-            borderColor: c.stroke,
+            minHeight: size === 'lg' ? 56 : 48,
+            paddingHorizontal: space.lg,
+            borderWidth: k === 'ghost' || primary ? 0 : 1,
+            borderColor: c.hair,
             backgroundColor: bg,
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'center',
-            gap: 10,
+            justifyContent: trailing ? 'space-between' : 'center',
           },
           face,
         ]}>
-        {icon}
-        <Text
-          allowFontScaling={false}
-          style={{
-            color: fg,
-            fontFamily: lg ? font.wide : font.bodySemi,
-            fontSize: lg ? 17 : 15,
-            letterSpacing: lg ? 0 : 0.2,
-            textDecorationLine: kind === 'ghost' ? 'underline' : 'none',
-          }}>
-          {label}
-        </Text>
+        <Text style={[type.bodyStrong, { color: fg }]}>{label}</Text>
+        {trailing ? <Text style={[type.bodyStrong, { color: fg, opacity: 0.7, fontVariant: ['tabular-nums'] }]}>{trailing}</Text> : null}
       </Animated.View>
     </Pressable>
   );
 }
 
-/** Square icon button. Children draw the icon. */
+/** A text row that behaves as a button: 44 tall, for secondary navigation. */
+export function TextLink({ label, onPress }: { label: string; onPress: () => void }) {
+  const { c } = useTheme();
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" style={{ minHeight: HIT, justifyContent: 'center' }}>
+      {({ pressed }) => <Text style={[type.bodyStrong, { color: c.text, opacity: pressed ? 0.6 : 1 }]}>{label}</Text>}
+    </Pressable>
+  );
+}
+
+/** Square icon button, 44×44. Children draw the icon; the label is spoken. */
 export function IconButton({
   onPress,
   label,
   children,
-  size = 40,
   disabled,
+  plain,
 }: {
   onPress?: () => void;
   label: string;
   children: ReactNode;
-  size?: number;
   disabled?: boolean;
+  /** No surface: for top bars. */
+  plain?: boolean;
 }) {
   const { c } = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
       onPress={onPress}
       disabled={disabled}
-      hitSlop={6}
       style={({ pressed }) => ({
-        width: size,
-        height: size,
-        borderWidth: 2,
-        borderColor: c.text,
+        width: HIT,
+        height: HIT,
+        borderWidth: plain ? 0 : 1,
+        borderColor: c.hair,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: pressed ? c.text : 'transparent',
-        opacity: disabled ? 0.3 : 1,
+        backgroundColor: plain ? 'transparent' : c.surface,
+        opacity: disabled ? 0.35 : pressed ? 0.6 : 1,
       })}>
       {children}
     </Pressable>
@@ -222,7 +206,7 @@ export function PauseIcon({ color, s = 14 }: { color: string; s?: number }) {
 
 export function Arrow({ dir, color, s = 16 }: { dir: 'left' | 'right' | 'up' | 'down'; color: string; s?: number }) {
   const rot = { right: '0deg', down: '90deg', left: '180deg', up: '270deg' }[dir];
-  const t = Math.max(2, s * 0.14);
+  const t = Math.max(2, Math.round(s * 0.14));
   return (
     <View style={{ width: s, height: s, transform: [{ rotate: rot }] }}>
       <View style={{ position: 'absolute', left: 0, right: t * 0.6, top: (s - t) / 2, height: t, backgroundColor: color }} />
@@ -244,7 +228,7 @@ export function Arrow({ dir, color, s = 16 }: { dir: 'left' | 'right' | 'up' | '
 }
 
 export function CloseIcon({ color, s = 16 }: { color: string; s?: number }) {
-  const t = Math.max(2, s * 0.14);
+  const t = Math.max(2, Math.round(s * 0.14));
   const bar = (r: string) => (
     <View style={{ position: 'absolute', left: -s * 0.1, right: -s * 0.1, top: (s - t) / 2, height: t, backgroundColor: color, transform: [{ rotate: r }] }} />
   );
@@ -256,69 +240,57 @@ export function CloseIcon({ color, s = 16 }: { color: string; s?: number }) {
   );
 }
 
-/* ---------- ladder: the legend and the progress ---------- */
+/* ---------- ladder: the legend of rungs ---------- */
 
-export function Ladder({ best, size = 20, animate }: { best: number; size?: number; animate?: boolean }) {
+export function Ladder({ best, size = 24, animate }: { best: number; size?: number; animate?: boolean }) {
   const { c } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }} accessibilityLabel="Merge ladder">
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }} accessibilityLabel="Лесенка плиток">
       {LADDER.map((v, k) => {
         const on = v <= 2 || v <= best;
         const rk = rank(v);
         return (
-          <View key={v} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-            {k === 1 ? <Op>+</Op> : k >= 2 ? <Op>›</Op> : null}
-            <Rung delay={animate ? k * 60 : undefined}>
-              <View
-                style={{
-                  minWidth: size,
-                  height: size,
-                  paddingHorizontal: 3,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: on ? c.tile[rk] : 'transparent',
-                  borderWidth: on ? 0 : 1.5,
-                  borderColor: c.faint,
-                }}>
-                <Text
-                  allowFontScaling={false}
-                  style={{ fontFamily: font.tile, fontSize: size * 0.5, color: on ? c.ink[rk] : c.faint }}>
-                  {v}
-                </Text>
-              </View>
-            </Rung>
-          </View>
+          <Rung key={v} delay={animate ? k * 50 : undefined}>
+            <View
+              style={{
+                minWidth: size,
+                height: size,
+                paddingHorizontal: space.xs,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: on ? c.tile[rk] : 'transparent',
+                borderWidth: on ? 0 : 1,
+                borderColor: c.hair,
+              }}>
+              <Text allowFontScaling={false} style={{ fontFamily: font.tile, fontSize: Math.max(12, Math.round(size * 0.5)), color: on ? c.ink[rk] : c.faint }}>
+                {v}
+              </Text>
+            </View>
+          </Rung>
         );
       })}
     </View>
   );
 }
 
-function Op({ children }: { children: ReactNode }) {
-  const { c } = useTheme();
-  return <Text style={{ color: c.faint, fontSize: 10, fontFamily: font.bodySemi }}>{children}</Text>;
-}
-
 function Rung({ children, delay }: { children: ReactNode; delay?: number }) {
   const s = useSharedValue(delay === undefined ? 1 : 0);
   useEffect(() => {
-    if (delay !== undefined) s.value = withDelay(delay, withSpring(1, { damping: 12 }));
+    if (delay !== undefined) s.value = withDelay(delay, withTiming(1, enter()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const st = useAnimatedStyle(() => ({ transform: [{ scale: s.value }] }));
+  const st = useAnimatedStyle(() => ({ opacity: s.value, transform: [{ translateY: (1 - s.value) * 4 }] }));
   return <Animated.View style={st}>{children}</Animated.View>;
 }
 
 /** A tile-coloured badge with a value, e.g. best tile. */
 export function TileBadge({ v, size = 24 }: { v: number; size?: number }) {
   const { c } = useTheme();
-  if (!v) {
-    return <Text style={{ fontFamily: font.tile, fontSize: size * 0.6, color: c.text }}>—</Text>;
-  }
+  if (!v) return <Text style={[type.bodyStrong, { color: c.text }]}>—</Text>;
   const rk = rank(v);
   return (
-    <View style={{ minWidth: size * 1.25, height: size, paddingHorizontal: 5, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center' }}>
-      <Text allowFontScaling={false} style={{ fontFamily: font.tile, fontSize: size * 0.58, color: c.ink[rk] }}>
+    <View style={{ minWidth: size + space.sm, height: size, paddingHorizontal: space.xs, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center' }}>
+      <Text allowFontScaling={false} style={{ fontFamily: font.tile, fontSize: Math.max(12, Math.round(size * 0.55)), color: c.ink[rk], fontVariant: ['tabular-nums'] }}>
         {v}
       </Text>
     </View>
@@ -327,30 +299,27 @@ export function TileBadge({ v, size = 24 }: { v: number; size?: number }) {
 
 /* ---------- settings controls ---------- */
 
-/** A switch made of two cells: off is a hollow cell, on fills it with the rung colour. */
+/** A switch: ink track when on, hairline track when off. 44 tall hit area. */
 export function Toggle({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: string }) {
   const { c } = useTheme();
   const x = useSharedValue(value ? 1 : 0);
   useEffect(() => {
-    x.value = withSpring(value ? 1 : 0, { damping: 16, stiffness: 260 });
+    x.value = withTiming(value ? 1 : 0, enter(dur.fast));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
-  const knob = useAnimatedStyle(() => ({ transform: [{ translateX: x.value * 24 }] }));
+  const knob = useAnimatedStyle(() => ({ transform: [{ translateX: x.value * 20 }] }));
   return (
     <Pressable
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
       accessibilityLabel={label}
       onPress={() => onChange(!value)}
-      hitSlop={8}
-      style={{ width: 52, height: 28, backgroundColor: value ? c.stroke : 'transparent', borderWidth: 2, borderColor: c.stroke }}>
-      {/* Off: a hollow cell on the left. On: the track fills and the cell moves right, in the paper colour. */}
-      <Animated.View
-        style={[
-          { position: 'absolute', left: 2, top: 2, width: 20, height: 20, backgroundColor: value ? c.bg : 'transparent', borderWidth: value ? 0 : 2, borderColor: c.stroke },
-          knob,
-        ]}
-      />
+      style={{ height: HIT, justifyContent: 'center' }}>
+      <View style={{ width: 48, height: 28, backgroundColor: value ? c.text : c.surface, borderWidth: 1, borderColor: value ? c.text : c.hair }}>
+        <Animated.View
+          style={[{ position: 'absolute', left: 3, top: 3, width: 20, height: 20, backgroundColor: value ? c.bg : c.faint }, knob]}
+        />
+      </View>
     </Pressable>
   );
 }
@@ -366,7 +335,7 @@ export function Segmented<T extends string>({
 }) {
   const { c } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', borderWidth: 2, borderColor: c.stroke, backgroundColor: c.stroke, gap: 2 }}>
+    <View style={{ flexDirection: 'row', borderWidth: 1, borderColor: c.hair, backgroundColor: c.surface, padding: space.xs, gap: space.xs }}>
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -375,8 +344,8 @@ export function Segmented<T extends string>({
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
             onPress={() => onChange(o.value)}
-            style={{ flex: 1, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.stroke : c.bg }}>
-            <Text style={{ fontFamily: font.bodySemi, fontSize: 14, color: on ? c.bg : c.text }}>{o.label}</Text>
+            style={{ flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.text : 'transparent' }}>
+            <Text style={[type.secondaryStrong, { color: on ? c.bg : c.text }]}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -384,14 +353,27 @@ export function Segmented<T extends string>({
   );
 }
 
-/* ---------- a modal card: the thick frame of the board around a canvas panel ---------- */
+/* ---------- a dialog card: L2, hairline plus a soft shadow ---------- */
 
-export function Panel({ children, style, accent }: { children: ReactNode; style?: ViewStyle; accent?: number }) {
+export function Panel({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   const { c } = useTheme();
   return (
-    <View style={[{ backgroundColor: c.line, padding: 6 }, style]}>
-      {accent ? <View style={{ height: 14, backgroundColor: c.tile[accent], marginBottom: 6 }} /> : null}
-      <View style={{ backgroundColor: c.canvas, padding: 22 }}>{children}</View>
+    <View
+      style={[
+        {
+          backgroundColor: c.surface,
+          borderWidth: 1,
+          borderColor: c.hair,
+          padding: space.xl,
+          shadowColor: c.shadow,
+          shadowOpacity: 1,
+          shadowRadius: 24,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: 4,
+        },
+        style,
+      ]}>
+      {children}
     </View>
   );
 }
@@ -401,11 +383,48 @@ export function Panel({ children, style, accent }: { children: ReactNode; style?
 export function TopBar({ title, onBack, close }: { title: string; onBack: () => void; close?: boolean }) {
   const { c } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 18 }}>
-      <IconButton label={close ? 'Закрыть' : 'Назад'} onPress={onBack} size={38}>
-        {close ? <CloseIcon color={c.text} s={14} /> : <Arrow dir="left" color={c.text} s={16} />}
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.lg, marginLeft: -space.md }}>
+      <IconButton plain label={close ? 'Закрыть' : 'Назад'} onPress={onBack}>
+        {close ? <CloseIcon color={c.text} s={16} /> : <Arrow dir="left" color={c.text} s={18} />}
       </IconButton>
-      <Heading size={20}>{title}</Heading>
+      <Heading level="heading">{title}</Heading>
+    </View>
+  );
+}
+
+/** A settings-style row: label and note on the left, a control on the right. */
+export function Row({ label, note, children, onPress }: { label: string; note?: string; children?: ReactNode; onPress?: () => void }) {
+  const { c } = useTheme();
+  const inner = (pressed = false) => (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 56, paddingVertical: space.sm, opacity: pressed ? 0.6 : 1 }}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={[type.body, { color: c.text }]}>{label}</Text>
+        {note ? <Text style={[type.secondary, { color: c.muted }]}>{note}</Text> : null}
+      </View>
+      {children ?? (onPress ? <Arrow dir="right" color={c.muted} s={14} /> : null)}
+    </View>
+  );
+  if (!onPress) return inner();
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress}>
+      {({ pressed }) => inner(pressed)}
+    </Pressable>
+  );
+}
+
+/** A hairline divider. */
+export function Rule() {
+  const { c } = useTheme();
+  return <View style={{ height: 1, backgroundColor: c.hair }} />;
+}
+
+/** A small stat: meta label over a number. */
+export function Stat({ label, value, children }: { label: string; value?: string; children?: ReactNode }) {
+  const { c } = useTheme();
+  return (
+    <View style={{ gap: space.xs }}>
+      <Label meta>{label}</Label>
+      {children ?? <Text style={[type.stat, { color: c.text }]}>{value}</Text>}
     </View>
   );
 }

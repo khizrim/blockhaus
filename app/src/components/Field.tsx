@@ -5,11 +5,11 @@ import Animated, {
   useSharedValue,
   withDelay,
   withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg';
 
+import { dur, enter } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, mix, rank } from '@/design/tokens';
 
@@ -155,7 +155,7 @@ const Cell = memo(function Cell(p: CellProps) {
 
   useEffect(() => {
     if (look?.enterDelay !== undefined) {
-      scale.value = withDelay(look.enterDelay, withSpring(1, { damping: 14, stiffness: 180 }));
+      scale.value = withDelay(look.enterDelay, withTiming(1, enter()));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -163,16 +163,16 @@ const Cell = memo(function Cell(p: CellProps) {
   useEffect(() => {
     if (!look?.pop) return;
     scale.value = withSequence(
-      withTiming(0.6, { duration: 0 }),
-      withSpring(1, { damping: 7, stiffness: 260, mass: 0.6 }),
+      withTiming(0.85, { duration: 0 }),
+      withTiming(1, enter(dur.base)),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [look?.pop]);
 
   useEffect(() => {
     if (!look?.land) return;
-    scale.value = withSequence(withTiming(0.8, { duration: 0 }), withTiming(1, { duration: 200 }));
-    opacity.value = withSequence(withTiming(0.5, { duration: 0 }), withTiming(1, { duration: 200 }));
+    scale.value = withSequence(withTiming(0.92, { duration: 0 }), withTiming(1, enter(dur.base)));
+    opacity.value = withSequence(withTiming(0.6, { duration: 0 }), withTiming(1, enter(dur.base)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [look?.land]);
 
@@ -245,8 +245,9 @@ const Cell = memo(function Cell(p: CellProps) {
             allowFontScaling={false}
             style={{
               color: ink,
-              fontFamily: long ? font.narrow : font.tile,
-              fontSize: cell * (long ? 0.27 : 0.38),
+              fontFamily: font.tile,
+              fontSize: Math.max(12, Math.round(cell * (long ? 0.28 : v >= 10 ? 0.34 : 0.4))),
+              fontVariant: ['tabular-nums'],
               includeFontPadding: false,
             }}>
             {v}

@@ -2,20 +2,19 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
-  Easing,
   FadeIn,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
 import { Field, type CellLook } from '@/components/Field';
 import { Arrow, IconButton, Label, PauseIcon, Screen, TileBadge } from '@/components/ui';
+import { dur, enter, exit, space, type } from '@/design/system';
 import { N, pieceGrid, sceneByKey, type Piece } from '@/design/mock';
 import { useTheme } from '@/design/theme';
-import { font, pairs } from '@/design/tokens';
+import { pairs } from '@/design/tokens';
 
 /* The game screen, fully drawn, with no rules behind it. Pieces can be picked
    up and set down so the drag, the partner highlight, the ghost and the landing
@@ -59,7 +58,7 @@ export default function Game() {
   // Sizing: the board takes the width, but leaves the tray within thumb reach.
   const inner = Math.min(width, 440) - 32;
   const gap = Math.round(Math.min(7, Math.max(5, width * 0.015)));
-  const boardSize = Math.max(240, Math.min(inner, height - 360));
+  const boardSize = Math.max(240, Math.min(inner, height - 380));
   const cell = Math.floor((boardSize - gap) / N);
   // Pieces in the tray at about half the board's cell, so they read as the same things.
   const trayCell = Math.min(Math.floor(cell * 0.7), Math.floor(inner / 3 / 3.3));
@@ -108,8 +107,8 @@ export default function Game() {
     const { ox, oy } = pieceOffset(p);
     dx.value = pageX - ox;
     dy.value = pageY - oy + 20;
-    dy.value = withTiming(pageY - oy, { duration: 120 });
-    lift.value = withSpring(1, { damping: 14, stiffness: 300 });
+    dy.value = withTiming(pageY - oy, enter(dur.fast));
+    lift.value = withTiming(1, enter(dur.fast));
     setHold({ slot, piece: p, x: pageX, y: pageY });
     setHint('Яркие плитки: с ними фигура сольётся.');
   };
@@ -145,7 +144,7 @@ export default function Game() {
       lift.value = 0;
       setHint('Фигура на месте. Правил пока нет, ничего не сливается.');
     } else {
-      lift.value = withTiming(0, { duration: 160 });
+      lift.value = withTiming(0, exit(dur.fast));
       setHint('Здесь не помещается.');
     }
     setHold(null);
@@ -214,11 +213,10 @@ export default function Game() {
   const boardStyle = useAnimatedStyle(() => ({ transform: [{ translateX: sx.value }, { translateY: sy.value }] }));
   const sweep = (dir: 'left' | 'right' | 'up' | 'down') => {
     if (sweeps === 0) return;
-    const d = 10;
+    const d = 8;
     const [vx, vy] = { left: [-d, 0], right: [d, 0], up: [0, -d], down: [0, d] }[dir];
-    const back = { duration: 260, easing: Easing.out(Easing.back(2.5)) };
-    sx.value = withSequence(withTiming(vx, { duration: 90 }), withTiming(0, back));
-    sy.value = withSequence(withTiming(vy, { duration: 90 }), withTiming(0, back));
+    sx.value = withSequence(withTiming(vx, exit(dur.fast)), withTiming(0, enter(dur.base)));
+    sy.value = withSequence(withTiming(vy, exit(dur.fast)), withTiming(0, enter(dur.base)));
     setSweeps((s) => s - 1);
     setHint(sweeps === 1 ? 'Сдвигов больше нет. Новый лоток даст ещё два.' : 'Сдвиг. Настоящее движение появится вместе с правилами.');
   };
@@ -227,31 +225,48 @@ export default function Game() {
     if (board[i] > 0) setPops((p) => ({ ...p, [i]: Date.now() }));
   };
 
+  const sweepRow = (
+    <View style={{ width: boardSize, flexDirection: 'row', alignItems: 'center', marginTop: space.md }}>
+      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm }} accessibilityLabel={`Сдвигов осталось: ${sweeps}`}>
+        <Label>Сдвиги</Label>
+        {[0, 1].map((k) => (
+          <View key={k} style={{ width: 8, height: 8, backgroundColor: k < sweeps ? c.text : c.hair }} />
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', gap: space.sm }}>
+        {(['left', 'down', 'up', 'right'] as const).map((d) => (
+          <IconButton key={d} label={SWEEP_LABEL[d]} disabled={sweeps === 0} onPress={() => sweep(d)}>
+            <Arrow dir={d} color={c.text} s={16} />
+          </IconButton>
+        ))}
+      </View>
+    </View>
+  );
+
   return (
     <View style={[{ flex: 1 }, noSelect]}>
       <Screen>
-        {/* header: one row. The score is the hero, the best tile is the progress. */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Pressable onPress={() => router.back()} accessibilityLabel="В меню" hitSlop={8}>
-            <Text
-              allowFontScaling={false}
-              style={{ fontFamily: font.black, fontSize: Math.min(48, width * 0.12), lineHeight: Math.min(56, width * 0.14), color: c.text }}>
+        {/* header: the score leads, the best tile is the progress, pause on the right */}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+          <View>
+            <Label meta>Очки</Label>
+            <Text allowFontScaling={false} style={[type.number, { color: c.text }]}>
               {scene.score.toLocaleString('ru-RU')}
             </Text>
-          </Pressable>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <View style={{ alignItems: 'flex-end', gap: 3 }}>
-              <Label>лучшая</Label>
-              <TileBadge v={best} size={26} />
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.lg }}>
+            <View style={{ alignItems: 'flex-end', gap: space.xs }}>
+              <Label meta>Лучшая</Label>
+              <TileBadge v={best} size={28} />
             </View>
-            <IconButton label="Пауза" size={44} onPress={() => router.push({ pathname: '/pause', params: { scene: scene.key } })}>
+            <IconButton label="Пауза" onPress={() => router.push({ pathname: '/pause', params: { scene: scene.key } })}>
               <PauseIcon color={c.text} />
             </IconButton>
           </View>
         </View>
 
-        {/* board */}
-        <View style={{ marginTop: 14, alignItems: 'center' }}>
+        {/* board, with its toolbar and the hint, centred in the free height */}
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: space.lg }}>
           <Animated.View style={boardStyle}>
             <View ref={boardRef} onLayout={measureBoard} collapsable={false}>
               <Field w={N} h={N} values={values} cell={cell} gap={gap} look={look} />
@@ -263,62 +278,37 @@ export default function Game() {
               </View>
             </View>
           </Animated.View>
+          {sweepRow}
+          {hints ? (
+            <Text style={[type.secondary, { width: boardSize, marginTop: space.md, minHeight: 20, color: c.muted }]}>{hint}</Text>
+          ) : null}
         </View>
 
-        {hints ? (
-          <Text style={{ textAlign: 'center', marginTop: 12, minHeight: 20, fontFamily: font.body, fontSize: 13, color: c.muted }}>
-            {hint}
-          </Text>
-        ) : null}
-
-        {/* sweeps */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 12 }}>
-          {(['left', 'down', 'up', 'right'] as const).map((d) => (
-            <IconButton key={d} label={SWEEP_LABEL[d]} size={40} disabled={sweeps === 0} onPress={() => sweep(d)}>
-              <Arrow dir={d} color={c.text} s={16} />
-            </IconButton>
-          ))}
-          <View style={{ flexDirection: 'row', gap: 4, marginLeft: 6 }} accessibilityLabel={`Сдвигов осталось: ${sweeps}`}>
-            {[0, 1].map((k) => (
-              <View
-                key={k}
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderWidth: 2,
-                  borderColor: sweeps === 0 ? c.faint : c.text,
-                  backgroundColor: k < sweeps ? c.text : 'transparent',
-                }}
-              />
-            ))}
-          </View>
-        </View>
-
-        {/* tray */}
+        {/* tray: an L1 surface with three slots */}
         <View
           style={{
-            marginTop: 'auto',
-            height: trayCell * 3 + 28,
+            height: trayCell * 3 + space.xxl,
             flexDirection: 'row',
-            borderTopWidth: gap,
-            borderBottomWidth: gap,
-            borderColor: c.line,
+            backgroundColor: c.surface,
+            borderWidth: 1,
+            borderColor: c.hair,
           }}>
           {tray.map((p, slot) => (
             <View
               key={slot}
               {...responders[slot].panHandlers}
+              accessibilityLabel={p && !p.used ? `Фигура ${slot + 1}` : `Пустой слот ${slot + 1}`}
               style={{
                 flex: 1,
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderLeftWidth: slot ? 2 : 0,
-                borderColor: c.fold,
+                borderLeftWidth: slot ? 1 : 0,
+                borderColor: c.hair,
               }}>
               {p ? (
                 <Animated.View
                   key={p.used ? 'used' : 'live'}
-                  entering={p.used ? undefined : FadeIn.duration(220)}
+                  entering={p.used ? undefined : FadeIn.duration(dur.base)}
                   style={{ opacity: p.used || hold?.slot === slot ? 0 : 1 }}>
                   <Field variant="piece" {...pieceGrid(p)} cell={trayCell} gap={gap} />
                 </Animated.View>
@@ -328,18 +318,10 @@ export default function Game() {
         </View>
       </Screen>
 
-      {/* The lifted piece, above everything. Its shadow is a hard offset copy in
-          the line colour, the same device as the buttons, so it works the same on
-          every platform and never shades the piece's empty corners. */}
+      {/* The lifted piece, above everything. No drop shadow: the lift reads
+          from the scale-up and from the ghost on the board. */}
       <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0 }, dragStyle]}>
-        {hold ? (
-          <>
-            <View style={{ position: 'absolute', left: 6, top: 10, opacity: 0.22 }}>
-              <Field variant="piece" {...pieceGrid(hold.piece)} cell={cell} gap={gap} numbers={false} look={() => ({ shadow: true })} />
-            </View>
-            <Field variant="piece" {...pieceGrid(hold.piece)} cell={cell} gap={gap} />
-          </>
-        ) : null}
+        {hold ? <Field variant="piece" {...pieceGrid(hold.piece)} cell={cell} gap={gap} /> : null}
       </Animated.View>
     </View>
   );

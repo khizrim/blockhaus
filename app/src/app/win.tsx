@@ -1,78 +1,32 @@
 import { router } from 'expo-router';
-import { useEffect } from 'react';
-import { Text, View } from 'react-native';
-import Animated, {
-  FadeInDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+import { View } from 'react-native';
+import Animated, { Easing, FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { Field } from '@/components/Field';
 import { Overlay } from '@/components/Overlay';
-import { Body, Button, Label, Panel } from '@/components/ui';
-import { useTheme } from '@/design/theme';
-import { font } from '@/design/tokens';
+import { Body, Button, Heading, Panel, Stat } from '@/components/ui';
+import { dur, space } from '@/design/system';
 
-/* The win: the ladder collapses into one teal block. A strip of every rung
-   assembles left to right, then the 96 lands on top and keeps a slow pulse. */
-const STRIP = [1, 2, 3, 6, 12, 24, 48];
-
+/* The win. One tile, the 96, is the picture: the only colour on the card. */
 export default function Win() {
-  const { c } = useTheme();
-  const s = useSharedValue(0);
-  const pulse = useSharedValue(1);
-  useEffect(() => {
-    s.value = withDelay(STRIP.length * 70 + 120, withSpring(1, { damping: 9, stiffness: 160 }));
-    pulse.value = withDelay(1400, withRepeat(withSequence(withTiming(1.04, { duration: 700 }), withTiming(1, { duration: 700 })), -1));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const big = useAnimatedStyle(() => ({ transform: [{ scale: s.value * pulse.value }] }));
-
   return (
     <Overlay>
-      <Panel accent={8}>
-        <View style={{ alignItems: 'center', gap: 16 }}>
-          <Field
-            w={STRIP.length}
-            h={1}
-            values={STRIP}
-            cell={34}
-            gap={5}
-            look={(i) => ({ enterDelay: i * 70 })}
-          />
-          <Animated.View style={[{ width: 132, height: 132, backgroundColor: c.line, padding: 6 }, big]}>
-            <View style={{ flex: 1, backgroundColor: c.tile[8], alignItems: 'center', justifyContent: 'center' }}>
-              <Text allowFontScaling={false} style={{ fontFamily: font.black, fontSize: 56, color: c.ink[8] }}>
-                96
-              </Text>
-            </View>
-          </Animated.View>
-          <Animated.View entering={FadeInDown.delay(900)} style={{ alignItems: 'center', gap: 6 }}>
-            <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: 26, color: c.text }}>
-              Вы собрали 96
-            </Text>
-            <Body muted style={{ textAlign: 'center' }}>
-              Можно играть дальше на очки или начать новую партию.
-            </Body>
-          </Animated.View>
-          <View style={{ flexDirection: 'row', gap: 24 }}>
-            <View style={{ alignItems: 'center', gap: 4 }}>
-              <Label>Очки</Label>
-              <Text style={{ fontFamily: font.tile, fontSize: 20, color: c.text }}>2 410</Text>
-            </View>
-            <View style={{ alignItems: 'center', gap: 4 }}>
-              <Label>Слияния</Label>
-              <Text style={{ fontFamily: font.tile, fontSize: 20, color: c.text }}>260</Text>
-            </View>
-          </View>
-        </View>
-        <View style={{ gap: 10, marginTop: 20 }}>
-          <Button kind="primary" tone={8} size="lg" label="Играть дальше" onPress={() => router.back()} />
+      <Panel>
+        <Animated.View
+          entering={FadeInDown.delay(dur.base).duration(dur.slow).easing(Easing.out(Easing.cubic)).withInitialValues({ opacity: 0, transform: [{ translateY: 8 }] })}
+          style={{ alignSelf: 'flex-start' }}>
+          <Field w={1} h={1} values={[96]} cell={96} gap={8} variant="piece" />
+        </Animated.View>
+        <Heading style={{ marginTop: space.xl }}>Вы собрали 96</Heading>
+        <Body muted style={{ marginTop: space.sm }}>
+          Партия выиграна. Можно продолжить на очки или начать новую.
+        </Body>
+        <Animated.View entering={FadeIn.delay(dur.slow).duration(dur.base)} style={{ flexDirection: 'row', gap: space.xxl, marginTop: space.xl }}>
+          <Stat label="Очки" value="2 410" />
+          <Stat label="Слияния" value="260" />
+        </Animated.View>
+        <View style={{ gap: space.md, marginTop: space.xl }}>
+          <Button kind="primary" size="lg" label="Играть дальше" onPress={() => router.back()} />
           <Button
             label="Новая игра"
             onPress={() => {

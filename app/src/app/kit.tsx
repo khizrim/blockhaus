@@ -7,6 +7,7 @@ import { Body, Button, Glyph, Heading, IconButton, Label, Ladder, PauseIcon, Arr
 import { pieceGrid, scenes, type Piece } from '@/design/mock';
 import { useTheme } from '@/design/theme';
 import { font, LADDER, NAMES, rank } from '@/design/tokens';
+import { type } from '@/design/system';
 
 /* A living sheet of every piece of the visual language, for prototyping:
    colours, type, the field rules, pieces, controls and the still scenes. */
@@ -63,10 +64,13 @@ export default function Kit() {
 
         <Block title="Type">
           <Wordmark size={22} />
-          <Text style={{ fontFamily: font.black, fontSize: 44, color: c.text }}>1,840</Text>
-          <Heading>Poster heading</Heading>
-          <Body>Dela Gothic One for the name, headings and every number, tiles included. Onest for text.</Body>
-          <Label>Label · uppercase</Label>
+          <Text style={[type.number, { color: c.text }]}>1 840</Text>
+          <Heading>Title 24/30</Heading>
+          <Heading level="heading">Heading 20/24</Heading>
+          <Body>Body 16/24. Dela Gothic One is the wordmark only; Onest 400/500/600 for everything else.</Body>
+          <Body small muted>Secondary 14/20</Body>
+          <Label>Label 14 medium</Label>
+          <Label meta>Meta 12/16</Label>
         </Block>
 
         <Block title="Fields">
@@ -108,8 +112,8 @@ export default function Kit() {
 
         <Block title="Controls">
           <Button kind="primary" size="lg" label="Primary" />
-          <Button kind="primary" tone={8} size="lg" label="Toned" />
-          <Button label="Outline" />
+          <Button kind="primary" size="lg" label="With trailing" trailing="129" />
+          <Button label="Secondary" />
           <Button kind="danger" label="Destructive" />
           <Button kind="ghost" label="Ghost link" />
           <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
@@ -166,7 +170,7 @@ function Block({ title, children }: { title: string; children: ReactNode }) {
   const { c } = useTheme();
   return (
     <View style={{ gap: 12 }}>
-      <View style={{ borderBottomWidth: 2, borderColor: c.stroke, paddingBottom: 6 }}>
+      <View style={{ borderBottomWidth: 1, borderColor: c.hair, paddingBottom: 8 }}>
         <Label style={{ color: c.text }}>{title}</Label>
       </View>
       {children}

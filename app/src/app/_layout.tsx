@@ -5,6 +5,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ThemeProvider, useTheme } from '@/design/theme';
@@ -28,6 +29,8 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      {/* Every animation follows the system's reduced-motion setting. */}
+      <ReducedMotionConfig mode={ReduceMotion.System} />
       <ThemeProvider>
         <Navigator />
       </ThemeProvider>

@@ -19,6 +19,12 @@ export type Palette = {
   muted: string;
   faint: string;
   scrim: string;
+  /** L1 surface: controls, cards, the tray. */
+  surface: string;
+  /** Hairline border of an L1 surface. */
+  hair: string;
+  /** Soft shadow colour for L2 (cards over a scrim). */
+  shadow: string;
   /** Tile fill and number colour per rung, index 1..8. */
   tile: string[];
   ink: string[];
@@ -34,6 +40,9 @@ export const light: Palette = {
   muted: '#5D5F66',
   faint: '#9A9BA0',
   scrim: 'rgba(243,239,228,0.88)',
+  surface: '#FFFDF7',
+  hair: 'rgba(17,18,21,0.14)',
+  shadow: 'rgba(17,18,21,0.06)',
   tile: ['', '#1F4FB2', '#D9342B', '#F4C21C', '#EC7A1F', '#1D8657', '#6B3DA3', '#D9468C', '#0E8C97'],
   ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF'],
 };
@@ -50,6 +59,9 @@ export const dark: Palette = {
   muted: '#A2A3A8',
   faint: '#66686E',
   scrim: 'rgba(27,28,32,0.9)',
+  surface: '#26272C',
+  hair: 'rgba(238,237,234,0.14)',
+  shadow: 'rgba(0,0,0,0.3)',
   tile: ['', '#3466D6', '#E5463C', '#F2C230', '#F08A33', '#26A06A', '#8455C4', '#E25C9C', '#18A3AE'],
   ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF'],
 };
@@ -78,16 +90,16 @@ export function pairs(a: number, b: number): boolean {
 }
 
 export const font = {
-  /** Dela Gothic One: the poster face. Wordmark, headings, big numbers. */
+  /** Dela Gothic One: the wordmark only. It is a logo, not a type style. */
   wide: 'DelaGothicOne_400Regular',
-  black: 'DelaGothicOne_400Regular',
-  /** Tile numbers use the poster face too: one display family across the app. */
-  tile: 'DelaGothicOne_400Regular',
-  narrow: 'DelaGothicOne_400Regular',
-  /** Onest for everything you read. Both faces carry Cyrillic. */
+  /** Onest for everything else, in three weights: 400, 500, 600. */
   body: 'Onest_400Regular',
   bodyMedium: 'Onest_500Medium',
   bodySemi: 'Onest_600SemiBold',
+  /** Numbers: tiles, the score. Onest 600 with tabular figures. */
+  tile: 'Onest_600SemiBold',
+  black: 'Onest_600SemiBold',
+  narrow: 'Onest_600SemiBold',
 };
 
 /** Mix colour `a` into `b` by `t` (0..1). Hex only. */
@@ -99,8 +111,3 @@ export function mix(a: string, b: string, t: number): string {
   return `#${c(r1, r2)}${c(g1, g2)}${c(b1, b2)}`;
 }
 
-export const motion = {
-  fast: 140,
-  base: 220,
-  slow: 420,
-};

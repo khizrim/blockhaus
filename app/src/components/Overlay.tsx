@@ -1,18 +1,22 @@
 import { type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
+import Animated, { Easing, FadeIn, FadeInDown } from 'react-native-reanimated';
 
+import { dur, space } from '@/design/system';
 import { useTheme } from '@/design/theme';
 
-/** A scrim over the game with a card that drops in like a placed piece. */
+/** A scrim over the screen with a dialog card. The card fades up 8pt, ease-out. */
 export function Overlay({ children, onDismiss }: { children: ReactNode; onDismiss?: () => void }) {
   const { c } = useTheme();
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <Animated.View entering={FadeIn.duration(180)} style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} accessibilityLabel="Закрыть" />
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.lg }}>
+      <Animated.View entering={FadeIn.duration(dur.base)} style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} accessibilityLabel="Закрыть" disabled={!onDismiss} />
       </Animated.View>
-      <Animated.View entering={ZoomIn.springify().damping(14).stiffness(220)} style={{ width: '100%', maxWidth: 340 }}>
+      <Animated.View
+        accessibilityViewIsModal
+        entering={FadeInDown.duration(dur.slow).easing(Easing.out(Easing.cubic)).withInitialValues({ opacity: 0, transform: [{ translateY: 8 }] })}
+        style={{ width: '100%', maxWidth: 360 }}>
         {children}
       </Animated.View>
     </View>

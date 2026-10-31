@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
-import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 
-/* ---------- shared: a block that grows in from a corner ---------- */
+import { dur, enter } from '@/design/system';
+
+/* ---------- a poster line that draws itself in from one end ---------- */
 
 export function Grow({
   children,
@@ -14,7 +16,7 @@ export function Grow({
 }) {
   const s = useSharedValue(0);
   useEffect(() => {
-    s.value = withDelay(delay, withSpring(1, { damping: 18, stiffness: 140 }));
+    s.value = withDelay(delay, withTiming(1, enter(dur.slow)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const st = useAnimatedStyle(() =>
@@ -24,4 +26,3 @@ export function Grow({
   );
   return <Animated.View style={st}>{children}</Animated.View>;
 }
-
