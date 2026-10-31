@@ -141,7 +141,7 @@ export default function Game() {
   /* The board takes what is left of the height after the fixed parts:
      header 64, the lesson card when there is one, the tray, and the 8pt
      paddings around them. Never wider than the screen, never under 240. */
-  const plate = Math.max(14, Math.round(width / 22)); // the board's bottom edge, which holds the sweeps
+  const plate = gap * 2; // the board's bottom edge, which holds the sweeps
   const chrome =
     ins.top + space.sm + ins.bottom + space.lg + // screen paddings
     64 + space.lg + // header and its gap to the board
@@ -545,30 +545,29 @@ export default function Game() {
         {/* One column exactly as wide as the board, so every edge lines up with it. */}
         <View style={{ flex: 1, width: boardW, alignSelf: 'center' }}>
           {/* header: the score leads, the best tile is the progress, pause on the right */}
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-            <View>
+          {/* Two stats on one baseline, labels over them; pause on the right. */}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+            <View style={{ flex: 1 }}>
               <Label meta>Очки</Label>
               <Text allowFontScaling={false} style={[type.number, { color: c.text }]} accessibilityLabel={`Очки: ${g.score}`}>
                 {(shownScore ?? g.score).toLocaleString('ru-RU')}
               </Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.md }}>
-              {lesson ? null : (
-                <View style={{ alignItems: 'flex-end', gap: space.xs }}>
-                  <Label meta>Лучшая плитка</Label>
-                  <BestTile v={best} gap={gap} />
-                </View>
-              )}
-              <SquareButton label="Пауза" gap={gap} onPress={() => router.push('/pause')}>
-                <PauseIcon color={c.text} />
-              </SquareButton>
-            </View>
+            {lesson || !best ? null : (
+              <View style={{ marginRight: space.xl }}>
+                <Label meta>Лучшая</Label>
+                <BestTile v={best} gap={gap} />
+              </View>
+            )}
+            <SquareButton label="Пауза" gap={gap} onPress={() => router.push('/pause')}>
+              <PauseIcon color={c.text} />
+            </SquareButton>
           </View>
 
-          {/* The free height goes mostly above the board: below it, at most a
-              thumb's gap to the tray, so the drag stays short. */}
+          {/* The free height is split 3:2 above and below the board, so the
+              board and the tray read as one group without crowding. */}
           <View style={{ flex: 1, paddingTop: space.lg }}>
-            <View style={{ flex: 1 }} />
+            <View style={{ flex: 3 }} />
             {lesson ? (
               <View style={{ marginBottom: space.lg }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -623,11 +622,11 @@ export default function Game() {
                 pointerEvents="none"
                 style={{ height: plate, backgroundColor: c.line, flexDirection: 'row', justifyContent: 'flex-end', gap, paddingRight: gap / 2, paddingBottom: gap / 2 }}>
                 {[1, 0].map((k) => (
-                  <Inlay key={k} on={g.sweeps > k} k={k} dir={lastDir.current} w={cell - gap} delay={refillDelay.current} />
+                  <Inlay key={k} on={g.sweeps > k} k={k} dir={lastDir.current} w={Math.round(cell / 2)} delay={refillDelay.current} />
                 ))}
               </View>
             </Animated.View>
-            <View style={{ flex: 1, maxHeight: space.x3 }} />
+            <View style={{ flex: 2 }} />
           </View>
 
           {/* tray: bare paper, three slots under the board's columns */}
@@ -637,7 +636,7 @@ export default function Game() {
                 key={slot}
                 {...responders[slot].panHandlers}
                 accessibilityLabel={p && !p.used ? `Фигура ${slot + 1}${fits(p) ? '' : ', не помещается'}` : `Пустой слот ${slot + 1}`}
-                style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: space.sm }}>
                 {p ? (
                   <TrayPiece
                     key={`${trayId.current}-${slot}-${JSON.stringify(p.cells)}`}
