@@ -43,8 +43,9 @@ export const light: Palette = {
   surface: '#FFFDF7',
   hair: 'rgba(17,18,21,0.14)',
   shadow: 'rgba(17,18,21,0.06)',
-  tile: ['', '#1F4FB2', '#D9342B', '#F4C21C', '#EC7A1F', '#1D8657', '#6B3DA3', '#D9468C', '#0E8C97'],
-  ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF'],
+  // 192, the goal, is the theme's own ink: a black tile with a yellow number here.
+  tile: ['', '#1F4FB2', '#D9342B', '#F4C21C', '#EC7A1F', '#1D8657', '#6B3DA3', '#D9468C', '#0E8C97', '#111215'],
+  ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#F4C21C'],
 };
 
 export const dark: Palette = {
@@ -62,20 +63,21 @@ export const dark: Palette = {
   surface: '#26272C',
   hair: 'rgba(238,237,234,0.14)',
   shadow: 'rgba(0,0,0,0.3)',
-  tile: ['', '#3466D6', '#E5463C', '#F2C230', '#F08A33', '#26A06A', '#8455C4', '#E25C9C', '#18A3AE'],
-  ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF'],
+  // 192, the goal, is the theme's own ink: a paper tile with a black number here.
+  tile: ['', '#3466D6', '#E5463C', '#F2C230', '#F08A33', '#26A06A', '#8455C4', '#E25C9C', '#18A3AE', '#F3EFE4'],
+  ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#111215'],
 };
 
-export const LADDER = [1, 2, 3, 6, 12, 24, 48, 96] as const;
-export const NAMES = ['', 'blue', 'red', 'yellow', 'orange', 'green', 'violet', 'magenta', 'teal'];
+export const LADDER = [1, 2, 3, 6, 12, 24, 48, 96, 192] as const;
+export const NAMES = ['', 'blue', 'red', 'yellow', 'orange', 'green', 'violet', 'magenta', 'teal', 'ink'];
 
-/** Rung of a value: 1→1, 2→2, 3→3, 6→4 … 96 and above → 8. Same as engine.rank. */
+/** Rung of a value: 1→1, 2→2, 3→3, 6→4 … 96 → 8, 192 and above → 9. Same as engine.rank. */
 export function rank(v: number): number {
   if (v <= 0) return 0;
   if (v < 3) return v;
   let r = 3;
   let x = v;
-  while (x > 3 && r < 8) {
+  while (x > 3 && r < 9) {
     x /= 2;
     r++;
   }

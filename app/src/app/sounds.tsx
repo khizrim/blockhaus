@@ -31,12 +31,13 @@ const GROUPS: { title: string; items: { name: SoundName; label: string; note: st
       { name: 'merge-6', label: 'Получилась 24', note: 'Соль' },
       { name: 'merge-7', label: 'Получилась 48', note: 'Ля' },
       { name: 'merge-8', label: 'Получилась 96', note: 'До октавой выше' },
+      { name: 'merge-9', label: 'Получилась 192', note: 'Ре над октавой' },
     ],
   },
   {
     title: 'Конец партии',
     items: [
-      { name: 'win', label: 'Победа', note: 'Вся лесенка и аккорд на 96' },
+      { name: 'win', label: 'Победа', note: 'Вся лесенка и аккорд на 192' },
       { name: 'over', label: 'Места нет', note: 'Две ноты вниз, спокойно' },
     ],
   },
@@ -73,7 +74,7 @@ export default function Sounds() {
         <View style={{ gap: space.sm }}>
           <Label>Цепочки</Label>
           <Button label="Каскад 3 → 6 → 12" onPress={() => fx.cascade([3, 6, 12])} />
-          <Button label="Вся лесенка 3 → 96" onPress={() => fx.cascade([3, 6, 12, 24, 48, 96])} />
+          <Button label="Вся лесенка 3 → 192" onPress={() => fx.cascade([3, 6, 12, 24, 48, 96, 192])} />
           <Button label="Ход: взять, поставить, слить" onPress={() => {
             fx.pick();
             setTimeout(() => fx.place(2), 450);

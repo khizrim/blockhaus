@@ -198,7 +198,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         ng.sweeps = p.sweeps;
         ng.moves = 1;
         ng.bestTile = Math.max(...p.board);
-        ng.won = ng.bestTile >= 96;
+        ng.won = ng.bestTile >= 192;
         ng.over = !engine.anyMove(ng);
         gRef.current = ng;
         setWinSeen(false);

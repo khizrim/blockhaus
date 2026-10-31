@@ -10,7 +10,7 @@ import { Overlay } from '@/components/Overlay';
 import { Body, Button, Heading, Panel, Stat } from '@/components/ui';
 import { dur, space } from '@/design/system';
 
-/* The win. One tile, the 96, is the picture: the only colour on the card. */
+/* The win. One tile, the 192, is the picture: the only colour on the card. */
 export default function Win() {
   const { game, markWinSeen, newGame } = useGame();
   useEffect(() => {
@@ -24,9 +24,9 @@ export default function Win() {
         <Animated.View
           entering={FadeInDown.delay(dur.base).duration(dur.slow).easing(Easing.out(Easing.cubic)).withInitialValues({ opacity: 0, transform: [{ translateY: 8 }] })}
           style={{ alignSelf: 'flex-start', width: 96, height: 96 }}>
-          <Field w={1} h={1} values={[Math.max(96, game.bestTile)]} cell={96} gap={8} variant="piece" />
+          <Field w={1} h={1} values={[Math.max(192, game.bestTile)]} cell={96} gap={8} variant="piece" />
         </Animated.View>
-        <Heading style={{ marginTop: space.xl }}>Вы собрали {Math.max(96, game.bestTile)}</Heading>
+        <Heading style={{ marginTop: space.xl }}>Вы собрали {Math.max(192, game.bestTile)}</Heading>
         <Body muted style={{ marginTop: space.sm }}>
           Партия выиграна. Можно продолжить на очки или начать новую.
         </Body>

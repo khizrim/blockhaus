@@ -52,14 +52,14 @@
     balancedTray: 0,
     // Chance that a single comes as a 3 instead of a 1 or 2.
     threeChance: 0,
-    goal: 96,
+    goal: 192,
   };
 
   /* ---- pairing ------------------------------------------------------------
      Threes' economy: 1 + 2 makes 3, and from 3 upward equals double.       */
   const pairs = (a, b) => (a === 1 && b === 2) || (a === 2 && b === 1) || (a >= 3 && a === b);
   const merged = (a, b) => (a >= 3 ? a * 2 : 3);
-  const rank = v => (v === 1 ? 1 : v === 2 ? 2 : Math.min(8, 3 + Math.round(Math.log2(v / 3))));
+  const rank = v => (v === 1 ? 1 : v === 2 ? 2 : Math.min(9, 3 + Math.round(Math.log2(v / 3))));
 
   const idx = (x, y) => y * N + x;
   function neighbours(i) {

@@ -23,6 +23,7 @@ const SRC = {
   'merge-6': require('../../assets/sounds/merge-6.wav'),
   'merge-7': require('../../assets/sounds/merge-7.wav'),
   'merge-8': require('../../assets/sounds/merge-8.wav'),
+  'merge-9': require('../../assets/sounds/merge-9.wav'),
   sweep: require('../../assets/sounds/sweep.wav'),
   tray: require('../../assets/sounds/tray.wav'),
   tap: require('../../assets/sounds/tap.wav'),
@@ -126,8 +127,8 @@ const buzz = (f: () => Promise<void>) => {
   if (hapticsOn && canBuzz) f().catch(() => {});
 };
 
-/** Merge result value to the rung whose note it plays: 3 → 3 … 96 and up → 8. */
-const rungOf = (v: number) => Math.max(3, Math.min(8, v < 3 ? 3 : 3 + Math.round(Math.log2(v / 3))));
+/** Merge result value to the rung whose note it plays: 3 → 3 … 96 → 8, 192 and up → 9. */
+const rungOf = (v: number) => Math.max(3, Math.min(9, v < 3 ? 3 : 3 + Math.round(Math.log2(v / 3))));
 
 /* ---------- game events ---------- */
 

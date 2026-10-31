@@ -89,10 +89,10 @@ test('the tray refills and sweeps reset once all three pieces are used', () => {
 
 test('reaching the goal tile wins', () => {
   const g = E.newGame({}, E.seeded(3));
-  g.board[idx(1, 0)] = 48; g.board[idx(0, 1)] = 48;
-  g.tray[0] = piece(48);
+  g.board[idx(1, 0)] = 96; g.board[idx(0, 1)] = 96;
+  g.tray[0] = piece(96);
   E.place(g, 0, 0, 0);
-  assert.equal(g.bestTile, 96);
+  assert.equal(g.bestTile, 192);
   assert.ok(g.won);
 });
 

@@ -211,7 +211,7 @@ export default function Game() {
   const bump = useSharedValue(1);
   const thump = (v: number) => {
     if (v < 12) return;
-    const k = v >= 96 ? 0.04 : v >= 48 ? 0.03 : v >= 24 ? 0.02 : 0.012;
+    const k = v >= 192 ? 0.05 : v >= 96 ? 0.04 : v >= 48 ? 0.03 : v >= 24 ? 0.02 : 0.012;
     bump.value = withSequence(withTiming(1 - k, { duration: 60 }), withTiming(1, back(260, 2.5)));
   };
 
@@ -547,12 +547,9 @@ export default function Game() {
         {/* header without labels: the score leads; the best tile and pause are
             two squares of one size on the right */}
         <View style={{ height: unit, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text
-            allowFontScaling={false}
-            style={[type.number, { color: c.text, fontSize: Math.round(unit * 0.72), lineHeight: unit }]}
-            accessibilityLabel={`Очки: ${g.score}`}>
-            {g.score.toLocaleString('ru-RU')}
-          </Text>
+          <View accessible accessibilityLabel={`Очки: ${g.score}`}>
+            <TileNum v={g.score.toLocaleString('ru-RU')} size={Math.round(unit * 0.72)} color={c.text} style={{ lineHeight: unit, letterSpacing: -0.5 }} />
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
             <BestTile v={best} size={unit} frame={gap} />
             <IconButton label="Пауза" size={unit} onPress={() => router.push('/pause')}>
@@ -563,15 +560,17 @@ export default function Game() {
 
         {/* the lesson and the board, centred between the header and the tray, never closer than one step */}
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: step }}>
-          {/* One line above the board, nothing else: the rule as a formula,
-              then what just happened. The way out of the lessons is in pause. */}
+          {/* One line above the board, nothing else: the move in plain words,
+              then the rule it proved as a formula. The way out of the lessons is in pause. */}
           {lesson || goalLine ? (
             <View style={{ width: col, marginBottom: step, height: LESSON_H, justifyContent: 'center' }}>
-              {lesson && coach === 'task' ? (
-                <Heading>{lesson.title}</Heading>
-              ) : (
-                <Body muted>{lesson ? lesson.done : 'Соберите 96'}</Body>
-              )}
+              <Text
+                accessibilityRole="header"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                style={[type.title, { color: c.text }]}>
+                {lesson ? (coach === 'task' ? lesson.title : lesson.done) : 'Цель: 192'}
+              </Text>
             </View>
           ) : null}
           <Animated.View style={boardStyle} {...swipe.panHandlers}>

@@ -121,7 +121,7 @@ def note(semis_from_c5):
 
 
 # Major pentatonic from C5, one step per rung. Rung 3 (the first merge, 1+2)
-# is C5; 96, rung 8, is C6 an octave above: the ladder resolves.
+# is C5; 96, rung 8, is C6 an octave above; 192, the goal, steps on to D6.
 PENT = [0, 2, 4, 7, 9, 12, 14, 16, 19]
 RUNG_NOTE = {r: note(PENT[r - 3]) for r in range(3, 12)}
 
@@ -144,7 +144,7 @@ def main():
     write('invalid', layer(a, lowpass(knock(160, d=d, bright=0.3), 1000), 0.075, 0.8), 0.4)
 
     # Merges, one per rung the merge produces.
-    for r in range(3, 9):
+    for r in range(3, 10):
         write(f'merge-{r}', marimba(RUNG_NOTE[r]), 0.5)
 
     # Sweep: the board slides on felt. Band-limited noise with a falling
@@ -170,11 +170,11 @@ def main():
     # Win: the ladder, rung by rung, then the top note and its fifth held.
     total = 2.0
     out = np.zeros(int(SR * total))
-    for k, r in enumerate(range(3, 8)):
+    for k, r in enumerate(range(3, 9)):
         s = marimba(RUNG_NOTE[r], 0.5) * 0.7
         out = layer(out, s, 0.09 * k)
-    i = int(SR * 0.09 * 5 + 0.05 * SR)
-    for f, a in [(RUNG_NOTE[8], 1.0), (RUNG_NOTE[8] * 1.5, 0.5), (RUNG_NOTE[8] / 2, 0.45)]:
+    i = int(SR * 0.09 * 6 + 0.05 * SR)
+    for f, a in [(RUNG_NOTE[9], 1.0), (RUNG_NOTE[9] * 1.5, 0.5), (RUNG_NOTE[9] / 2, 0.45)]:
         s = modes([f, f * 3.99], [a, 0.15 * a], [0.6, 0.1], total - i / SR, attack=0.005)
         out = layer(out, s, i / SR)
     write('win', out, 0.55)

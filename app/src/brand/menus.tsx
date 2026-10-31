@@ -38,7 +38,7 @@ export function PosterMenu() {
   };
   const recordLine = stats.played || stats.best
     ? `Рекорд ${stats.best.toLocaleString('ru-RU')} · лучшая плитка ${stats.bestTile}`
-    : 'Сложите 1 и 2, дойдите до 96';
+    : 'Сложите 1 и 2, дойдите до 192';
 
   const L = 8; // poster line weight, on the 8pt grid
   const A = Math.round(Math.min(H * 0.44, W * 1.05)); // poster height

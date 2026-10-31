@@ -3,8 +3,8 @@ import type { Dir, Game, Piece } from './engine';
 /* The first game teaches itself on the real board: five set positions, each
    with one thing to do, and only that move is possible: the piece goes in
    only where the lesson wants it, the board slides only the taught way. The
-   step is done when the board shows its result, then the next one slides in. The title is the whole instruction (a
-   formula where it can be); the move itself is played on the board by a
+   step is done when the board shows its result, then the next one slides in. The title is the move in a few plain words,
+   and `done` is the rule it proved, as a formula; the move itself is played on the board by a
    see-through copy of the piece. `text` is the full wording, kept for later. */
 
 export type Lesson = {
@@ -33,9 +33,9 @@ const has = (v: number) => (g: Game) => g.board.includes(v);
 
 export const LESSONS: Lesson[] = [
   {
-    title: '1 + 2 = 3',
+    title: 'Поставьте 1 рядом с 2',
     text: 'Перетащите единицу из лотка вплотную к двойке.',
-    done: 'Единица и двойка сложились в тройку.',
+    done: '1 + 2 = 3',
     board: board([[3, 2, 2]]),
     tray: [none(), piece([[0, 0, 1]]), none()],
     sweeps: 0,
@@ -43,9 +43,9 @@ export const LESSONS: Lesson[] = [
     goal: has(3),
   },
   {
-    title: '3 + 3 = 6',
+    title: 'Сделайте вторую тройку',
     text: 'От тройки и выше сливаются одинаковые: 3 и 3 дают 6. Поставьте единицу между двойкой и тройкой.',
-    done: 'Тройка тут же слилась с соседней в 6.',
+    done: '3 + 3 = 6',
     board: board([[1, 2, 3], [3, 2, 2]]),
     tray: [none(), piece([[0, 0, 1]]), none()],
     sweeps: 0,
@@ -53,9 +53,9 @@ export const LESSONS: Lesson[] = [
     goal: has(6),
   },
   {
-    title: '3 → 6 → 12 → 24',
+    title: 'Поставьте 1 в центр',
     text: 'Плитка после слияния снова ищет пару среди соседей. Поставьте единицу в центр креста.',
-    done: 'Одна единица собрала весь ряд.',
+    done: '3 → 6 → 12 → 24',
     board: board([[1, 2, 3], [3, 2, 2], [2, 1, 6], [2, 3, 12]]),
     tray: [none(), piece([[0, 0, 1]]), none()],
     sweeps: 0,
@@ -63,9 +63,9 @@ export const LESSONS: Lesson[] = [
     goal: has(24),
   },
   {
-    title: '1 + 2 в каждой клетке',
+    title: 'Каждой 1 своя 2',
     text: 'В фигуре каждая клетка ищет свою пару. Положите двойки на единицы.',
-    done: 'Две тройки встали рядом и слились в 6.',
+    done: '3 + 3 = 6, сразу',
     board: board([[2, 3, 1], [3, 3, 1]]),
     tray: [none(), piece([[0, 0, 2], [1, 0, 2]]), none()],
     sweeps: 0,
@@ -73,9 +73,9 @@ export const LESSONS: Lesson[] = [
     goal: has(6),
   },
   {
-    title: 'Смахните доску',
+    title: 'Смахните доску вбок',
     text: 'Смахните доску влево или вправо. Всё съедет к краю, а пары по пути сольются. Два сдвига на каждый лоток.',
-    done: 'Единица и двойка встретились у края.',
+    done: '1 + 2 = 3 у края',
     board: board([[0, 2, 1], [5, 2, 2]]),
     tray: [none(), none(), none()],
     sweeps: 2,
