@@ -38,8 +38,8 @@ export default function Menu() {
           <Text
             allowFontScaling={false}
             numberOfLines={1}
-            style={{ fontFamily: font.wide, fontSize: Math.min(44, Math.floor(inner / 8.4)), letterSpacing: 1, color: c.text }}>
-            BLOCKHAUS
+            style={{ fontFamily: font.wide, fontSize: Math.min(52, Math.floor(inner / 6.4)), letterSpacing: 0, color: c.text }}>
+            Blockhaus
           </Text>
           <Body muted>Drop pieces. Pair them up. Build to 96.</Body>
         </Animated.View>

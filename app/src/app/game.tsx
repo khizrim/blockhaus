@@ -231,7 +231,7 @@ export default function Game() {
         <View style={{ gap: 6 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Pressable onPress={() => router.back()} accessibilityLabel="Back to menu" hitSlop={8}>
-              <Wordmark />
+              <Wordmark size={16} />
             </Pressable>
             <IconButton
               label="Pause"

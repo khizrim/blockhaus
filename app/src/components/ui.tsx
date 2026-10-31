@@ -89,8 +89,8 @@ export function Wordmark({ size = 13 }: { size?: number }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: size * 0.6 }}>
       <Glyph size={Math.round(size * 0.55)} />
-      <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: size, letterSpacing: size * 0.14, color: c.text }}>
-        BLOCKHAUS
+      <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: size, letterSpacing: size * 0.02, color: c.text }}>
+        Blockhaus
       </Text>
     </View>
   );
