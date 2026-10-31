@@ -8,6 +8,11 @@ marimba plays a sparse figure in octave 4, a soft pad holds the chords and a
 round sine bass walks the roots. No drums: the player's own placements are
 the rhythm. Eight bars of four chords, twice, with the second pass varied,
 rendered circularly so the end flows into the start without a seam.
+
+The file holds the loop plus its first TAIL seconds again. A player that can
+loop exactly (Web Audio) loops the first LOOP seconds; one that cannot (the
+phone's media players leave a gap at the wrap) crossfades two copies over the
+tail, where both play the same notes.
 """
 import os
 import wave
@@ -19,6 +24,7 @@ BPM = 72
 BEAT = 60 / BPM
 BARS = 16
 LEN = int(SR * BEAT * 4 * BARS)
+TAIL = 2.0  # seconds of the loop's start repeated after its end
 OUT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'sounds', 'music.wav')
 rng = np.random.default_rng(42)
 
@@ -127,8 +133,8 @@ def main():
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(SR)
-        w.writeframes((y * 32767).astype('<i2').tobytes())
-    print(f'{LEN / SR:.1f}s, {os.path.getsize(OUT) // 1024} KB')
+        w.writeframes((np.concatenate([y, y[: int(SR * TAIL)]]) * 32767).astype('<i2').tobytes())
+    print(f'loop {LEN / SR:.4f}s + tail {TAIL}s, {os.path.getsize(OUT) // 1024} KB')
 
 
 if __name__ == '__main__':

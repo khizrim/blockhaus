@@ -2,6 +2,8 @@ import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-aud
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
 
+import { getMusic } from './music';
+
 /* Sound and touch feedback in one place. Every game event calls one function
    here; it plays the sound if sound is on and the matching haptic if
    vibration is on. The sounds are synthesised by scripts/make-sounds.py.
@@ -65,42 +67,10 @@ export function setFeedback(o: { sound: boolean; haptics: boolean; music: boolea
    murmur on the pause screen. */
 
 const MUSIC_LEVEL = 0.35;
-let music: AudioPlayer | null = null;
-let musicTarget = 0;
-let fadeTimer: ReturnType<typeof setInterval> | null = null;
 let dimmed = false;
 
-function fadeTo(target: number, ms = 600) {
-  if (!music) return;
-  musicTarget = target;
-  if (fadeTimer) clearInterval(fadeTimer);
-  const p = music;
-  const from = p.volume;
-  const t0 = Date.now();
-  if (target > 0 && !p.playing) {
-    try {
-      p.play();
-    } catch {}
-  }
-  fadeTimer = setInterval(() => {
-    const k = Math.min(1, (Date.now() - t0) / ms);
-    p.volume = from + (target - from) * k;
-    if (k === 1) {
-      if (fadeTimer) clearInterval(fadeTimer);
-      fadeTimer = null;
-      if (musicTarget === 0) p.pause();
-    }
-  }, 30);
-}
-
 function syncMusic() {
-  if (musicOn && !music) {
-    music = createAudioPlayer(require('../../assets/sounds/music.wav'));
-    music.loop = true;
-    music.volume = 0;
-  }
-  if (!music) return;
-  fadeTo(musicOn ? (dimmed ? MUSIC_LEVEL * 0.35 : MUSIC_LEVEL) : 0);
+  getMusic().setVolume(musicOn ? (dimmed ? MUSIC_LEVEL * 0.35 : MUSIC_LEVEL) : 0, 600);
 }
 
 /** Lower the music while a screen like pause is open. */
@@ -111,7 +81,7 @@ export function dimMusic(on: boolean) {
 
 /** Browsers refuse audio until the first tap; every tap retries the music. */
 function kickMusic() {
-  if (musicOn && music && !music.playing) syncMusic();
+  if (musicOn) getMusic().resume();
 }
 
 /** Play one sound, regardless of the haptic. */

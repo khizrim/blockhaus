@@ -7,6 +7,7 @@ import { Field, type CellLook } from '@/components/Field';
 import { Overlay } from '@/components/Overlay';
 import { Body, Button, Heading, IconButton, Label, Panel, PauseIcon, Screen, TextLink, TileBadge } from '@/components/ui';
 import { pieceGrid } from '@/design/mock';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dur, enter, exit, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
@@ -83,12 +84,17 @@ export default function Game() {
   }, [store.ready]);
 
   // Sizing: the board takes the width, but leaves the tray within thumb reach.
+  const ins = useSafeAreaInsets();
   const inner = Math.min(width, 440) - 32;
   const gap = Math.round(Math.min(7, Math.max(5, width * 0.015)));
-  const boardSize = Math.max(240, Math.min(inner, height - 380));
+  // Tray cells follow the width (three slots, a three-cell piece in each with room).
+  const trayCell = Math.max(24, Math.min(40, Math.floor(inner / 3 / 3.3)));
+  /* The board takes what is left of the height after the fixed parts:
+     header 64, toolbar 52, hint 52 (lesson card 120), tray, and the 8pt
+     paddings around them. Never wider than the screen, never under 240. */
+  const chrome = ins.top + ins.bottom + 24 + 64 + 52 + (store.lesson !== null ? 120 : 52) + trayCell * 3 + 32 + 32;
+  const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
-  // Pieces in the tray at about two thirds of the board's cell, so they read as the same things.
-  const trayCell = Math.min(Math.floor(cell * 0.7), Math.floor(inner / 3 / 3.3));
 
   /** After the animation of a move: the win, or the end, if either happened. */
   const afterMove = (ms: number) => {
@@ -389,7 +395,7 @@ export default function Game() {
         ))}
       </View>
       <Text style={[type.secondary, { flex: 1, textAlign: 'right', color: c.muted }]} numberOfLines={1}>
-        {g.sweeps ? 'Смахните доску в любую сторону' : 'Вернутся с новым лотком'}
+        {g.sweeps ? 'Смахните доску' : 'Вернутся с новым лотком'}
       </Text>
     </View>
   );

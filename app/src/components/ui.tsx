@@ -450,7 +450,7 @@ export function Rule() {
 export function Stat({ label, value, children }: { label: string; value?: string; children?: ReactNode }) {
   const { c } = useTheme();
   return (
-    <View style={{ gap: space.xs }}>
+    <View style={{ gap: space.xs, alignItems: 'flex-start' }}>
       <Label meta>{label}</Label>
       {children ?? <Text style={[type.stat, { color: c.text }]}>{value}</Text>}
     </View>
