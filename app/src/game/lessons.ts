@@ -2,8 +2,9 @@ import type { Game, Piece } from './engine';
 
 /* The first game teaches itself on the real board: five set positions, each
    with one thing to do. The step is done when the board shows its result,
-   then the next position slides in. Text is short on purpose: the board and
-   the hatched hint cell do the explaining. */
+   then the next position slides in. The title is the whole instruction (a
+   formula where it can be); the move itself is played on the board by a
+   see-through copy of the piece. `text` is the full wording, kept for later. */
 
 export type Lesson = {
   title: string;
@@ -39,7 +40,7 @@ export const LESSONS: Lesson[] = [
     goal: has(3),
   },
   {
-    title: 'Равные удваиваются',
+    title: '3 + 3 = 6',
     text: 'От тройки и выше сливаются одинаковые: 3 и 3 дают 6. Поставьте единицу между двойкой и тройкой.',
     done: 'Получилась тройка, и она тут же слилась с соседней в 6.',
     board: board([[1, 2, 3], [3, 2, 2]]),
@@ -49,7 +50,7 @@ export const LESSONS: Lesson[] = [
     goal: has(6),
   },
   {
-    title: 'Цепочки',
+    title: '3 → 6 → 12 → 24',
     text: 'Плитка после слияния снова ищет пару среди соседей. Поставьте единицу в центр креста.',
     done: '3, 6, 12, 24: одна единица собрала целый ряд.',
     board: board([[1, 2, 3], [3, 2, 2], [2, 1, 6], [2, 3, 12]]),
@@ -59,7 +60,7 @@ export const LESSONS: Lesson[] = [
     goal: has(24),
   },
   {
-    title: 'Фигуры',
+    title: '1 + 2 в каждой клетке',
     text: 'В фигуре каждая клетка ищет свою пару. Положите двойки на единицы.',
     done: 'Две тройки встали рядом и слились в 6.',
     board: board([[2, 3, 1], [3, 3, 1]]),
@@ -69,7 +70,7 @@ export const LESSONS: Lesson[] = [
     goal: has(6),
   },
   {
-    title: 'Сдвиг',
+    title: 'Смахните доску',
     text: 'Смахните доску влево или вправо. Всё съедет к краю, а пары по пути сольются. Два сдвига на каждый лоток.',
     done: 'Единица и двойка встретились у края.',
     board: board([[0, 2, 1], [5, 2, 2]]),

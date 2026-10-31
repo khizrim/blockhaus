@@ -481,6 +481,29 @@ export default function Game() {
   if (!sliding) bestRef.current = Math.max(...shown, 0);
   const best = bestRef.current;
 
+  /* ---------- the lesson plays its own move ----------
+     A see-through copy of the piece lifts from its slot, glides to the
+     hatched cell and fades, over and over until the player takes over. The
+     sweep lesson shows a finger square crossing the board instead. */
+  const slotRefs = useRef<(ComponentRef<typeof View> | null)[]>([]);
+  type Geo = { board: { x: number; y: number; w: number }; slot?: { x: number; y: number } };
+  const [geo, setGeo] = useState<Geo | null>(null);
+  const demoSlot = lesson ? g.tray.findIndex((p) => p && !p.used) : -1;
+  useEffect(() => {
+    setGeo(null);
+    if (!lesson || coach !== 'task') return;
+    const id = setTimeout(() => {
+      boardRef.current?.measureInWindow((bx, by, bw) => {
+        const board = { x: bx, y: by, w: bw };
+        const r = demoSlot >= 0 ? slotRefs.current[demoSlot] : null;
+        if (!r) return setGeo({ board });
+        r.measureInWindow((sx_, sy_, sw, sh) => setGeo({ board, slot: { x: sx_ + sw / 2, y: sy_ + sh / 2 } }));
+      });
+    }, 400);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.lesson, store.version, coach, width, height]);
+
   return (
     <View style={[{ flex: 1 }, noSelect]}>
       <Screen>
@@ -510,9 +533,13 @@ export default function Game() {
                 </Pressable>
               </View>
               <Heading level="heading">{coach === 'done' ? 'Получилось' : coach === 'retry' ? 'Ещё раз' : lesson.title}</Heading>
-              <Body muted small style={{ marginTop: space.xs }}>
-                {coach === 'done' ? lesson.done : coach === 'retry' ? 'Пары не вышло. Ставим заново.' : lesson.text}
-              </Body>
+              {/* The task is shown, not told: the board plays the move. Words
+                  only come back to say how it went. */}
+              {coach === 'task' ? null : (
+                <Body muted small style={{ marginTop: space.xs }}>
+                  {coach === 'done' ? lesson.done : 'Пары не вышло. Ставим заново.'}
+                </Body>
+              )}
             </View>
           ) : null}
           <Animated.View style={boardStyle} {...swipe.panHandlers}>
@@ -568,6 +595,8 @@ export default function Game() {
           {g.tray.map((p, slot) => (
             <View
               key={slot}
+              ref={(r) => void (slotRefs.current[slot] = r)}
+              collapsable={false}
               {...responders[slot].panHandlers}
               accessibilityLabel={p && !p.used ? `Фигура ${slot + 1}` : `Пустой слот ${slot + 1}`}
               style={{
@@ -604,6 +633,21 @@ export default function Game() {
             </Panel>
           </Overlay>
         </View>
+      ) : null}
+
+      {lesson && coach === 'task' && !hold && !held && !sliding && geo ? (
+        demoSlot >= 0 && geo.slot && lesson.hint ? (
+          <Demo
+            key={`demo-${store.lesson}-${store.version}`}
+            piece={g.tray[demoSlot]!}
+            from={geo.slot}
+            to={{ x: geo.board.x + gap / 2 + (lesson.hint[0][0] % N) * cell, y: geo.board.y + gap / 2 + ((lesson.hint[0][0] / N) | 0) * cell }}
+            cell={cell}
+            gap={gap}
+          />
+        ) : demoSlot < 0 ? (
+          <Finger key={`finger-${store.lesson}`} board={geo.board} />
+        ) : null
       ) : null}
 
       {/* The lifted piece, above everything. No drop shadow: the lift reads
@@ -748,4 +792,66 @@ function TrayPiece({ delay, opacity, children }: { delay: number; opacity: numbe
   }, []);
   const st = useAnimatedStyle(() => ({ transform: [{ scale: 0.4 + k.value * 0.6 }], opacity: Math.min(1, k.value * 2) * opacity }));
   return <Animated.View style={st}>{children}</Animated.View>;
+}
+
+/** The lesson's own move: a see-through copy of the piece goes from its slot
+    to the hatched cell, again and again. */
+function Demo({ piece, from, to, cell, gap }: { piece: Piece; from: { x: number; y: number }; to: { x: number; y: number }; cell: number; gap: number }) {
+  const { w, h } = pieceGrid(piece);
+  const start = { x: from.x - (w * cell) / 2, y: from.y - (h * cell) / 2 };
+  const k = useSharedValue(0);
+  const o = useSharedValue(0);
+  useEffect(() => {
+    const loop = () => {
+      k.value = 0;
+      o.value = withSequence(withTiming(0.75, { duration: 250 }), withDelay(950, withTiming(0.75, { duration: 0 })), withTiming(0, { duration: 300 }));
+      k.value = withDelay(250, withTiming(1, { duration: 700, easing: Easing.inOut(Easing.cubic) }));
+    };
+    loop();
+    const id = setInterval(loop, 2400);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const st = useAnimatedStyle(() => ({
+    opacity: o.value,
+    transform: [
+      { translateX: start.x + (to.x - start.x) * k.value },
+      { translateY: start.y + (to.y - start.y) * k.value },
+    ],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0 }, st]}>
+      <Field variant="piece" {...pieceGrid(piece)} cell={cell} gap={gap} />
+    </Animated.View>
+  );
+}
+
+/** For the sweep lesson: a finger square that crosses the board, the gesture
+    to copy. */
+function Finger({ board }: { board: { x: number; y: number; w: number } }) {
+  const { c } = useTheme();
+  const size = 44;
+  const k = useSharedValue(0);
+  const o = useSharedValue(0);
+  useEffect(() => {
+    const loop = () => {
+      k.value = 0;
+      o.value = withSequence(withTiming(0.8, { duration: 200 }), withDelay(600, withTiming(0, { duration: 250 })));
+      k.value = withDelay(200, withTiming(1, { duration: 600, easing: Easing.inOut(Easing.quad) }));
+    };
+    loop();
+    const id = setInterval(loop, 1800);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const x0 = board.x + board.w * 0.75 - size / 2;
+  const x1 = board.x + board.w * 0.25 - size / 2;
+  const y = board.y + board.w / 2 - size / 2;
+  const st = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateX: x0 + (x1 - x0) * k.value }, { translateY: y }] }));
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[{ position: 'absolute', left: 0, top: 0, width: size, height: size, borderWidth: 4, borderColor: c.line, backgroundColor: c.canvas }, st]}
+    />
+  );
 }
