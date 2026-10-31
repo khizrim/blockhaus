@@ -1,0 +1,9 @@
+{
+  "name": "blockhaus",
+  "private": true,
+  "description": "A merge puzzle on a 6x6 board.",
+  "scripts": {
+    "test": "node --test",
+    "sim": "node sim/simulate.js"
+  }
+}
