@@ -1,8 +1,9 @@
-import type { Game, Piece } from './engine';
+import type { Dir, Game, Piece } from './engine';
 
 /* The first game teaches itself on the real board: five set positions, each
-   with one thing to do. The step is done when the board shows its result,
-   then the next position slides in. The title is the whole instruction (a
+   with one thing to do, and only that move is possible: the piece goes in
+   only where the lesson wants it, the board slides only the taught way. The
+   step is done when the board shows its result, then the next one slides in. The title is the whole instruction (a
    formula where it can be); the move itself is played on the board by a
    see-through copy of the piece. `text` is the full wording, kept for later. */
 
@@ -15,6 +16,8 @@ export type Lesson = {
   sweeps: number;
   /** Cells to hint where the piece goes, with the value to hatch there. */
   hint?: [number, number][];
+  /** Sweep steps: the only directions the board answers. */
+  dirs?: Dir[];
   goal: (g: Game) => boolean;
 };
 
@@ -76,6 +79,7 @@ export const LESSONS: Lesson[] = [
     board: board([[0, 2, 1], [5, 2, 2]]),
     tray: [none(), none(), none()],
     sweeps: 2,
+    dirs: ['left', 'right'],
     goal: has(3),
   },
 ];

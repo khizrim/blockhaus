@@ -15,7 +15,7 @@ export default function Pause() {
     dimMusic(true);
     return () => dimMusic(false);
   }, []);
-  const { game, newGame } = useGame();
+  const { game, newGame, lesson, finishLessons } = useGame();
   const [confirm, setConfirm] = useState(false);
   const restart = () => {
     newGame();
@@ -56,6 +56,18 @@ export default function Pause() {
             <Toggle label="Музыка" value={music} onChange={setMusic} />
           </Row>
           <Rule />
+          {lesson !== null ? (
+            <>
+              <Row
+                label="Пропустить обучение"
+                onPress={() => {
+                  finishLessons();
+                  router.back();
+                }}
+              />
+              <Rule />
+            </>
+          ) : null}
           <Row label="Как играть" onPress={() => router.push('/howto')} />
           <Rule />
           <Row label="Настройки" onPress={() => router.push('/settings')} />

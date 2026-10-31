@@ -34,8 +34,8 @@ const noSelect = { userSelect: 'none' } as object;
 
 const SWIPE = 24; // px of travel that counts as a swipe
 const SLIDE = dur.base; // ms for tiles to travel in a sweep
-/** The lesson block: meta line 20, a 4pt step, title 30, a 4pt step, one line of result 24. */
-const LESSON_H = 82;
+/** The lesson line: one line of title type. */
+const LESSON_H = 30;
 
 type Hold = { slot: number; piece: Piece };
 
@@ -66,12 +66,17 @@ export default function Game() {
   const { width, height } = useWindowDimensions();
   const { learn } = useLocalSearchParams<{ learn?: string }>();
   const lesson = store.lesson === null ? null : LESSONS[store.lesson];
-  const [coach, setCoach] = useState<'task' | 'done' | 'retry'>('task');
-  const [final, setFinal] = useState(false);
+  const [coach, setCoach] = useState<'task' | 'done'>('task');
+  /** Right after the lessons: the goal stands in the lesson line for the whole first game,
+      so the board never jumps when it goes. */
+  const [goalLine, setGoalLine] = useState(false);
+  // The lesson on the board now, for timers that outlive a render (skip from pause).
+  const lessonNow = useRef(store.lesson);
+  lessonNow.current = store.lesson;
 
   // Opened to learn: start the first lesson once the save has loaded.
   useEffect(() => {
-    if (store.ready && learn && store.lesson === null && !final) store.startLesson(0);
+    if (store.ready && learn && store.lesson === null) store.startLesson(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.ready, learn]);
   useEffect(() => setCoach('task'), [store.lesson]);
@@ -140,7 +145,7 @@ export default function Game() {
   /* The board takes what is left of the height after the fixed parts:
      header ~64, the lesson card when there is one, the tray, and the 8pt
      paddings around them. Never wider than the screen, never under 240. */
-  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null ? LESSON_H + space.lg : 0) + 18 + trayMax * 3 + 32 + 48;
+  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || goalLine ? LESSON_H + space.lg : 0) + 18 + trayMax * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
   /* One column for the whole screen: the header, the lesson, the board and
@@ -174,19 +179,27 @@ export default function Game() {
     later(ms + 150, () => {
       if (L.goal(g)) {
         setCoach('done');
-        later(1600, () => (k + 1 < LESSONS.length ? store.startLesson(k + 1) : setFinal(true)));
+        later(1600, () => {
+          if (lessonNow.current !== k) return;
+          if (k + 1 < LESSONS.length) return store.startLesson(k + 1);
+          // Straight into the game, no card: the goal takes the lesson line.
+          setGoalLine(true);
+          skipLessons();
+        });
       } else if (pieceStep || g.sweeps === 0) {
-        setCoach('retry');
-        later(1200, () => store.startLesson(k));
+        // Cannot happen with moves locked, but never leave a lesson stuck.
+        later(400, () => lessonNow.current === k && store.startLesson(k));
       }
     });
   };
 
   const skipLessons = () => {
     settle();
-    setFinal(false);
     store.finishLessons();
   };
+  useEffect(() => {
+    if (goalLine && g.over) setGoalLine(false);
+  }, [goalLine, g.over, store.version]);
 
   /** Points rise from where a merge happened. */
   const float = (at: number, v: number) => {
@@ -222,9 +235,12 @@ export default function Game() {
       const pad = gap / 2;
       const gx = Math.round((px - boardAt.current.x - pad) / cell);
       const gy = Math.round((py - boardAt.current.y - pad) / cell);
+      // In a lesson the piece goes in only where the lesson puts it.
+      const at = lesson?.hint?.[0]?.[0];
+      if (at !== undefined && (gx !== at % N || gy !== ((at / N) | 0))) return null;
       return engine.fits(g.board, p, gx, gy) ? { gx, gy } : null;
     },
-    [g, cell, gap],
+    [g, cell, gap, lesson],
   );
 
   const pieceOffset = (p: Piece) => {
@@ -271,7 +287,7 @@ export default function Game() {
       const w = Math.max(...h.piece.cells.map(([cx]) => cx)) + 1;
       const hgt = Math.max(...h.piece.cells.map(([, cy]) => cy)) + 1;
       const overBoard = px > -w && py > -hgt && px < N && py < N;
-      if (overBoard) fx.invalid();
+      if (overBoard && store.lesson === null) fx.invalid();
       else fx.putBack();
       setReturning(h.slot);
       setHeld(h.piece);
@@ -409,6 +425,8 @@ export default function Game() {
     sx.value = withTiming(0, enter(dur.fast));
     sy.value = withTiming(0, enter(dur.fast));
     if (g.over) return;
+    // A lesson's board slides only the way it teaches; other swipes do nothing.
+    if (lesson?.dirs && !lesson.dirs.includes(dir)) return;
     if (g.sweeps === 0) {
       fx.invalid();
       shake();
@@ -545,22 +563,14 @@ export default function Game() {
 
         {/* the lesson and the board, centred between the header and the tray, never closer than one step */}
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: step }}>
-          {lesson ? (
-            <View style={{ width: col, marginBottom: step, minHeight: LESSON_H }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Label>{`Обучение · ${(store.lesson ?? 0) + 1} из ${LESSONS.length}`}</Label>
-                {/* Quiet on purpose: a way out, not the main thing on screen. */}
-                <Pressable accessibilityRole="button" accessibilityLabel="Пропустить обучение" onPress={skipLessons} hitSlop={12}>
-                  <Text style={[type.secondary, { color: c.muted }]}>Пропустить</Text>
-                </Pressable>
-              </View>
-              <Heading style={{ marginTop: space.xs }}>{coach === 'done' ? 'Получилось' : coach === 'retry' ? 'Ещё раз' : lesson.title}</Heading>
-              {/* The task is shown, not told: the board plays the move. Words
-                  only come back to say how it went. */}
-              {coach === 'task' ? null : (
-                <Body muted style={{ marginTop: space.xs }}>
-                  {coach === 'done' ? lesson.done : 'Пары не вышло. Ставим заново.'}
-                </Body>
+          {/* One line above the board, nothing else: the rule as a formula,
+              then what just happened. The way out of the lessons is in pause. */}
+          {lesson || goalLine ? (
+            <View style={{ width: col, marginBottom: step, height: LESSON_H, justifyContent: 'center' }}>
+              {lesson && coach === 'task' ? (
+                <Heading>{lesson.title}</Heading>
+              ) : (
+                <Body muted>{lesson ? lesson.done : 'Соберите 96'}</Body>
               )}
             </View>
           ) : null}
@@ -640,22 +650,6 @@ export default function Game() {
           ))}
         </View>
       </Screen>
-
-      {final ? (
-        <View style={StyleSheet.absoluteFill}>
-          <Overlay>
-            <Panel>
-              <Heading>Цель: собрать 96</Heading>
-              <Body muted style={{ marginTop: space.sm }}>
-                Лесенка: 3, 6, 12, 24, 48, 96. Партия кончается, когда ни одна фигура из лотка не встаёт на доску и сдвиг уже не помогает. Держите место и пары.
-              </Body>
-              <View style={{ marginTop: space.xl }}>
-                <Button kind="primary" size="lg" label="Начать игру" onPress={skipLessons} />
-              </View>
-            </Panel>
-          </Overlay>
-        </View>
-      ) : null}
 
       {lesson && coach === 'task' && !hold && !held && !sliding && geo ? (
         demoSlot >= 0 && geo.slot && lesson.hint ? (
