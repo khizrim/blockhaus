@@ -34,8 +34,8 @@ const noSelect = { userSelect: 'none' } as object;
 
 const SWIPE = 24; // px of travel that counts as a swipe
 const SLIDE = dur.base; // ms for tiles to travel in a sweep
-/** The lesson block: meta line 16, title 24, a 4pt step, one line of result 20. */
-const LESSON_H = 64;
+/** The lesson block: meta line 20, a 4pt step, title 30, a 4pt step, one line of result 24. */
+const LESSON_H = 82;
 
 type Hold = { slot: number; piece: Piece };
 
@@ -138,7 +138,7 @@ export default function Game() {
   // Tray cells follow the width (three slots, a three-cell piece in each with room).
   const trayMax = Math.max(24, Math.min(40, Math.floor(inner / 3 / 3.3)));
   /* The board takes what is left of the height after the fixed parts:
-     header 64, the lesson card when there is one, the tray, and the 8pt
+     header ~64, the lesson card when there is one, the tray, and the 8pt
      paddings around them. Never wider than the screen, never under 240. */
   const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null ? LESSON_H + space.lg : 0) + 18 + trayMax * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
@@ -147,6 +147,11 @@ export default function Game() {
      the tray share the board's left and right edges. */
   const col = cell * N + gap;
   const trayCell = Math.min(trayMax, Math.floor(col / 3 / 3.3));
+  /* The interface unit: the header squares are one board cell, the score is
+     set to the cell's height, and the steps between blocks are a share of it,
+     so the chrome grows and shrinks with the board instead of staying fixed. */
+  const unit = Math.max(HIT, cell);
+  const step = Math.round(unit * 0.4);
 
   /** After the animation of a move: the win, or the end, if either happened. */
   const afterMove = (ms: number) => {
@@ -516,34 +521,37 @@ export default function Game() {
       <Screen style={{ width: col }}>
         {/* header without labels: the score leads; the best tile and pause are
             two squares of one size on the right */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text allowFontScaling={false} style={[type.number, { color: c.text }]} accessibilityLabel={`Очки: ${g.score}`}>
+        <View style={{ height: unit, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text
+            allowFontScaling={false}
+            style={[type.number, { color: c.text, fontSize: Math.round(unit * 0.72), lineHeight: unit }]}
+            accessibilityLabel={`Очки: ${g.score}`}>
             {g.score.toLocaleString('ru-RU')}
           </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-            <BestTile v={best} />
-            <IconButton label="Пауза" onPress={() => router.push('/pause')}>
-              <PauseIcon color={c.text} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+            <BestTile v={best} size={unit} frame={gap} />
+            <IconButton label="Пауза" size={unit} onPress={() => router.push('/pause')}>
+              <PauseIcon color={c.text} s={Math.round(unit * 0.32)} />
             </IconButton>
           </View>
         </View>
 
-        {/* the board sits on the tray at a fixed step; the free height goes above the lesson, under the header */}
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', paddingTop: space.lg, paddingBottom: space.xl }}>
+        {/* the lesson and the board, centred between the header and the tray, never closer than one step */}
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: step }}>
           {lesson ? (
-            <View style={{ width: col, marginBottom: space.lg, minHeight: LESSON_H }}>
+            <View style={{ width: col, marginBottom: step, minHeight: LESSON_H }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Label meta>{`Обучение · ${(store.lesson ?? 0) + 1} из ${LESSONS.length}`}</Label>
+                <Label>{`Обучение · ${(store.lesson ?? 0) + 1} из ${LESSONS.length}`}</Label>
                 {/* Quiet on purpose: a way out, not the main thing on screen. */}
                 <Pressable accessibilityRole="button" accessibilityLabel="Пропустить обучение" onPress={skipLessons} hitSlop={12}>
-                  <Text style={[type.meta, { color: c.muted }]}>Пропустить</Text>
+                  <Text style={[type.secondary, { color: c.muted }]}>Пропустить</Text>
                 </Pressable>
               </View>
-              <Heading level="heading">{coach === 'done' ? 'Получилось' : coach === 'retry' ? 'Ещё раз' : lesson.title}</Heading>
+              <Heading style={{ marginTop: space.xs }}>{coach === 'done' ? 'Получилось' : coach === 'retry' ? 'Ещё раз' : lesson.title}</Heading>
               {/* The task is shown, not told: the board plays the move. Words
                   only come back to say how it went. */}
               {coach === 'task' ? null : (
-                <Body muted small style={{ marginTop: space.xs }}>
+                <Body muted style={{ marginTop: space.xs }}>
                   {coach === 'done' ? lesson.done : 'Пары не вышло. Ставим заново.'}
                 </Body>
               )}
@@ -699,9 +707,9 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
 
 
 /** The best tile, drawn as a tile of the board: its fill inside the line. */
-function BestTile({ v }: { v: number }) {
+/** Drawn the way a lone tile sits on the board: one cell, framed by one gap. */
+function BestTile({ v, size, frame }: { v: number; size: number; frame: number }) {
   const { c } = useTheme();
-  const size = HIT; // the same square as the pause button beside it
   const rk = rank(v);
   const k = useSharedValue(1);
   const first = useRef(true);
@@ -714,10 +722,10 @@ function BestTile({ v }: { v: number }) {
   return (
     <Animated.View
       accessibilityLabel={v ? `Лучшая плитка ${v}` : 'Лучшей плитки пока нет'}
-      style={[{ width: size, height: size, padding: 3, backgroundColor: c.line }, st]}>
+      style={[{ width: size, height: size, padding: frame, backgroundColor: c.line }, st]}>
       <View style={{ flex: 1, backgroundColor: v ? c.tile[rk] : c.canvas, alignItems: 'center', justifyContent: 'center' }}>
         {v ? (
-          <TileNum v={v} color={c.ink[rk]} size={v >= 100 ? 14 : v >= 10 ? 17 : 20} />
+          <TileNum v={v} color={c.ink[rk]} size={Math.max(12, Math.round(size * (v >= 100 ? 0.28 : v >= 10 ? 0.34 : 0.4)))} />
         ) : null}
       </View>
     </Animated.View>

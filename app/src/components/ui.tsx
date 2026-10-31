@@ -174,6 +174,7 @@ export function IconButton({
   disabled,
   plain,
   quiet,
+  size = HIT,
 }: {
   onPress?: () => void;
   label: string;
@@ -183,6 +184,8 @@ export function IconButton({
   quiet?: boolean;
   /** No surface: for top bars. */
   plain?: boolean;
+  /** Side of the square; never under HIT. */
+  size?: number;
 }) {
   const { c } = useTheme();
   return (
@@ -196,8 +199,8 @@ export function IconButton({
       }}
       disabled={disabled}
       style={({ pressed }) => ({
-        width: HIT,
-        height: HIT,
+        width: Math.max(HIT, size),
+        height: Math.max(HIT, size),
         borderWidth: plain ? 0 : 1,
         borderColor: c.hair,
         alignItems: 'center',
