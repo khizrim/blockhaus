@@ -40,6 +40,7 @@ declare const engine: {
   place(g: Game, slot: number, ox: number, oy: number): PlaceResult | null;
   sweep(g: Game, dir: Dir): SweepResult | null;
   anyMove(g: Game): boolean;
+  canSweep(g: Game): boolean;
   canPlaceAnywhere(board: number[], piece: Piece): boolean;
   seeded(seed: number): () => number;
 };

@@ -50,7 +50,7 @@ export const light: Palette = {
 export const dark: Palette = {
   // Dark keeps the lines pure black and lifts the fields, so the thick gaps
   // between fields still read: the board's whole look depends on them.
-  bg: '#1B1C20',
+  bg: '#2B2C32', // light enough that the black frame of the board cuts against it
   canvas: '#383A42',
   line: '#000000',
   stroke: '#EEEDEA',
@@ -58,8 +58,8 @@ export const dark: Palette = {
   text: '#EEEDEA',
   muted: '#A2A3A8',
   faint: '#66686E',
-  scrim: 'rgba(27,28,32,0.9)',
-  surface: '#26272C',
+  scrim: 'rgba(43,44,50,0.9)',
+  surface: '#2B2C32',
   hair: 'rgba(238,237,234,0.14)',
   shadow: 'rgba(0,0,0,0.3)',
   tile: ['', '#3466D6', '#E5463C', '#F2C230', '#F08A33', '#26A06A', '#8455C4', '#E25C9C', '#18A3AE'],

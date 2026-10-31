@@ -5,6 +5,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
@@ -25,6 +26,8 @@ export type CellLook = {
   dim?: boolean;
   /** Where a held piece would land, hatched in its colour. */
   ghost?: number;
+  /** A suggested move: an outline in this value's colour that breathes. */
+  mark?: number;
   /** About to be absorbed by a merge: canvas frame inside. */
   absorb?: boolean;
   /** Bumped to replay the merge pop on this cell. */
@@ -243,29 +246,12 @@ const Cell = memo(function Cell(p: CellProps) {
             },
           ]}
         />
+        {/* About to be eaten: the tile pales, a canvas band inside its edge. */}
         {look?.absorb ? (
-          <View
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFill, { borderWidth: p.gap, borderColor: c.canvas }]}>
-            <View style={[StyleSheet.absoluteFill, { borderWidth: 2, borderColor: c.line }]} />
-          </View>
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: Math.max(3, p.gap / 2), borderColor: c.canvas }]} />
         ) : null}
+        {look?.mark ? <Mark color={c.tile[rank(look.mark)]} width={Math.max(4, p.gap)} /> : null}
         {v > 0 ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF' }, flashStyle]} /> : null}
-        {p.numbers && v > 0 ? (
-          <Animated.View style={numStyle}>
-            <Text
-              allowFontScaling={false}
-              style={{
-                color: ink,
-                fontFamily: font.tile,
-                fontSize: Math.max(12, Math.round(cell * (long ? 0.28 : v >= 10 ? 0.34 : 0.4))),
-                fontVariant: ['tabular-nums'],
-                includeFontPadding: false,
-              }}>
-              {v}
-            </Text>
-          </Animated.View>
-        ) : null}
         {/* Where two lines meet at an inside corner of a field, the joint square
             belongs to the line, or the line steps sideways there. */}
         {p.t && p.l && !p.tl ? corner({ left: 0, top: 0 }) : null}
@@ -273,6 +259,25 @@ const Cell = memo(function Cell(p: CellProps) {
         {p.b && p.l && !p.bl ? corner({ left: 0, bottom: 0 }) : null}
         {p.b && p.r && !p.br ? corner({ right: 0, bottom: 0 }) : null}
       </Animated.View>
+      {/* The number is centred on the whole cell square, not on the inset
+          fill, so numbers in one field sit on one line. */}
+      {p.numbers && v > 0 && !look?.shadow ? (
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }, anim]}>
+          <Animated.View style={numStyle}>
+            <Text
+              allowFontScaling={false}
+              style={{
+                color: ink,
+                fontFamily: font.tile,
+                fontSize: Math.max(12, Math.round(cell * (long ? 0.28 : v >= 10 ? 0.34 : 0.4))),
+                letterSpacing: v >= 10 ? -0.5 : 0,
+                includeFontPadding: false,
+              }}>
+              {v}
+            </Text>
+          </Animated.View>
+        </Animated.View>
+      ) : null}
     </View>
   );
 });
@@ -282,12 +287,23 @@ function Hatch({ color, base }: { color: string; base: string }) {
   return (
     <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
       <Defs>
-        <Pattern id={id} width={10} height={10} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <Rect width={10} height={10} fill={mix(color, base, 0.45)} />
-          <Rect width={5} height={10} fill={color} />
+        <Pattern id={id} width={8} height={8} patternUnits="userSpaceOnUse">
+          <Rect width={8} height={8} fill={mix(color, base, 0.45)} />
+          <Rect width={8} height={4} fill={color} />
         </Pattern>
       </Defs>
       <Rect width="100%" height="100%" fill={`url(#${id})`} />
     </Svg>
   );
+}
+
+/** The suggested-move outline: a band in the tile colour that breathes. */
+function Mark({ color, width }: { color: string; width: number }) {
+  const o = useSharedValue(1);
+  useEffect(() => {
+    o.value = withRepeat(withSequence(withTiming(0.45, { duration: 500 }), withTiming(1, { duration: 500 })), -1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const st = useAnimatedStyle(() => ({ opacity: o.value }));
+  return <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: width, borderColor: color }, st]} />;
 }
