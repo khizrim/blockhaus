@@ -55,8 +55,9 @@ export default function Settings() {
         </Section>
 
         <Text style={{ fontFamily: font.body, fontSize: 12, color: c.faint, textAlign: 'center' }}>
-          Blockhaus 0.1 · visual prototype
+          Blockhaus 0.1, visual prototype
         </Text>
+        <Button kind="ghost" label="Design kit" onPress={() => router.push('/kit')} />
       </ScrollView>
     </Screen>
 

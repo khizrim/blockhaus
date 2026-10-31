@@ -4,7 +4,10 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@expo-google-fonts/archivo": "^0.4.2",
+    "@expo-google-fonts/dela-gothic-one": "^0.4.1",
     "@expo-google-fonts/instrument-sans": "^0.4.2",
+    "@expo-google-fonts/onest": "^0.4.2",
+    "@expo-google-fonts/unbounded": "^0.4.1",
     "@expo/ui": "~58.0.25",
     "expo": "~58.0.21",
     "expo-constants": "~58.0.14",

@@ -3,6 +3,9 @@ import {
   InstrumentSans_500Medium,
   InstrumentSans_600SemiBold,
 } from '@expo-google-fonts/instrument-sans';
+import { DelaGothicOne_400Regular } from '@expo-google-fonts/dela-gothic-one';
+import { Onest_400Regular, Onest_500Medium, Onest_600SemiBold } from '@expo-google-fonts/onest';
+import { Unbounded_500Medium, Unbounded_700Bold } from '@expo-google-fonts/unbounded';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -23,6 +26,13 @@ export default function RootLayout() {
     InstrumentSans_400Regular,
     InstrumentSans_500Medium,
     InstrumentSans_600SemiBold,
+    // Identity candidates, all with Cyrillic.
+    Unbounded_500Medium,
+    Unbounded_700Bold,
+    Onest_400Regular,
+    Onest_500Medium,
+    Onest_600SemiBold,
+    DelaGothicOne_400Regular,
   });
 
   useEffect(() => {
