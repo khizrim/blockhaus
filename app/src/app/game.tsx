@@ -8,7 +8,7 @@ import { Overlay } from '@/components/Overlay';
 import { Body, Button, Heading, IconButton, Label, Panel, PauseIcon, Screen, TextLink, TileBadge } from '@/components/ui';
 import { pieceGrid } from '@/design/mock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { dur, enter, exit, space, type } from '@/design/system';
+import { dur, enter, exit, HIT, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Piece } from '@/game/engine';
@@ -484,19 +484,14 @@ export default function Game() {
   return (
     <View style={[{ flex: 1 }, noSelect]}>
       <Screen>
-        {/* header: the score leads, the best tile is the progress, pause on the right */}
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-          <View>
-            <Label meta>Очки</Label>
-            <Text allowFontScaling={false} style={[type.number, { color: c.text }]} accessibilityLabel={`Очки: ${g.score}`}>
-              {g.score.toLocaleString('ru-RU')}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.lg }}>
-            <View style={{ alignItems: 'flex-end', gap: space.xs }}>
-              <Label meta>Лучшая</Label>
-              <BestTile v={best} />
-            </View>
+        {/* header without labels: the score leads; the best tile and pause are
+            two squares of one size on the right */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text allowFontScaling={false} style={[type.number, { color: c.text }]} accessibilityLabel={`Очки: ${g.score}`}>
+            {g.score.toLocaleString('ru-RU')}
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+            <BestTile v={best} />
             <IconButton label="Пауза" onPress={() => router.push('/pause')}>
               <PauseIcon color={c.text} />
             </IconButton>
@@ -509,7 +504,10 @@ export default function Game() {
             <View style={{ width: boardSize, marginBottom: space.lg, minHeight: 104 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Label meta>{`Обучение · ${(store.lesson ?? 0) + 1} из ${LESSONS.length}`}</Label>
-                <TextLink label="Пропустить" onPress={skipLessons} />
+                {/* Quiet on purpose: a way out, not the main thing on screen. */}
+                <Pressable accessibilityRole="button" accessibilityLabel="Пропустить обучение" onPress={skipLessons} hitSlop={12}>
+                  <Text style={[type.meta, { color: c.muted }]}>Пропустить</Text>
+                </Pressable>
               </View>
               <Heading level="heading">{coach === 'done' ? 'Получилось' : coach === 'retry' ? 'Ещё раз' : lesson.title}</Heading>
               <Body muted small style={{ marginTop: space.xs }}>
@@ -661,7 +659,7 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
 /** The best tile, drawn as a tile of the board: its fill inside the line. */
 function BestTile({ v }: { v: number }) {
   const { c } = useTheme();
-  const size = 36;
+  const size = HIT; // the same square as the pause button beside it
   const rk = rank(v);
   const k = useSharedValue(1);
   const first = useRef(true);
@@ -677,7 +675,7 @@ function BestTile({ v }: { v: number }) {
       style={[{ width: size, height: size, padding: 3, backgroundColor: c.line }, st]}>
       <View style={{ flex: 1, backgroundColor: v ? c.tile[rk] : c.canvas, alignItems: 'center', justifyContent: 'center' }}>
         {v ? (
-          <Text allowFontScaling={false} style={{ fontFamily: font.tile, fontSize: v >= 10 ? 14 : 16, color: c.ink[rk], fontVariant: ['tabular-nums'] }}>
+          <Text allowFontScaling={false} style={{ fontFamily: font.tile, fontSize: v >= 100 ? 14 : v >= 10 ? 17 : 20, color: c.ink[rk] }}>
             {v}
           </Text>
         ) : null}
