@@ -1,193 +1,217 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>Blockhaus Merge Test</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Blockhaus</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=Instrument+Sans:wght@400;500;600&display=swap">
 <style>
-  /* Layout: one column, board centred, tray pinned under it within thumb reach.
-     Tiles climb in weight and saturation rather than hue-hopping, so a 6 reads
-     as further along than a 3 without needing a legend. */
+  /* Layout: one column, the board is a De Stijl panel, the tray pinned under it
+     within thumb reach.
+
+     The board reads as a Mondrian composition. Tiles of the same value that
+     touch form one "field", a single block of colour. Between fields runs a
+     thick black gap; inside a field only a thin fold marks where one cell ends
+     and the next begins, so a field still counts cell by cell. Empty space is a
+     field too, which is what makes "is there room for this L?" a glance.
+
+     Colour encodes the rung. The primaries go to 1, 2 and 3, the tiles that
+     cover most of the board, so a typical position looks like a Mondrian; the
+     rarer rungs above take the secondaries, each a clear step from the last. */
   :root {
-    --bg: #F2F1EE;
-    --surface: #E4E2DD;
-    --slot: #D8D5CE;
-    --ink: #1B1D21;
-    --muted: #6B6E74;
-    --faint: #9A9CA1;
-    --rule: #C9C6BE;
-    --accent: #2B5FD9;
-    --warn: #C23B2E;
+    --bg: #E8E5DE;        /* the wall the panel hangs on */
+    --canvas: #F6F4EF;    /* empty field */
+    --line: #111215;      /* thick gaps between fields */
+    --fold: rgba(17, 18, 21, .2);   /* thin folds inside a field */
+    --text: #111215;
+    --muted: #5D5F66;
+    --faint: #9A9BA0;
 
-    --t1: #BFC6D2; --t1f: #3A414D;
-    --t2: #92A3C4; --t2f: #1B2435;
-    --t3: #5C7FC0; --t3f: #FFFFFF;
-    --t4: #3659B5; --t4f: #FFFFFF;
-    --t5: #2B3E96; --t5f: #FFFFFF;
-    --t6: #6A3FA0; --t6f: #FFFFFF;
-    --t7: #A6742A; --t7f: #FFFFFF;
-    --t8: #C9941F; --t8f: #2A1D00;
+    --t1: #1F4FB2; --t1f: #FFFFFF;  /* 1  blue   */
+    --t2: #D9342B; --t2f: #FFFFFF;  /* 2  red    */
+    --t3: #F4C21C; --t3f: #111215;  /* 3  yellow */
+    --t4: #EC7A1F; --t4f: #111215;  /* 6  orange */
+    --t5: #1D8657; --t5f: #FFFFFF;  /* 12 green  */
+    --t6: #6B3DA3; --t6f: #FFFFFF;  /* 24 violet */
+    --t7: #D9468C; --t7f: #FFFFFF;  /* 48 magenta */
+    --t8: #0E8C97; --t8f: #FFFFFF;  /* 96+ teal  */
 
-    --display: 'Fraunces', Georgia, serif;
-    --body: 'Inter', system-ui, -apple-system, sans-serif;
+    --gap: clamp(5px, 1.5vw, 7px);
+    --hg: calc(var(--gap) / 2);
+    --fw: 1px;
+
+    --display: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+    --body: 'Instrument Sans', 'Helvetica Neue', Arial, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #15171A; --surface: #1F2226; --slot: #282C31;
-      --ink: #ECEDEF; --muted: #9DA1A8; --faint: #6B7078; --rule: #343941;
-      --accent: #6E95F2; --warn: #E2705F;
-      --t1: #3C434E; --t1f: #C6CBD4;
-      --t2: #4C5D7E; --t2f: #E8ECF4;
-      --t3: #5C7FC0; --t3f: #FFFFFF;
-      --t4: #4568CC; --t4f: #FFFFFF;
-      --t5: #3D52B8; --t5f: #FFFFFF;
-      --t6: #8054C0; --t6f: #FFFFFF;
-      --t7: #C08A33; --t7f: #1B1200;
-      --t8: #E3AC2B; --t8f: #2A1D00;
+      --bg: #141518; --canvas: #26282D; --line: #050506; --fold: rgba(0, 0, 0, .35);
+      --text: #EEEDEA; --muted: #A2A3A8; --faint: #66686E;
+      --t1: #3466D6; --t2: #E5463C; --t3: #F2C230; --t4: #F08A33;
+      --t5: #26A06A; --t6: #8455C4; --t7: #E25C9C; --t8: #18A3AE;
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #15171A; --surface: #1F2226; --slot: #282C31;
-    --ink: #ECEDEF; --muted: #9DA1A8; --faint: #6B7078; --rule: #343941;
-    --accent: #6E95F2; --warn: #E2705F;
-    --t1: #3C434E; --t1f: #C6CBD4;
-    --t2: #4C5D7E; --t2f: #E8ECF4;
-    --t3: #5C7FC0; --t3f: #FFFFFF;
-    --t4: #4568CC; --t4f: #FFFFFF;
-    --t5: #3D52B8; --t5f: #FFFFFF;
-    --t6: #8054C0; --t6f: #FFFFFF;
-    --t7: #C08A33; --t7f: #1B1200;
-    --t8: #E3AC2B; --t8f: #2A1D00;
+    --bg: #141518; --canvas: #26282D; --line: #050506; --fold: rgba(0, 0, 0, .35);
+    --text: #EEEDEA; --muted: #A2A3A8; --faint: #66686E;
+    --t1: #3466D6; --t2: #E5463C; --t3: #F2C230; --t4: #F08A33;
+    --t5: #26A06A; --t6: #8455C4; --t7: #E25C9C; --t8: #18A3AE;
     color-scheme: dark;
   }
 
-  html, body { height: 100%; }
+  html, body { height: 100%; box-sizing: border-box; }
   body {
-    margin: 0; background: var(--bg); color: var(--ink);
+    margin: 0; background: var(--bg); color: var(--text);
     font-family: var(--body);
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
-    padding-block: 14px 18px;
+    padding-block: 14px 16px;
     display: flex; flex-direction: column; gap: 12px;
     touch-action: manipulation; -webkit-user-select: none; user-select: none;
     overflow: hidden;
   }
+  .col { width: 100%; max-width: 420px; margin: 0 auto; }
 
-  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-  .score { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 10vw, 42px); line-height: 1; font-variant-numeric: tabular-nums; }
-  .score small { display: block; font-family: var(--body); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
-  .meta { text-align: right; font-size: 12px; color: var(--muted); line-height: 1.6; font-variant-numeric: tabular-nums; }
-  .meta b { color: var(--ink); font-weight: 700; }
+  /* ---- header ---- */
+  header { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 4px 12px; }
+  .mark { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px;
+    font-family: var(--display); font-weight: 800; font-stretch: 125%; font-size: 13px; letter-spacing: .14em; }
+  .mark span { display: inline-grid; grid-template-columns: 7px 4px; grid-template-rows: 4px 7px; gap: 2px; }
+  .mark span i { display: block; }
+  .score { font-family: var(--display); font-weight: 900; font-stretch: 112%;
+    font-size: clamp(34px, 11vw, 46px); line-height: .9; font-variant-numeric: tabular-nums; }
+  .lab { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .meta { display: flex; gap: 14px; text-align: right; font-variant-numeric: tabular-nums; }
+  .meta div { display: grid; gap: 3px; justify-items: end; }
+  .meta b { font-family: var(--display); font-weight: 800; font-size: 17px; }
+  #best { min-width: 30px; height: 24px; padding: 0 5px; display: grid; place-items: center;
+    background: var(--c, transparent); color: var(--f, var(--text)); font-size: 14px; box-sizing: border-box; }
 
-  .wrap { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 14px; min-height: 0; }
+  .wrap { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; gap: 12px; min-height: 0; }
 
-  /* A sweep in hand is worth saying without words. */
-  #board.sweepable { border-color: color-mix(in srgb, var(--accent) 55%, var(--rule)); }
+  /* ---- board ---- */
   #board {
-    position: relative; width: 100%; max-width: 420px; margin: 0 auto;
-    aspect-ratio: 1; background: var(--surface);
-    border: 2px solid var(--rule); border-radius: 10px; padding: 5px;
-    display: grid; grid-template-columns: repeat(6, 1fr); gap: 0;
+    position: relative; width: min(100%, 420px, max(240px, 100dvh - 400px)); max-width: 100%; aspect-ratio: 1; box-sizing: border-box;
+    background: var(--line); padding: var(--hg);
+    display: grid; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(6, 1fr);
     touch-action: none;
   }
   .cell { position: relative; }
   .cell i {
-    position: absolute; inset: 7%; border-radius: 14%;
-    background: var(--slot); display: grid; place-items: center;
-    font-family: var(--display); font-weight: 700; font-size: clamp(13px, 4.2vw, 21px);
-    font-style: normal; color: transparent;
+    position: absolute; top: var(--it); right: var(--ir); bottom: var(--ib); left: var(--il);
+    background: var(--canvas); display: grid; place-items: center;
+    font-family: var(--display); font-weight: 800; font-stretch: 110%; font-style: normal;
+    font-size: clamp(15px, 5vw, 25px); color: transparent; font-variant-numeric: tabular-nums;
     transition: background .14s ease, color .14s ease;
   }
+  .cell i.long { font-size: clamp(12px, 3.9vw, 19px); font-stretch: 90%; }
+  /* Folds are drawn on the left and top edge only, so two cells never double one up. */
+  .cell i::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+    border-left: var(--fl, 0px) solid var(--fold); border-top: var(--ft, 0px) solid var(--fold); }
+  .cell i::before, .pcell b::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: var(--notch, none); }
   .cell.v i { color: var(--f); background: var(--c); }
   .cell.pop i { animation: pop .26s cubic-bezier(.3,1.5,.5,1); }
-  @keyframes pop { 0% { transform: scale(.55) } 60% { transform: scale(1.14) } 100% { transform: scale(1) } }
+  @keyframes pop { 0% { transform: scale(.6) } 60% { transform: scale(1.1) } 100% { transform: scale(1) } }
   .cell.land i { animation: land .2s ease-out; }
-  @keyframes land { from { transform: scale(.7); opacity: .4 } to { transform: scale(1); opacity: 1 } }
+  @keyframes land { from { transform: scale(.8); opacity: .5 } to { transform: scale(1); opacity: 1 } }
 
-  /* Every tile the held piece could pair with, lit the moment it is picked up.
-     The rule is asymmetric - 1 goes with 2, but 1 does not go with 1, and from
-     3 up only equals pair - and colour encodes the rung, not compatibility. So
-     without this the player has to hold two regimes in their head and apply
-     them tile by tile. Lit up, the rule can simply be watched. */
-  .cell.partner i { outline: 2px dashed color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: -3px; }
+  /* While a piece is held, everything it cannot pair with steps back into the
+     canvas and only its partners keep full colour. The rule is asymmetric (1
+     goes with 2, 1 not with 1, from 3 up only equals), so it is shown rather
+     than left for the player to work out tile by tile. */
+  #board.holding .cell.v:not(.partner) i { background: color-mix(in srgb, var(--c) 22%, var(--canvas)); color: color-mix(in srgb, var(--text) 35%, transparent); }
 
-  /* Where the piece lands: an outline on the empty slot it will fill. */
-  .cell.ghost i { outline: 2px solid var(--accent); outline-offset: -2px; background: color-mix(in srgb, var(--accent) 26%, var(--slot)); }
-  /* The tile about to be eaten, ringed on the tile itself. */
-  .cell.absorb i { box-shadow: inset 0 0 0 3px var(--accent); }
-  .cell.bad i { background: color-mix(in srgb, var(--warn) 24%, var(--slot)); }
+  /* Where the piece will land: its own colour, hatched, so it never reads as placed. */
+  .cell.ghost i { background: repeating-linear-gradient(135deg, var(--gc) 0 5px, color-mix(in srgb, var(--gc) 45%, var(--canvas)) 5px 10px); }
+  /* A tile about to be eaten: a canvas-coloured frame inside it. */
+  .cell.absorb i { box-shadow: inset 0 0 0 var(--gap) var(--canvas), inset 0 0 0 calc(var(--gap) + 2px) var(--line); }
 
   #flyers { position: absolute; inset: 0; pointer-events: none; }
-  .flyer { position: absolute; border-radius: 14%; display: grid; place-items: center;
-    font-family: var(--display); font-weight: 700; transition: transform .2s ease-in, opacity .2s ease-in; }
 
-  #tray { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 420px; width: 100%; margin: 0 auto;
-    background: var(--surface); border: 2px solid var(--rule); border-radius: 10px; padding: 10px 6px; min-height: 92px; }
-  .slot { display: grid; place-items: center; touch-action: none; }
-  .piece { display: grid; gap: 2px; cursor: grab; }
-  .piece.used { opacity: .12; pointer-events: none; }
-  .piece.held { opacity: 0; }
-  .pcell { border-radius: 16%; width: var(--s); height: var(--s); display: grid; place-items: center;
-    font-family: var(--display); font-weight: 700; font-size: calc(var(--s) * .55); }
-  .pcell.off { background: transparent; }
+  .hint { text-align: center; font-size: 13px; color: var(--muted); min-height: 1.35em; line-height: 1.35; margin-block: 0; }
+  .hint b { color: var(--text); font-weight: 600; }
 
-  /* A held piece is lifted off the board - shadowed and slightly transparent -
-     so it never reads as tiles already in place. On the first build it was
-     drawn flat at full size over the grid, which looked like stacking. */
-  #drag { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 40; display: none;
-    filter: drop-shadow(0 10px 16px rgba(0,0,0,.35)); opacity: .92; }
-
-  .hint { text-align: center; font-size: 12px; color: var(--muted); min-height: 1.3em; line-height: 1.3; }
-  .hint b { color: var(--accent); font-weight: 700; }
-  .sweeps { display: flex; align-items: center; justify-content: center; gap: 6px; }
-  .sweeps .lab { font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase;
-    color: var(--muted); margin-right: 2px; }
-  .sweeps button { min-width: 38px; padding: 6px 0; font-size: 15px; line-height: 1; }
+  /* ---- controls row: sweeps + ladder ---- */
+  .rail { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .sweeps { display: flex; align-items: center; gap: 6px; }
+  .sweeps button { width: 36px; height: 36px; padding: 0; font-size: 17px; line-height: 1; display: grid; place-items: center; }
   .sweeps button:disabled { opacity: .3; cursor: default; }
-  .sweeps .dots { font-size: 13px; letter-spacing: 2px; color: var(--accent); margin-left: 2px; min-width: 28px; }
-  .sweeps.empty .dots { color: var(--faint); }
+  .dots { display: flex; gap: 4px; margin-left: 4px; }
+  .dots i { width: 10px; height: 10px; box-sizing: border-box; border: 2px solid var(--text); }
+  .dots i.on { background: var(--text); }
+  .sweeps.empty .dots i { border-color: var(--faint); }
 
-  /* The ladder, stated once, so the progression is a thing you can see rather
-     than a sentence you have to parse. */
-  .ladder { margin: 0; text-align: center; font-family: var(--display); font-weight: 700;
-    font-size: 13px; color: var(--faint); letter-spacing: .04em; }
+  /* The ladder doubles as the legend: every rung in its own colour, the ones
+     already reached at full strength. */
+  .ladder { grid-column: 1 / -1; display: flex; align-items: center; gap: 3px; margin: 0; padding: 0; list-style: none; }
+  .ladder li { min-width: 20px; height: 20px; padding: 0 3px; box-sizing: border-box; display: grid; place-items: center;
+    background: var(--c); color: var(--f); font-family: var(--display); font-weight: 800; font-size: 10px; }
+  .ladder li.off { background: transparent; color: var(--faint); box-shadow: inset 0 0 0 1.5px var(--faint); }
+  .ladder .op { min-width: 0; padding: 0; background: none; color: var(--faint); font-size: 10px; }
+
+  /* ---- tray ---- */
+  #tray { margin-top: auto; display: grid; grid-template-columns: repeat(3, 1fr); height: 92px;
+    border-top: var(--gap) solid var(--line); border-bottom: var(--gap) solid var(--line); }
+  .slot { display: grid; place-items: center; touch-action: none; }
+  .slot + .slot { border-left: 2px solid color-mix(in srgb, var(--line) 18%, transparent); }
+  .piece { display: grid; cursor: grab; }
+  .piece.used { opacity: .1; pointer-events: none; }
+  .piece.held { opacity: 0; }
+  .pcell { position: relative; width: var(--s); height: var(--s); background: var(--line); }
+  .pcell.off { background: transparent; }
+  .pcell b { position: absolute; top: var(--it); right: var(--ir); bottom: var(--ib); left: var(--il);
+    display: grid; place-items: center; background: var(--c); color: var(--f);
+    font-family: var(--display); font-weight: 800; font-stretch: 110%; font-size: calc(var(--s) * .42); }
+  .pcell b::after { content: ''; position: absolute; inset: 0;
+    border-left: var(--fl, 0px) solid var(--fold); border-top: var(--ft, 0px) solid var(--fold); }
+
+  /* A held piece is lifted off the board, shadowed, so it never reads as tiles already in place. */
+  #drag { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 40; display: none;
+    filter: drop-shadow(0 12px 14px rgba(0,0,0,.3)); }
 
   .bar { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
-  button { font: inherit; font-size: 13px; font-weight: 500; color: var(--ink); background: transparent;
-    border: 1.5px solid var(--rule); border-radius: 7px; padding: 8px 14px; cursor: pointer; }
-  button:hover { border-color: var(--muted); }
-  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button { font: inherit; font-size: 13px; font-weight: 600; color: var(--text); background: transparent;
+    border: 2px solid var(--text); border-radius: 0; padding: 8px 14px; cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--text); color: var(--bg); }
+  button:focus-visible { outline: 3px solid var(--t1); outline-offset: 2px; }
 
-  #over { position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 88%, transparent);
+  #over { position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 86%, transparent);
     display: none; place-items: center; z-index: 50; padding: 24px; }
   #over.on { display: grid; }
-  #over div { background: var(--surface); border: 2px solid var(--rule); border-radius: 12px; padding: 22px; text-align: center; max-width: 320px; }
-  #over h2 { font-family: var(--display); margin: 0 0 6px; font-size: 24px; }
+  #over > div { background: var(--canvas); border: var(--gap) solid var(--line); padding: 22px; text-align: center; max-width: 300px; }
+  #over h2 { font-family: var(--display); font-weight: 900; font-stretch: 120%; margin: 0 0 6px; font-size: 24px; text-wrap: balance; }
   #over p { margin: 0 0 16px; color: var(--muted); font-size: 14px; line-height: 1.5; }
 
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
+</head><body>
 
-<header>
-  <div class="score"><span id="score">0</span><small>score</small></div>
-  <div class="meta">best tile <b id="best">—</b><br>merges <b id="merges">0</b></div>
+<header class="col">
+  <div class="mark" aria-hidden="true"><span><i style="background:var(--t2)"></i><i style="background:var(--t3)"></i><i style="background:var(--t3)"></i><i style="background:var(--t1)"></i></span>BLOCKHAUS</div>
+  <div>
+    <div class="score" id="score">0</div>
+  </div>
+  <div class="meta">
+    <div><span class="lab">merges</span><b id="merges">0</b></div>
+    <div><span class="lab">best</span><b id="best">—</b></div>
+  </div>
+  <ol class="ladder" id="ladder" aria-label="Merge ladder"></ol>
 </header>
 
 <div class="wrap">
-  <div id="board"><div id="flyers"></div></div>
-  <p class="hint" id="hint">Pick up a piece to see what it pairs with.</p>
+  <div id="board" class="col"><div id="flyers"></div></div>
+  <p class="hint col" id="hint">Drag a piece onto the board. Swipe to sweep.</p>
 
-  <!-- The sweep needs a face. As a bare gesture nobody could tell it existed,
-       when it was available, or how it came back. -->
-  <div class="sweeps" id="sweepbar">
-    <span class="lab">Sweep</span>
-    <button type="button" data-dir="left" aria-label="Sweep left">&larr;</button>
-    <button type="button" data-dir="down" aria-label="Sweep down">&darr;</button>
-    <button type="button" data-dir="up" aria-label="Sweep up">&uarr;</button>
-    <button type="button" data-dir="right" aria-label="Sweep right">&rarr;</button>
-    <span class="dots" id="dots" aria-live="polite"></span>
+  <div class="rail col">
+    <!-- The sweep needs a face. As a bare gesture nobody could tell it existed,
+         when it was available, or how it came back. -->
+    <div class="sweeps" id="sweepbar">
+      <button type="button" data-dir="left" aria-label="Sweep left">&larr;</button>
+      <button type="button" data-dir="down" aria-label="Sweep down">&darr;</button>
+      <button type="button" data-dir="up" aria-label="Sweep up">&uarr;</button>
+      <button type="button" data-dir="right" aria-label="Sweep right">&rarr;</button>
+      <span class="dots" id="dots" aria-live="polite"></span>
+    </div>
   </div>
-  <p class="ladder">1 + 2 &rarr; 3 &rarr; 6 &rarr; 12 &rarr; 24 &rarr; 48 &rarr; 96</p>
-  <div id="tray"></div>
+  <div id="tray" class="col"></div>
 </div>
 
 <div class="bar">
@@ -341,29 +365,82 @@ function apply(b, shape, ox, oy, value) {
 }
 
 /* ---- rendering ---------------------------------------------------------- */
+/* Fields: tiles of one value that touch read as one block of colour. Each
+   cell is drawn inset from its own square, by half the gap on a side that
+   faces another field and not at all on a side that continues its own, where
+   a thin fold is drawn instead. `same(dx, dy)` answers "is that neighbour
+   part of my field?". */
+function edges(el, same) {
+  const t = same(0, -1), r = same(1, 0), b = same(0, 1), l = same(-1, 0);
+  el.style.setProperty('--it', t ? '0px' : 'var(--hg)');
+  el.style.setProperty('--ir', r ? '0px' : 'var(--hg)');
+  el.style.setProperty('--ib', b ? '0px' : 'var(--hg)');
+  el.style.setProperty('--il', l ? '0px' : 'var(--hg)');
+  el.style.setProperty('--ft', t ? 'var(--fw)' : '0px');
+  el.style.setProperty('--fl', l ? 'var(--fw)' : '0px');
+  // Where two lines meet at an inside corner of a field, the joint square
+  // belongs to the line, not the field, or the line steps sideways there.
+  const corner = pos => `linear-gradient(var(--line), var(--line)) ${pos} / var(--hg) var(--hg) no-repeat`;
+  const notch = [];
+  if (t && l && !same(-1, -1)) notch.push(corner('left top'));
+  if (t && r && !same(1, -1)) notch.push(corner('right top'));
+  if (b && l && !same(-1, 1)) notch.push(corner('left bottom'));
+  if (b && r && !same(1, 1)) notch.push(corner('right bottom'));
+  el.style.setProperty('--notch', notch.length ? notch.join(', ') : 'none');
+}
+
+const LADDER = [1, 2, 3, 6, 12, 24, 48, 96];
+const ladderEl = $('#ladder');
+LADDER.forEach((v, k) => {
+  if (k === 1) ladderEl.insertAdjacentHTML('beforeend', '<li class="op" aria-hidden="true">+</li>');
+  if (k >= 2) ladderEl.insertAdjacentHTML('beforeend', '<li class="op" aria-hidden="true">›</li>');
+  const li = document.createElement('li');
+  li.textContent = v;
+  li.dataset.v = v;
+  li.style.setProperty('--c', `var(--t${rank(v)})`);
+  li.style.setProperty('--f', `var(--t${rank(v)}f)`);
+  ladderEl.appendChild(li);
+});
+
 function paint() {
   for (let i = 0; i < N * N; i++) {
     const v = board[i], c = cells[i], el = c.firstChild;
+    const x = i % N, y = (i / N) | 0;
     c.classList.toggle('v', v > 0);
     if (v > 0) {
       const t = rank(v);
       c.style.setProperty('--c', `var(--t${t})`);
       c.style.setProperty('--f', `var(--t${t}f)`);
       el.textContent = v;
-    } else { el.textContent = ''; }
+      el.classList.toggle('long', v >= 100);
+    } else { el.textContent = ''; el.classList.remove('long'); }
+    edges(el, (dx, dy) => {
+      const nx = x + dx, ny = y + dy;
+      return nx >= 0 && ny >= 0 && nx < N && ny < N && board[idx(nx, ny)] === v;
+    });
   }
   $('#score').textContent = score.toLocaleString('en-US');
   $('#merges').textContent = merges;
-  $('#best').textContent = bestTile || '—';
+  const best = $('#best');
+  best.textContent = bestTile || '—';
+  best.style.setProperty('--c', bestTile ? `var(--t${rank(bestTile)})` : 'transparent');
+  best.style.setProperty('--f', bestTile ? `var(--t${rank(bestTile)}f)` : 'var(--text)');
 
-  // Spent and unspent sweeps as filled and hollow dots: countable at a glance,
-  // and the whole row dims when there are none.
-  $('#dots').textContent = '●'.repeat(sweeps) + '○'.repeat(Math.max(0, SWEEPS_PER_TRAY - sweeps));
+  // Rungs reached so far keep their colour; 1 and 2 are always in hand.
+  for (const li of ladderEl.querySelectorAll('li[data-v]')) {
+    const v = Number(li.dataset.v);
+    li.classList.toggle('off', v > 2 && v > bestTile);
+  }
+
+  // Spent and unspent sweeps as filled and hollow squares.
+  $('#dots').innerHTML = '<i class="on"></i>'.repeat(sweeps) + '<i></i>'.repeat(Math.max(0, SWEEPS_PER_TRAY - sweeps));
+  $('#dots').setAttribute('aria-label', `${sweeps} sweeps left`);
   $('#sweepbar').classList.toggle('empty', sweeps === 0);
   for (const b of $('#sweepbar').querySelectorAll('button')) b.disabled = sweeps === 0;
-  boardEl.classList.toggle('sweepable', sweeps > 0);
 }
 
+/* A piece is a single field: one block of its colour with folds between its
+   cells and the thick line all round, the same drawing as on the board. */
 function pieceEl(p, size) {
   const w = Math.max(...p.shape.map(c => c[0])) + 1;
   const h = Math.max(...p.shape.map(c => c[1])) + 1;
@@ -372,14 +449,19 @@ function pieceEl(p, size) {
   el.style.gridTemplateColumns = `repeat(${w}, ${size}px)`;
   el.style.setProperty('--s', size + 'px');
   const has = new Set(p.shape.map(([x, y]) => x + ',' + y));
+  const t = rank(p.value);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const c = document.createElement('div');
     if (has.has(x + ',' + y)) {
-      const t = rank(p.value);
       c.className = 'pcell';
-      c.style.background = `var(--t${t})`;
-      c.style.color = `var(--t${t}f)`;
-      c.textContent = p.value;
+      const b = document.createElement('b');
+      b.style.setProperty('--c', `var(--t${t})`);
+      b.style.setProperty('--f', `var(--t${t}f)`);
+      b.textContent = p.value;
+      // Outer edges carry the full line, since there is no neighbour to share it.
+      b.style.setProperty('--hg', 'var(--gap)');
+      edges(b, (dx, dy) => has.has((x + dx) + ',' + (y + dy)));
+      c.appendChild(b);
     } else { c.className = 'pcell off'; }
     el.appendChild(c);
   }
@@ -514,7 +596,8 @@ function anyMove() {
 const dragEl = $('#drag') || (() => { const d = document.createElement('div'); d.id = 'drag'; document.body.appendChild(d); return d; })();
 let held = null, heldEl = null, target = null;
 
-function cellSize() { return (boardEl.clientWidth - 10) / N; }
+const boardPad = () => parseFloat(getComputedStyle(boardEl).paddingLeft) || 0;
+function cellSize() { return (boardEl.clientWidth - 2 * boardPad()) / N; }
 
 function clearMarks() {
   for (const c of cells) c.classList.remove('ghost', 'absorb', 'bad');
@@ -565,6 +648,8 @@ function startDrag(ev, slot) {
   held = { slot, piece: p };
   heldEl = ev.currentTarget;
   heldEl.classList.add('held');
+  boardEl.classList.add('holding');
+  boardEl.style.setProperty('--gc', `var(--t${rank(p.value)})`);
 
   markPartners(p.value);
 
@@ -588,8 +673,9 @@ function moveDrag(ev) {
   dragEl.style.transform = `translate(${left}px, ${top}px)`;
 
   const r = boardEl.getBoundingClientRect();
-  const ox = Math.round((left - r.left - 5) / s);
-  const oy = Math.round((top - r.top - 5) / s);
+  const pad = boardPad();
+  const ox = Math.round((left - r.left - pad) / s);
+  const oy = Math.round((top - r.top - pad) / s);
   if (ox >= 0 && oy >= 0 && ox <= N - w && oy <= N - h) preview(ox, oy);
   else { clearMarks(); target = null; $('#hint').textContent = 'Drag a piece onto the board.'; }
 }
@@ -601,10 +687,11 @@ function endDrag() {
   if (heldEl) heldEl.classList.remove('held');
   clearMarks();
   clearPartners();
+  boardEl.classList.remove('holding');
 
   if (!target) {
     held = null; heldEl = null;
-    $('#hint').textContent = 'Pick up a piece to see what it pairs with. Swipe the board to sweep.';
+    $('#hint').textContent = 'Drag a piece onto the board. Swipe to sweep.';
     buzz();
     return;
   }
@@ -629,7 +716,7 @@ function endDrag() {
   }
 
   if (tray.every(t => t.used)) refill(); else drawTray();
-  $('#hint').textContent = 'Pick up a piece to see what it pairs with. Swipe the board to sweep.';
+  $('#hint').textContent = 'Drag a piece onto the board. Swipe to sweep.';
 
   if (!anyMove()) {
     $('#overtext').textContent = `${score.toLocaleString('en-US')} points, ${merges} merges, best tile ${bestTile || '—'}.`;
@@ -674,7 +761,7 @@ function reset() {
   $('#over').classList.remove('on');
   refill(); paint();
   clearPartners();
-  $('#hint').textContent = 'Pick up a piece to see what it pairs with. Swipe the board to sweep.';
+  $('#hint').textContent = 'Drag a piece onto the board. Swipe to sweep.';
 }
 $('#again').onclick = reset;
 $('#retry').onclick = reset;
