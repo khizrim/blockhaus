@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Field, type CellLook } from '@/components/Field';
 import { Overlay } from '@/components/Overlay';
@@ -53,7 +53,19 @@ export default function Game() {
   // What the board shows. Equal to the game's board at rest; during a chain it
   // steps through the intermediate positions.
   const [shown, setShown] = useState<number[]>(() => g.board.slice());
-  const [hint, setHint] = useState('Перетащите фигуру на доску.');
+  /* Hints are not a permanent line any more: one surfaces when it helps (a
+     drop that does not fit, a sweep that cannot happen, a long pause, the
+     first pick of a game) and leaves on its own. */
+  const [toast, setToast] = useState<{ text: string; id: number } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setHint = (text: string, ms = 2600) => {
+    if (!hints) return;
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ text, id: Date.now() });
+    toastTimer.current = setTimeout(() => setToast(null), ms);
+  };
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleShown = useRef(0);
   const [pops, setPops] = useState<Record<number, number>>({});
   const [lands, setLands] = useState<Record<number, number>>({});
   const [hold, setHold] = useState<Hold | null>(null);
@@ -75,7 +87,7 @@ export default function Game() {
       lastGame.current = g;
       settle();
       setShown(g.board.slice());
-      setHint('Перетащите фигуру на доску.');
+      idleShown.current = 0;
     }
   }, [g, store.version]);
   useEffect(() => {
@@ -90,9 +102,9 @@ export default function Game() {
   // Tray cells follow the width (three slots, a three-cell piece in each with room).
   const trayCell = Math.max(24, Math.min(40, Math.floor(inner / 3 / 3.3)));
   /* The board takes what is left of the height after the fixed parts:
-     header 64, toolbar 52, hint 52 (lesson card 120), tray, and the 8pt
+     header 64, the lesson card when there is one, the tray, and the 8pt
      paddings around them. Never wider than the screen, never under 240. */
-  const chrome = ins.top + ins.bottom + 24 + 64 + 52 + (store.lesson !== null ? 120 : 52) + trayCell * 3 + 32 + 32;
+  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null ? 120 : 0) + trayCell * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
 
@@ -172,7 +184,7 @@ export default function Game() {
     lift.value = withTiming(1, enter(dur.fast));
     setHold({ slot, piece: p });
     fx.pick();
-    setHint('Яркие плитки сольются с фигурой.');
+    if (g.moves < 2 && store.lesson === null) setHint('Яркие плитки сольются с фигурой.');
   };
 
   const move = (pageX: number, pageY: number) => {
@@ -223,15 +235,8 @@ export default function Game() {
     const done = 90 + res.steps.length * BEAT;
     later(done, () => setShown(g.board.slice()));
 
-    if (res.steps.length > 1) setHint(`Цепочка из ${res.steps.length} слияний, до ${res.steps[res.steps.length - 1].level}.`);
-    else if (res.steps.length === 1) setHint(`Слияние: ${res.steps[0].level}.`);
-    else setHint('Ставьте рядом с парой: 1 и 2, или две равные плитки от 3.');
-    if (res.refilled) {
-      later(done + 100, () => {
-        fx.tray();
-        setHint('Новый лоток и снова два сдвига.');
-      });
-    }
+    if (res.steps.length >= 3 && store.lesson === null) later(done, () => setHint(`Цепочка ×${res.steps.length}, до ${res.steps[res.steps.length - 1].level}`, 1800));
+    if (res.refilled) later(done + 100, () => fx.tray());
     afterMove(done);
   };
 
@@ -315,7 +320,7 @@ export default function Game() {
     if (g.sweeps === 0) {
       fx.invalid();
       shake();
-      setHint('Сдвигов не осталось. Новый лоток даст ещё два.');
+      setHint('Сдвиги кончились. Новый лоток вернёт два.');
       return;
     }
     settle();
@@ -340,13 +345,6 @@ export default function Game() {
         setPops((pp) => ({ ...pp, [m.at]: Date.now() }));
         fx.merge(m.level);
       }),
-    );
-    setHint(
-      res.made.length
-        ? `Сдвиг: ${res.made.length === 1 ? 'одно слияние' : `слияний: ${res.made.length}`}.`
-        : g.sweeps === 0
-          ? 'Это был последний сдвиг в этом лотке.'
-          : 'Сдвиг. В этом лотке остался ещё один.',
     );
     afterMove(SLIDE + res.made.length * BEAT);
   };
@@ -386,18 +384,29 @@ export default function Game() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const sweepRow = (
-    <View style={{ width: boardSize, flexDirection: 'row', alignItems: 'center', minHeight: 44, marginTop: space.sm, gap: space.md }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }} accessibilityLabel={`Сдвигов осталось: ${g.sweeps}`}>
-        <Label>Сдвиги</Label>
-        {[0, 1].map((k) => (
-          <View key={k} style={{ width: 16, height: 8, backgroundColor: k < g.sweeps ? c.text : 'transparent', borderWidth: 1, borderColor: k < g.sweeps ? c.text : c.hair }} />
-        ))}
-      </View>
-      <Text style={[type.secondary, { flex: 1, textAlign: 'right', color: c.muted }]} numberOfLines={1}>
-        {g.sweeps ? 'Смахните доску' : 'Вернутся с новым лотком'}
-      </Text>
-    </View>
+  // After a long pause in a normal game, one quiet reminder of the two moves.
+  useEffect(() => {
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+    if (store.lesson !== null || g.over || hold || idleShown.current >= 2) return;
+    idleTimer.current = setTimeout(() => {
+      idleShown.current++;
+      setHint(
+        g.sweeps
+          ? 'Ставьте фигуру рядом с парой: 1 к 2, равные от тройки. Или смахните доску.'
+          : 'Ставьте фигуру рядом с парой: 1 к 2, равные от тройки.',
+        4000,
+      );
+    }, 12000);
+    return () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.version, hold, store.lesson]);
+  useEffect(
+    () => () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    },
+    [],
   );
 
   const best = Math.max(...shown, 0);
@@ -414,6 +423,7 @@ export default function Game() {
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.lg }}>
+            <Sweeps n={g.sweeps} />
             <View style={{ alignItems: 'flex-end', gap: space.xs }}>
               <Label meta>Лучшая</Label>
               <TileBadge v={best} size={28} />
@@ -424,7 +434,7 @@ export default function Game() {
           </View>
         </View>
 
-        {/* board, with its toolbar and the hint, centred in the free height */}
+        {/* the board, centred in the free height; a hint floats over its foot when there is one */}
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: space.lg }}>
           {lesson ? (
             <View style={{ width: boardSize, marginBottom: space.lg, minHeight: 104 }}>
@@ -461,9 +471,29 @@ export default function Game() {
               ) : null}
             </View>
           </Animated.View>
-          {lesson && lesson.sweeps === 0 ? <View style={{ minHeight: 44, marginTop: space.sm }} /> : sweepRow}
-          {hints && !lesson ? (
-            <Text style={[type.secondary, { width: boardSize, marginTop: space.md, minHeight: 40, color: c.muted }]}>{hint}</Text>
+          {toast ? (
+            <Animated.View
+              key={toast.id}
+              entering={FadeIn.duration(dur.base)}
+              exiting={FadeOut.duration(dur.fast)}
+              pointerEvents="none"
+              accessibilityLiveRegion="polite"
+              style={{
+                position: 'absolute',
+                bottom: space.sm,
+                maxWidth: boardSize - space.xxl,
+                paddingHorizontal: space.lg,
+                paddingVertical: space.sm,
+                backgroundColor: c.surface,
+                borderWidth: 1,
+                borderColor: c.hair,
+                shadowColor: c.shadow,
+                shadowOpacity: 1,
+                shadowRadius: 16,
+                shadowOffset: { width: 0, height: 4 },
+              }}>
+              <Text style={[type.secondary, { color: c.text, textAlign: 'center' }]}>{toast.text}</Text>
+            </Animated.View>
           ) : null}
         </View>
 
@@ -563,5 +593,44 @@ function SlidingTile({ m, cell, gap }: { m: Move; cell: number; gap: number }) {
         </Text>
       </View>
     </Animated.View>
+  );
+}
+
+/** Sweeps left in this tray, as two charges in the header. A spent charge
+    empties; a fresh tray fills both again with a short grow. */
+function Sweeps({ n }: { n: number }) {
+  const { c } = useTheme();
+  return (
+    <View style={{ alignItems: 'flex-end', gap: space.xs }} accessibilityLabel={`Сдвигов осталось: ${n} из 2. Смахните доску, чтобы сдвинуть`}>
+      <Label meta style={{ color: n ? c.muted : c.faint }}>Сдвиги</Label>
+      <View style={{ flexDirection: 'row', gap: space.xs, height: 28, alignItems: 'center' }}>
+        {[0, 1].map((k) => (
+          <Charge key={k} on={k < n} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function Charge({ on }: { on: boolean }) {
+  const { c } = useTheme();
+  const s = useSharedValue(1);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    s.value = withSequence(withTiming(on ? 0.6 : 1.15, { duration: 0 }), withTiming(1, enter(dur.base)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on]);
+  const st = useAnimatedStyle(() => ({ transform: [{ scale: s.value }] }));
+  return (
+    <Animated.View
+      style={[
+        { width: 16, height: 28, backgroundColor: on ? c.text : 'transparent', borderWidth: on ? 0 : 1, borderColor: c.hair },
+        st,
+      ]}
+    />
   );
 }
