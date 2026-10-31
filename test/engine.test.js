@@ -170,3 +170,14 @@ test('a chain of two merges earns a sweep, up to the cap', () => {
   assert.ok(!again.bonus);
   assert.equal(g.sweeps, g.cfg.sweepsMax);
 });
+
+test('a piece limit ends the game after that many placements', () => {
+  const g = E.newGame({ pieceLimit: 2 }, E.seeded(11));
+  g.board = new Array(N * N).fill(0);
+  g.tray = [piece(3), piece(6), piece(12)];
+  E.place(g, 0, 0, 0);
+  assert.ok(!g.over);
+  E.place(g, 1, 3, 3);
+  assert.ok(g.over);
+  assert.equal(E.place(g, 2, 5, 5), null);
+});

@@ -12,7 +12,7 @@ import { dur, enter, exit, HIT, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Piece } from '@/game/engine';
-import { dayLabel } from '@/game/daily';
+import { DAILY, MEDALS, medalOf, nextMedal } from '@/game/daily';
 import { LESSONS } from '@/game/lessons';
 import { slideMoves, type Move } from '@/game/slide';
 import { useGame } from '@/game/store';
@@ -67,6 +67,18 @@ export default function Game() {
   const { width, height } = useWindowDimensions();
   const { learn, daily } = useLocalSearchParams<{ learn?: string; daily?: string }>();
   const isDaily = store.mode === 'daily';
+  /* The daily's rules stay in sight: pieces left and the next medal. */
+  const piecesLeft = Math.max(0, DAILY.pieceLimit - g.moves);
+  const coming = nextMedal(g.score);
+  const dailyLine = `Осталось ${piecesLeft} · ${coming ? `до ${coming.of} ${coming.at - g.score}` : `${medalOf(g.score)!.emoji} золото`}`;
+  // A medal reached mid-game rings once, on the move that reached it.
+  const medalRank = isDaily ? (medalOf(g.score)?.rank ?? 0) : 0;
+  const lastMedal = useRef({ rank: medalRank, daily: isDaily });
+  useEffect(() => {
+    // Opening the daily with medals already won is not a new medal.
+    if (lastMedal.current.daily === isDaily && medalRank > lastMedal.current.rank) fx.bonus();
+    lastMedal.current = { rank: medalRank, daily: isDaily };
+  }, [medalRank, isDaily]);
   const lesson = store.lesson === null ? null : LESSONS[store.lesson];
   const [coach, setCoach] = useState<'task' | 'done'>('task');
   /** Right after the lessons: the goal stands in the lesson line for the whole first game,
@@ -593,11 +605,18 @@ export default function Game() {
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 style={[type.title, { color: c.text }]}>
-                {lesson ? (coach === 'task' ? lesson.title : lesson.done) : isDaily ? `Игра дня, ${dayLabel(store.daily.key)}` : 'Цель: 192'}
+                {lesson ? (coach === 'task' ? lesson.title : lesson.done) : isDaily ? dailyLine : 'Цель: 192'}
               </Text>
             </View>
           ) : null}
           <Animated.View style={boardStyle} {...swipe.panHandlers}>
+            {/* The game of the day wears a yellow frame: another game at a glance. */}
+            {isDaily ? (
+              <View
+                pointerEvents="none"
+                style={{ position: 'absolute', left: -gap * 2, top: -gap * 2, right: -gap * 2, bottom: -gap * 2, borderWidth: gap, borderColor: c.tile[3] }}
+              />
+            ) : null}
             <View
               ref={boardRef}
               onLayout={measureBoard}
@@ -631,7 +650,7 @@ export default function Game() {
           {/* The sweeps are the board's thickness: one layer under it per
               sweep left. A sweep pulls a layer out the way the board went; a
               new tray slides them back in. */}
-          <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: col, alignItems: 'center' }}>
+          <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: col, alignItems: 'center', marginTop: isDaily ? gap * 2 : 0 }}>
             {Array.from({ length: g.cfg.sweepsMax }, (_, k) => k).map((k) => (
               <Plate key={k} on={g.sweeps - (bonusHeld ? 1 : 0) > k} k={k} dir={lastDir.current} width={col - 2 * (k + 1) * space.sm} />
             ))}
@@ -673,6 +692,31 @@ export default function Game() {
           ))}
         </View>
       </Screen>
+
+      {/* The first daily explains itself once: what is different and why. */}
+      {isDaily && !store.dailyIntro && g.moves === 0 ? (
+        <View style={StyleSheet.absoluteFill}>
+          <Overlay>
+            <Panel>
+              <Heading>Игра дня</Heading>
+              <Body muted style={{ marginTop: space.sm }}>
+                Сегодня у всех одна и та же доска и одни и те же фигуры. Партия короткая: {DAILY.pieceLimit} фигур. Наберите очки на медаль и сравните результат с друзьями.
+              </Body>
+              <View style={{ flexDirection: 'row', gap: space.xl, marginTop: space.lg }}>
+                {MEDALS.map((m) => (
+                  <View key={m.rank} style={{ gap: space.xs }}>
+                    <Text style={[type.heading, { color: c.text }]}>{m.emoji}</Text>
+                    <Text style={[type.secondary, { color: c.muted }]}>{m.at}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={{ marginTop: space.xl }}>
+                <Button kind="primary" size="lg" label="Начать" onPress={store.markDailyIntro} />
+              </View>
+            </Panel>
+          </Overlay>
+        </View>
+      ) : null}
 
       {lesson && coach === 'task' && !hold && !held && !sliding && geo ? (
         demoSlot >= 0 && geo.slot && lesson.hint ? (

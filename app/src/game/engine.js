@@ -56,6 +56,12 @@
     // (0 = never), up to sweepsMax in hand. Earned sweeps outlast the tray.
     chainBonus: 0,
     sweepsMax: 2,
+    // The game ends after this many pieces are placed (0 = no limit): the
+    // short game of the day.
+    pieceLimit: 0,
+    // Tiles (3 to 24) set on the board before the first tray: the prepared
+    // position of the game of the day (0 = an empty board).
+    startTiles: 0,
     goal: 192,
   };
 
@@ -240,8 +246,23 @@
       score: 0, merges: 0, bestTile: 0, moves: 0,
       won: false, over: false,
     };
+    if (cfg.startTiles) setStart(g.board, cfg.startTiles, rng);
     g.tray = dealTray(cfg, g.board, rng);
+    g.bestTile = Math.max(0, ...g.board);
     return g;
+  }
+
+  /** Scatters `count` tiles from 3 to 24, never two equal side by side, so
+      the position starts calm and every pair is the player's to make. */
+  function setStart(board, count, rng) {
+    const pool = [3, 3, 3, 6, 6, 12, 12, 24];
+    for (let k = 0, guard = 0; k < count && guard < 500; guard++) {
+      const i = Math.floor(rng() * N * N);
+      const v = pool[Math.floor(rng() * pool.length)];
+      if (board[i] || neighbours(i).some(j => board[j] === v)) continue;
+      board[i] = v;
+      k++;
+    }
   }
 
   function canPlaceAnywhere(board, piece) {
@@ -254,7 +275,9 @@
       move anything. A sweep can rearrange the board so a piece fits again, so
       while one is in hand and it would move tiles, the game goes on. */
   const canSweep = g => g.sweeps > 0 && ['left', 'right', 'up', 'down'].some(d => applySweep(g.board.slice(), d).moved);
-  const anyMove = g => g.tray.some(p => p && !p.used && canPlaceAnywhere(g.board, p)) || canSweep(g);
+  const anyMove = g =>
+    !(g.cfg.pieceLimit && g.moves >= g.cfg.pieceLimit) &&
+    (g.tray.some(p => p && !p.used && canPlaceAnywhere(g.board, p)) || canSweep(g));
 
   function score(g, levels) {
     for (const lvl of levels) {
@@ -268,7 +291,7 @@
   /** Places tray piece `slot` at (ox, oy). Returns null if it doesn't fit. */
   function place(g, slot, ox, oy) {
     const p = g.tray[slot];
-    if (!p || p.used || !fits(g.board, p, ox, oy)) return null;
+    if (!p || p.used || g.over || !fits(g.board, p, ox, oy)) return null;
     const res = applyPlacement(g.board, p, ox, oy);
     p.used = true;
     g.moves++;
@@ -287,7 +310,7 @@
 
   /** Sweeps the board. Returns null if no sweeps are left or nothing would move. */
   function sweep(g, dir) {
-    if (g.sweeps <= 0) return null;
+    if (g.sweeps <= 0 || g.over) return null;
     const trial = g.board.slice();
     const res = applySweep(trial, dir);
     if (!res.moved) return null;

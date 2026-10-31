@@ -9,7 +9,7 @@ import { Body, Button, Heading, Panel, TextLink } from '@/components/ui';
 import { dur, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font } from '@/design/tokens';
-import { dayLabel, shareOrCopy, shareText } from '@/game/daily';
+import { dayLabel, medalOf, shareOrCopy, shareText } from '@/game/daily';
 import { useGame } from '@/game/store';
 
 import { Grow } from './marks';
@@ -112,7 +112,7 @@ export function PosterMenu() {
             daily.done ? (
               <Button
                 label="Поделиться игрой дня"
-                trailing={daily.result!.score.toLocaleString('ru-RU')}
+                trailing={`${medalOf(daily.result!.score)?.emoji ?? ''} ${daily.result!.score.toLocaleString('ru-RU')}`.trim()}
                 accessibilityLabel={`Поделиться игрой дня, ${daily.result!.score} очков`}
                 onPress={shareDaily}
               />

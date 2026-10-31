@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import engine, { type Dir, type Game, type Piece, type PlaceResult, type SweepResult } from './engine';
-import { dayKey, dayStream, newDailyGame, prevDay } from './daily';
+import { DAILY, dayKey, dayStream, newDailyGame, prevDay } from './daily';
 import { LESSONS } from './lessons';
 
 /* The one running game and the player's record, shared by every screen and
@@ -18,7 +18,7 @@ type GameFields = Pick<Game, (typeof FIELDS)[number]>;
 export type DailyResult = { score: number; bestTile: number; board: number[] };
 type SavedDaily = { key: string; draws: number; game: GameFields; winSeen: boolean; result: DailyResult | null };
 export type Streak = { last: string; count: number; best: number };
-type Saved = { game: GameFields; stats: Stats; winSeen: boolean; learned?: boolean; daily?: SavedDaily; streak?: Streak };
+type Saved = { game: GameFields; stats: Stats; winSeen: boolean; learned?: boolean; daily?: SavedDaily; streak?: Streak; dailyIntro?: boolean };
 
 /** Today's game of the day, as screens see it. */
 export type Daily = { key: string; started: boolean; done: boolean; result: DailyResult | null };
@@ -54,16 +54,19 @@ type Store = {
   startDaily: () => void;
   /** Back to the free game; the daily run waits where it was. */
   leaveDaily: () => void;
+  /** The card that explains the game of the day was shown once. */
+  dailyIntro: boolean;
+  markDailyIntro: () => void;
   /** Prototype only: put a still position on the board. */
   loadPosition: (p: { board: number[]; tray: (Piece | { cells: [number, number, number][]; used?: boolean } | null)[]; score: number; merges: number; sweeps: number }) => void;
 };
 
 const Ctx = createContext<Store | null>(null);
 
-function restore(s: GameFields, rng?: () => number): Game {
+function restore(s: GameFields, rng?: () => number, cfg?: Record<string, unknown>): Game {
   // Built on a throwaway stream (newGame deals a tray), then handed the real
   // one, so a replayed daily stream is not advanced by the restore itself.
-  const g = engine.newGame();
+  const g = engine.newGame(cfg);
   for (const f of FIELDS) (g as Record<string, unknown>)[f] = s[f];
   if (rng) g.rng = rng;
   return g;
@@ -83,6 +86,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const classic = useRef<{ game: Game; winSeen: boolean } | null>(null);
   const dailyRef = useRef<{ key: string; game: Game; stream: ReturnType<typeof dayStream>; winSeen: boolean; result: DailyResult | null } | null>(null);
   const [streak, setStreak] = useState<Streak>({ last: '', count: 0, best: 0 });
+  const [dailyIntro, setDailyIntro] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(KEY)
@@ -94,10 +98,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setWinSeen(!!s.winSeen);
         setLearned(!!s.learned || (s.stats?.played ?? 0) > 0);
         if (s.streak) setStreak(s.streak);
+        setDailyIntro(!!s.dailyIntro);
         if (s.daily) {
           // Replay the day's stream to where the run left off.
           const stream = dayStream(s.daily.key, s.daily.draws);
-          dailyRef.current = { key: s.daily.key, game: restore(s.daily.game, stream.next), stream, winSeen: s.daily.winSeen, result: s.daily.result };
+          dailyRef.current = { key: s.daily.key, game: restore(s.daily.game, stream.next, DAILY), stream, winSeen: s.daily.winSeen, result: s.daily.result };
         }
       })
       .catch(() => {})
@@ -117,8 +122,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (d && mode === 'daily') d.winSeen = winSeen;
     const daily = d ? { key: d.key, draws: d.stream.draws, game: fields(d.game), winSeen: d.winSeen, result: d.result } : undefined;
     const ws = mode === 'daily' ? classic.current!.winSeen : winSeen;
-    AsyncStorage.setItem(KEY, JSON.stringify({ game: fields(g), stats, winSeen: ws, learned, daily, streak } satisfies Saved)).catch(() => {});
-  }, [ready, version, stats, winSeen, learned, lesson, mode, streak]);
+    AsyncStorage.setItem(KEY, JSON.stringify({ game: fields(g), stats, winSeen: ws, learned, daily, streak, dailyIntro } satisfies Saved)).catch(() => {});
+  }, [ready, version, stats, winSeen, learned, lesson, mode, streak, dailyIntro]);
 
   const bump = () => setVersion((v) => v + 1);
 
@@ -255,6 +260,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       streak: alive ? streak : { ...streak, count: 0 },
       startDaily,
       leaveDaily,
+      dailyIntro,
+      markDailyIntro: () => setDailyIntro(true),
       game: g,
       version,
       stats: {
@@ -296,7 +303,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         bump();
       },
     };
-  }, [ready, version, stats, winSeen, place, sweep, newGame, learned, lesson, startLesson, finishLessons, mode, streak, startDaily, leaveDaily]);
+  }, [ready, version, stats, winSeen, place, sweep, newGame, learned, lesson, startLesson, finishLessons, mode, streak, startDaily, leaveDaily, dailyIntro]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -9,7 +9,7 @@ import { Overlay } from '@/components/Overlay';
 import { Body, Button, Heading, Label, Panel, Stat, TileBadge } from '@/components/ui';
 import { dur, space, type, useCalm } from '@/design/system';
 import { useTheme } from '@/design/theme';
-import { dayLabel, plural, shareOrCopy, shareText } from '@/game/daily';
+import { DAILY, dayLabel, medalOf, nextMedal, plural, shareOrCopy, shareText } from '@/game/daily';
 import { useGame } from '@/game/store';
 
 /* Game over: the final board as a thumbnail, the score counting up once. */
@@ -18,6 +18,14 @@ export default function Over() {
   const calm = useCalm();
   const { game: final, stats, newGame, mode, daily, streak } = useGame();
   const isDaily = mode === 'daily';
+  const medal = medalOf(final.score);
+  const miss = nextMedal(final.score);
+  const ranOut = final.moves < DAILY.pieceLimit;
+  const dailyNote = [
+    medal ? `${medal.emoji} Медаль: ${medal.name}.` : `До бронзы не хватило ${miss!.at - final.score}.`,
+    ranOut ? 'Место кончилось раньше фигур.' : `Все ${DAILY.pieceLimit} фигур на доске.`,
+    'Новая раскладка завтра.',
+  ].join(' ');
   const [shareNote, setShareNote] = useState<string | null>(null);
   const share = async () => {
     if (!daily.result) return;
@@ -47,7 +55,7 @@ export default function Over() {
           <View style={{ flex: 1 }}>
             <Heading>{isDaily ? `Игра дня, ${dayLabel(daily.key)}` : 'Места нет'}</Heading>
             <Body muted small style={{ marginTop: space.xs }}>
-              {isDaily ? 'Сыграна. Новая раскладка завтра.' : 'Ни одна фигура из лотка не помещается на доску.'}
+              {isDaily ? dailyNote : 'Ни одна фигура из лотка не помещается на доску.'}
             </Body>
           </View>
           <Field w={6} h={6} values={final.board} cell={12} gap={2} numbers={false} />

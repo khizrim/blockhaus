@@ -8,7 +8,7 @@ export type Step = { absorbed: number[]; anchor: number; level: number };
 export type Config = Record<string, unknown>;
 
 export type Game = {
-  cfg: Config & { goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number };
+  cfg: Config & { goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
   rng: () => number;
   board: number[];
   tray: Piece[];
