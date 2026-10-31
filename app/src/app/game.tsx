@@ -24,7 +24,7 @@ import { fx } from '@/sound/sfx';
 
 const N = engine.N;
 const STEP = 150; // ms between merges of a chain
-const FLY = 110; // ms for an absorbed tile to fly into its partner
+const FLY = 140; // ms for an absorbed tile to fly into its partner
 
 const back = (d: number, k = 1.8) => ({ duration: d, easing: Easing.out(Easing.back(k)) });
 
@@ -134,18 +134,19 @@ export default function Game() {
   // Sizing: the board takes the width, but leaves the tray within thumb reach.
   const ins = useSafeAreaInsets();
   const inner = Math.min(width, 440) - 32;
-  const gap = Math.round(Math.min(7, Math.max(5, width * 0.015)));
+  // Even, so the half gaps on either side of a cell land on whole points.
+  const gap = 2 * Math.round(Math.min(3.5, Math.max(2.5, width * 0.0075)));
   // Tray cells follow the width (three slots, a three-cell piece in each with room).
   const trayCell = Math.max(24, Math.min(40, Math.floor(inner / 3 / 3.3)));
   /* The board takes what is left of the height after the fixed parts:
      header 64, the lesson card when there is one, the tray, and the 8pt
      paddings around them. Never wider than the screen, never under 240. */
-  const plate = Math.max(8, Math.round(width / 40)); // one sweep layer's thickness
+  const plate = Math.max(14, Math.round(width / 22)); // the board's bottom edge, which holds the sweeps
   const chrome =
     ins.top + space.sm + ins.bottom + space.lg + // screen paddings
     64 + space.lg + // header and its gap to the board
     (store.lesson !== null ? 112 : 0) +
-    2 * plate + 3 * space.xs + // sweep layers
+    plate + // the board's thick bottom edge
     space.lg + trayCell * 3 + space.lg; // gap, tray
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
@@ -470,9 +471,15 @@ export default function Game() {
 
   const sweepRef = useRef(sweep);
   sweepRef.current = sweep;
+  // With no sweep in hand the board is stiff: it barely gives under the finger.
+  const looseRef = useRef(true);
+  looseRef.current = g.sweeps > 0 && !g.over;
   const swipe = useMemo(() => {
     const axis = (dx: number, dy: number) => (Math.abs(dx) > Math.abs(dy) ? 'x' : 'y');
-    const lean = (d: number) => Math.max(-8, Math.min(8, d * 0.1));
+    const lean = (d: number) => {
+      const m = looseRef.current ? 8 : 2;
+      return Math.max(-m, Math.min(m, d * (looseRef.current ? 0.1 : 0.03)));
+    };
     return PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) + Math.abs(gs.dy) > 8,
@@ -607,12 +614,16 @@ export default function Game() {
                   ))}
                 </View>
               </View>
-              {/* The sweeps are the board's thickness: one layer under it per
-                  sweep left, an empty outline per sweep spent. A swipe pulls a
-                  layer out the way the board went; a new tray slides them back. */}
-              <View pointerEvents="none" style={{ gap: space.xs, marginTop: space.xs }}>
-                {[0, 1].map((k) => (
-                  <Plate key={k} on={g.sweeps > k} k={k} dir={lastDir.current} h={plate} delay={refillDelay.current} />
+              {/* The sweeps are set into the board's frame: its bottom edge is
+                  thicker and carries one yellow block per sweep in hand, the way
+                  Mondrian lets colour into a line. A swipe knocks one out the
+                  way the board went, and the line closes over it; a new tray
+                  sets them back. */}
+              <View
+                pointerEvents="none"
+                style={{ height: plate, backgroundColor: c.line, flexDirection: 'row', justifyContent: 'flex-end', gap, paddingRight: gap / 2, paddingBottom: gap / 2 }}>
+                {[1, 0].map((k) => (
+                  <Inlay key={k} on={g.sweeps > k} k={k} dir={lastDir.current} w={cell - gap} delay={refillDelay.current} />
                 ))}
               </View>
             </Animated.View>
@@ -678,7 +689,7 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
   const b = at(m.to);
   const k = useSharedValue(0);
   useEffect(() => {
-    k.value = withTiming(1, ms === SLIDE ? enter(ms) : { duration: ms, easing: Easing.in(Easing.quad) });
+    k.value = withTiming(1, ms === SLIDE ? enter(ms) : { duration: ms, easing: Easing.inOut(Easing.quad) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const st = useAnimatedStyle(() => ({
@@ -698,7 +709,6 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
             color: c.ink[rk],
             fontFamily: font.tile,
             fontSize: Math.max(12, Math.round(cell * (m.value >= 100 ? 0.28 : m.value >= 10 ? 0.34 : 0.4))),
-            letterSpacing: m.value >= 10 ? -0.5 : 0,
           }}>
           {m.value}
         </Text>
@@ -726,7 +736,7 @@ function BestTile({ v, gap }: { v: number; gap: number }) {
       style={[{ width: HIT, height: HIT, padding: gap / 2, backgroundColor: c.line }, st]}>
       <View style={{ flex: 1, backgroundColor: v ? c.tile[rk] : c.canvas, alignItems: 'center', justifyContent: 'center' }}>
         {v ? (
-          <Text allowFontScaling={false} style={{ fontFamily: font.tile, fontSize: v >= 10 ? 15 : 18, letterSpacing: v >= 10 ? -0.5 : 0, color: c.ink[rk] }}>
+          <Text allowFontScaling={false} style={{ fontFamily: font.tile, fontSize: v >= 100 ? 13 : v >= 10 ? 16 : 19, includeFontPadding: false, color: c.ink[rk] }}>
             {v}
           </Text>
         ) : null}
@@ -749,34 +759,30 @@ function SquareButton({ label, gap, onPress, children }: { label: string; gap: n
   );
 }
 
-/** One sweep layer under the board: a black slab while the sweep is in hand,
-    an empty outline once it is spent. */
-function Plate({ on, k, dir, h, delay }: { on: boolean; k: number; dir: Dir; h: number; delay: number }) {
+/** One sweep, set into the board's bottom edge: yellow while in hand. */
+function Inlay({ on, k, dir, w, delay }: { on: boolean; k: number; dir: Dir; w: number; delay: number }) {
   const { c } = useTheme();
-  const [w, setW] = useState(0);
   const x = useSharedValue(on ? 0 : 1);
   const y = useSharedValue(0);
   const first = useRef(true);
   useEffect(() => {
     if (first.current) return void (first.current = false);
     if (on) {
-      // Back with a new tray: slides in from the left, one after the other.
-      x.value = -1;
+      // Set back with a new tray: grows in from the left, one after the other.
       y.value = 0;
-      x.value = withDelay(delay + k * 80, withTiming(0, back(320, 1.6)));
+      x.value = -1;
+      x.value = withDelay(delay + k * 90, withTiming(0, back(300, 1.8)));
     } else {
       const [ux, uy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
-      x.value = withTiming(ux, { duration: 220, easing: Easing.in(Easing.quad) });
-      y.value = withTiming(uy, { duration: 220, easing: Easing.in(Easing.quad) });
+      x.value = withTiming(ux || 1, { duration: 200, easing: Easing.in(Easing.quad) });
+      y.value = withTiming(uy, { duration: 200, easing: Easing.in(Easing.quad) });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on]);
-  const st = useAnimatedStyle(() => ({ transform: [{ translateX: x.value * w }, { translateY: y.value * h * 2 }] }));
+  const st = useAnimatedStyle(() => ({ transform: [{ translateX: x.value * w }, { translateY: y.value * 12 }] }));
   return (
-    <View
-      onLayout={(e) => setW(e.nativeEvent.layout.width)}
-      style={{ height: h, overflow: 'hidden', borderWidth: 2, borderColor: on ? c.line : c.faint }}>
-      <Animated.View style={[{ position: 'absolute', left: -2, right: -2, top: -2, bottom: -2, backgroundColor: c.line }, st]} />
+    <View style={{ width: w, overflow: 'hidden' }}>
+      <Animated.View style={[{ flex: 1, backgroundColor: c.tile[3] }, st]} />
     </View>
   );
 }
