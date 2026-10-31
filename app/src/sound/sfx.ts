@@ -128,11 +128,7 @@ export const fx = {
   merge: (value: number) => {
     const r = rungOf(value);
     play(`merge-${r}` as SoundName);
-    // The hand feels the rung: light for 3 and 6, medium for 12 and 24,
-    // heavy for 48, and 96 adds the success pattern on top.
-    const S = Haptics.ImpactFeedbackStyle;
-    buzz(() => Haptics.impactAsync(r >= 7 ? S.Heavy : r >= 5 ? S.Medium : S.Light));
-    if (r >= 8) buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+    buzz(() => Haptics.impactAsync(r >= 6 ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Soft));
   },
   /** A chain: each step one beat after the last, so it climbs audibly. */
   cascade: (values: number[], beat = 120) => {

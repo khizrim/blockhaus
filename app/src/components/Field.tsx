@@ -5,7 +5,6 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
@@ -18,16 +17,14 @@ import { font, mix, rank } from '@/design/tokens';
 /* The one drawing used everywhere: the board, pieces in the tray, the logo,
    tutorial diagrams. Tiles of one value that touch read as one field. Each
    cell is drawn inset from its own square on the sides that face another
-   field, and flush on sides that continue its own, so a field is one
-   unbroken block of colour. */
+   field, and flush on sides that continue its own, where a thin fold is drawn
+   instead. */
 
 export type CellLook = {
   /** Faded into the canvas: not a partner of the held piece. */
   dim?: boolean;
   /** Where a held piece would land, hatched in its colour. */
   ghost?: number;
-  /** A suggested move: an outline in this value's colour that breathes. */
-  mark?: number;
   /** About to be absorbed by a merge: canvas frame inside. */
   absorb?: boolean;
   /** Bumped to replay the merge pop on this cell. */
@@ -151,23 +148,6 @@ type CellProps = {
   palette: ReturnType<typeof useTheme>['c'];
 };
 
-const sameLook = (a?: CellLook, b?: CellLook) =>
-  a === b ||
-  (!!a && !!b && a.dim === b.dim && a.ghost === b.ghost && a.mark === b.mark && a.absorb === b.absorb &&
-    a.pop === b.pop && a.land === b.land && a.shadow === b.shadow && a.enterDelay === b.enterDelay) ||
-  (!a && !!b && !b.dim && !b.ghost && !b.mark && !b.absorb && !b.pop && !b.land && !b.shadow && b.enterDelay === undefined) ||
-  (!b && !!a && !a.dim && !a.ghost && !a.mark && !a.absorb && !a.pop && !a.land && !a.shadow && a.enterDelay === undefined);
-
-/* Only redraw a cell when something about it changed: the board re-renders on
-   every frame of a chain, and 36 cells redrawn each time stutter on a phone. */
-const cellEqual = (a: CellProps, b: CellProps) => {
-  for (const k of Object.keys(a) as (keyof CellProps)[]) {
-    if (k === 'look') continue;
-    if (a[k] !== b[k]) return false;
-  }
-  return sameLook(a.look, b.look);
-};
-
 const Cell = memo(function Cell(p: CellProps) {
   const { v, cell, hg, palette: c, look } = p;
   const rk = rank(v);
@@ -251,33 +231,27 @@ const Cell = memo(function Cell(p: CellProps) {
           anim,
         ]}>
         {look?.ghost ? <Hatch color={c.tile[rank(look.ghost)]} base={c.canvas} /> : null}
-        {/* About to be eaten: the tile pales, a canvas band inside its edge. */}
+        {/* Folds on the left and top edge only, so two cells never double one up. */}
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderLeftWidth: p.l ? 1 : 0,
+              borderTopWidth: p.t ? 1 : 0,
+              borderColor: c.fold,
+            },
+          ]}
+        />
         {look?.absorb ? (
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: Math.max(3, p.gap / 2), borderColor: c.canvas }]} />
+          <View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { borderWidth: p.gap, borderColor: c.canvas }]}>
+            <View style={[StyleSheet.absoluteFill, { borderWidth: 2, borderColor: c.line }]} />
+          </View>
         ) : null}
-        {look?.mark ? <Mark color={c.tile[rank(look.mark)]} width={Math.max(4, p.gap)} /> : null}
         {v > 0 ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF' }, flashStyle]} /> : null}
-        {/* Where two lines meet at an inside corner of a field, the joint square
-            belongs to the line, or the line steps sideways there. */}
-        {p.t && p.l && !p.tl ? corner({ left: 0, top: 0 }) : null}
-        {p.t && p.r && !p.tr ? corner({ right: 0, top: 0 }) : null}
-        {p.b && p.l && !p.bl ? corner({ left: 0, bottom: 0 }) : null}
-        {p.b && p.r && !p.br ? corner({ right: 0, bottom: 0 }) : null}
-      </Animated.View>
-      {/* Seam covers: where the field continues right or down, a one-point
-          strip of the fill straddles the edge, limited to where both cells
-          are filled. On fractional pixel positions two abutting views leave
-          a hairline of the line colour between them; this closes it. */}
-      {p.r && !look?.shadow ? (
-        <View pointerEvents="none" style={{ position: 'absolute', left: cell - 0.5, width: 1, top: p.t && p.tr ? 0 : hg, bottom: p.b && p.br ? 0 : hg, backgroundColor: fill }} />
-      ) : null}
-      {p.b && !look?.shadow ? (
-        <View pointerEvents="none" style={{ position: 'absolute', top: cell - 0.5, height: 1, left: p.l && p.bl ? 0 : hg, right: p.r && p.br ? 0 : hg, backgroundColor: fill }} />
-      ) : null}
-      {/* The number is centred on the whole cell square, not on the inset
-          fill, so numbers in one field sit on one line. */}
-      {p.numbers && v > 0 && !look?.shadow ? (
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }, anim]}>
+        {p.numbers && v > 0 ? (
           <Animated.View style={numStyle}>
             <Text
               allowFontScaling={false}
@@ -285,39 +259,35 @@ const Cell = memo(function Cell(p: CellProps) {
                 color: ink,
                 fontFamily: font.tile,
                 fontSize: Math.max(12, Math.round(cell * (long ? 0.28 : v >= 10 ? 0.34 : 0.4))),
+                fontVariant: ['tabular-nums'],
                 includeFontPadding: false,
               }}>
               {v}
             </Text>
           </Animated.View>
-        </Animated.View>
-      ) : null}
+        ) : null}
+        {/* Where two lines meet at an inside corner of a field, the joint square
+            belongs to the line, or the line steps sideways there. */}
+        {p.t && p.l && !p.tl ? corner({ left: 0, top: 0 }) : null}
+        {p.t && p.r && !p.tr ? corner({ right: 0, top: 0 }) : null}
+        {p.b && p.l && !p.bl ? corner({ left: 0, bottom: 0 }) : null}
+        {p.b && p.r && !p.br ? corner({ right: 0, bottom: 0 }) : null}
+      </Animated.View>
     </View>
   );
-}, cellEqual);
+});
 
 function Hatch({ color, base }: { color: string; base: string }) {
   const id = 'h' + useId().replace(/[^a-zA-Z0-9]/g, '');
   return (
     <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
       <Defs>
-        <Pattern id={id} width={8} height={8} patternUnits="userSpaceOnUse">
-          <Rect width={8} height={8} fill={mix(color, base, 0.45)} />
-          <Rect width={8} height={4} fill={color} />
+        <Pattern id={id} width={10} height={10} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <Rect width={10} height={10} fill={mix(color, base, 0.45)} />
+          <Rect width={5} height={10} fill={color} />
         </Pattern>
       </Defs>
       <Rect width="100%" height="100%" fill={`url(#${id})`} />
     </Svg>
   );
-}
-
-/** The suggested-move outline: a band in the tile colour that breathes. */
-function Mark({ color, width }: { color: string; width: number }) {
-  const o = useSharedValue(1);
-  useEffect(() => {
-    o.value = withRepeat(withSequence(withTiming(0.45, { duration: 500 }), withTiming(1, { duration: 500 })), -1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const st = useAnimatedStyle(() => ({ opacity: o.value }));
-  return <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: width, borderColor: color }, st]} />;
 }

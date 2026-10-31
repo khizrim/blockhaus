@@ -49,7 +49,7 @@ function Navigator() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'fade' }}>
         <Stack.Screen name="index" />
-        <Stack.Screen name="game" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="game" />
         <Stack.Screen name="settings" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="howto" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="kit" options={{ animation: 'slide_from_right' }} />

@@ -246,11 +246,10 @@
     return false;
   }
 
-  /** The game ends when no unused piece fits and no sweep is left that would
-      move anything. A sweep can rearrange the board so a piece fits again, so
-      while one is in hand and it would move tiles, the game goes on. */
-  const canSweep = g => g.sweeps > 0 && ['left', 'right', 'up', 'down'].some(d => applySweep(g.board.slice(), d).moved);
-  const anyMove = g => g.tray.some(p => p && !p.used && canPlaceAnywhere(g.board, p)) || canSweep(g);
+  /** The game ends when no unused piece fits. Sweeps are not counted as a way
+      out: a sweep never empties a cell unless it merges, and a full board
+      with a pair on it is rare enough that the prototype never counted it. */
+  const anyMove = g => g.tray.some(p => p && !p.used && canPlaceAnywhere(g.board, p));
 
   function score(g, levels) {
     for (const lvl of levels) {
@@ -327,6 +326,6 @@
     N, SHAPES: S, ORIGINAL, DEFAULTS, ORIGINAL_SHAPES,
     pairs, merged, rank, idx, neighbours, size, fits, pieceValue,
     applyPlacement, applySweep, lanes, chanceOfOnes, deal, dealTray,
-    newGame, place, sweep, anyMove, canSweep, canPlaceAnywhere, seeded,
+    newGame, place, sweep, anyMove, canPlaceAnywhere, seeded,
   };
 });

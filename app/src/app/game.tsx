@@ -1,14 +1,14 @@
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Field, type CellLook } from '@/components/Field';
 import { Overlay } from '@/components/Overlay';
-import { Body, Button, Heading, Label, Panel, PauseIcon, Screen } from '@/components/ui';
+import { Body, Button, Heading, IconButton, Label, Panel, PauseIcon, Screen, TextLink, TileBadge } from '@/components/ui';
 import { pieceGrid } from '@/design/mock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { dur, enter, HIT, space, type, useCalm } from '@/design/system';
+import { dur, enter, exit, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Piece } from '@/game/engine';
@@ -24,8 +24,8 @@ import { fx } from '@/sound/sfx';
 
 const N = engine.N;
 const STEP = 150; // ms between merges of a chain
-const FLY = 140; // ms for an absorbed tile to fly into its partner
-
+const FLY = 110; // ms for an absorbed tile to fly into its partner
+const PLATE = 6; // px each sweep layer shows under the board
 const back = (d: number, k = 1.8) => ({ duration: d, easing: Easing.out(Easing.back(k)) });
 
 // On the web a drag would otherwise select the numbers.
@@ -37,10 +37,10 @@ const SLIDE = dur.base; // ms for tiles to travel in a sweep
 type Hold = { slot: number; piece: Piece };
 
 /** The placement that merges the most, as [cell, value] pairs to hatch. */
-function bestMove(g: { board: number[]; tray: (Piece | null)[] }): { slot: number; cells: [number, number][] } | null {
-  let top: { slot: number; cells: [number, number][] } | null = null;
+function bestMove(g: { board: number[]; tray: (Piece | null)[] }): [number, number][] | null {
+  let top: [number, number][] | null = null;
   let most = 0;
-  for (const [slot, p] of g.tray.entries()) {
+  for (const p of g.tray) {
     if (!p || p.used) continue;
     const { w, h } = engine.size(p);
     for (let y = 0; y <= N - h; y++)
@@ -49,7 +49,7 @@ function bestMove(g: { board: number[]; tray: (Piece | null)[] }): { slot: numbe
         const n = engine.applyPlacement(g.board.slice(), p, x, y).steps.length;
         if (n > most) {
           most = n;
-          top = { slot, cells: p.cells.map(([cx, cy, v]) => [(y + cy) * N + x + cx, v] as [number, number]) };
+          top = p.cells.map(([cx, cy, v]) => [(y + cy) * N + x + cx, v] as [number, number]);
         }
       }
   }
@@ -78,15 +78,11 @@ export default function Game() {
   const [shown, setShown] = useState<number[]>(() => g.board.slice());
   /* A hint is shown, not told: after a long pause the board hatches one good
      move, once per game. */
-  const [nudge, setNudge] = useState<{ slot: number; cells: [number, number][] } | null>(null);
+  const [nudge, setNudge] = useState<[number, number][] | null>(null);
   const idleShown = useRef(0);
   const [flights, setFlights] = useState<{ id: string; m: Move; ms: number }[]>([]);
   const [floats, setFloats] = useState<{ id: string; at: number; v: number }[]>([]);
   const [returning, setReturning] = useState<number | null>(null);
-  // The score as the board shows it: it climbs one merge at a time with the chain.
-  const [shownScore, setShownScore] = useState<number | null>(null);
-  // A new tray and its sweeps arrive when the chain that emptied the old one ends.
-  const refillDelay = useRef(0);
   const [pops, setPops] = useState<Record<number, number>>({});
   const [lands, setLands] = useState<Record<number, number>>({});
   const [hold, setHold] = useState<Hold | null>(null);
@@ -100,19 +96,9 @@ export default function Game() {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const later = (ms: number, f: () => void) => timers.current.push(setTimeout(f, ms));
-  /* A new move ends the last one at once: pending frames are dropped and
-     everything in flight is cleared, so nothing is left stuck on the board.
-     The board itself jumps to the game's position. */
   const settle = () => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
-    setFlights([]);
-    setFloats([]);
-    setSliding(null);
-    setShownScore(null);
-    setReturning(null);
-    setHeld(null);
-    setNudge(null);
   };
   useEffect(() => settle, []);
 
@@ -134,31 +120,23 @@ export default function Game() {
   // Sizing: the board takes the width, but leaves the tray within thumb reach.
   const ins = useSafeAreaInsets();
   const inner = Math.min(width, 440) - 32;
-  // Even, so the half gaps on either side of a cell land on whole points.
-  const gap = 2 * Math.round(Math.min(3.5, Math.max(2.5, width * 0.0075)));
+  const gap = Math.round(Math.min(7, Math.max(5, width * 0.015)));
   // Tray cells follow the width (three slots, a three-cell piece in each with room).
   const trayCell = Math.max(24, Math.min(40, Math.floor(inner / 3 / 3.3)));
   /* The board takes what is left of the height after the fixed parts:
      header 64, the lesson card when there is one, the tray, and the 8pt
      paddings around them. Never wider than the screen, never under 240. */
-  const plate = gap * 2; // the board's bottom edge, which holds the sweeps
-  const chrome =
-    ins.top + space.sm + ins.bottom + space.lg + // screen paddings
-    64 + space.lg + // header and its gap to the board
-    (store.lesson !== null ? 112 : 0) +
-    plate + // the board's thick bottom edge
-    space.lg + trayCell * 3 + space.lg; // gap, tray
+  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null ? 120 : 0) + 18 + trayCell * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
-  // Everything lines up on the board's own edges.
-  const boardW = cell * N + gap;
 
   /** After the animation of a move: the win, or the end, if either happened. */
   const afterMove = (ms: number) => {
     if (store.lesson !== null) return lessonCheck(ms);
-    if (g.won && !store.winSeen) later(ms + 250, () => router.push('/win'));
-    // The end waits a beat: the board rests, the tray shows nothing fits.
-    else if (g.over) later(ms + 1000, () => router.push('/over'));
+    later(ms + 250, () => {
+      if (g.won && !store.winSeen) router.push('/win');
+      else if (g.over) router.push('/over');
+    });
   };
 
   /** In a lesson: the step is done when its result is on the board; a move
@@ -219,20 +197,9 @@ export default function Game() {
   const fitAt = useCallback(
     (p: Piece, px: number, py: number) => {
       const pad = gap / 2;
-      const fx_ = (px - boardAt.current.x - pad) / cell;
-      const fy_ = (py - boardAt.current.y - pad) / cell;
-      // The nearest spot where it fits, if one is within about half a cell.
-      let bestD = 0.65;
-      let out: { gx: number; gy: number } | null = null;
-      for (let gy = Math.floor(fy_); gy <= Math.ceil(fy_); gy++)
-        for (let gx = Math.floor(fx_); gx <= Math.ceil(fx_); gx++) {
-          const d = Math.hypot(gx - fx_, gy - fy_);
-          if (d < bestD && engine.fits(g.board, p, gx, gy)) {
-            bestD = d;
-            out = { gx, gy };
-          }
-        }
-      return out;
+      const gx = Math.round((px - boardAt.current.x - pad) / cell);
+      const gy = Math.round((py - boardAt.current.y - pad) / cell);
+      return engine.fits(g.board, p, gx, gy) ? { gx, gy } : null;
     },
     [g, cell, gap],
   );
@@ -261,16 +228,9 @@ export default function Game() {
   const move = (pageX: number, pageY: number) => {
     if (!holdRef.current) return;
     const { ox, oy } = pieceOffset(holdRef.current.piece);
+    dx.value = pageX - ox;
+    dy.value = pageY - oy;
     const t = fitAt(holdRef.current.piece, pageX - ox, pageY - oy);
-    if (t) {
-      // Over a spot that takes it, the piece settles into the cells it will fill.
-      const pad = gap / 2;
-      dx.value = withTiming(boardAt.current.x + pad + t.gx * cell, { duration: 60 });
-      dy.value = withTiming(boardAt.current.y + pad + t.gy * cell, { duration: 60 });
-    } else {
-      dx.value = pageX - ox;
-      dy.value = pageY - oy;
-    }
     setTarget((prev) => (prev?.gx === t?.gx && prev?.gy === t?.gy ? prev : t));
   };
 
@@ -297,10 +257,9 @@ export default function Game() {
     lift.value = 0;
     settle();
     const before = g.board.slice();
-    let score = g.score;
     const res = store.place(h.slot, t.gx, t.gy);
     if (!res) return;
-    if (res.steps.length) setShownScore(score);
+    if (res.refilled) trayId.current++;
 
     // Frame 0: the piece laid. Then one frame per merge of the chain.
     const frame = before.slice();
@@ -328,23 +287,14 @@ export default function Game() {
         setShown(snap);
         setFlights((f) => f.filter((x) => !st.absorbed.some((a) => x.m.from === a)));
         setPops((pp) => ({ ...pp, [st.anchor]: Date.now() }));
-        setShownScore((score += st.level));
         fx.merge(st.level);
         float(st.anchor, st.level);
         thump(st.level);
       });
     });
     const done = 90 + Math.max(0, res.steps.length - 1) * STEP + (res.steps.length ? FLY : 0);
-    later(done + 20, () => {
-      setShown(g.board.slice());
-      setShownScore(null);
-    });
-    refillDelay.current = 0;
-    if (res.refilled) {
-      trayId.current++;
-      refillDelay.current = done;
-      later(done, () => fx.tray());
-    }
+    later(done + 20, () => setShown(g.board.slice()));
+    if (res.refilled) later(done + 120, () => fx.tray());
     afterMove(done);
   };
 
@@ -376,14 +326,16 @@ export default function Game() {
     (i: number): CellLook | undefined => {
       const l: CellLook = { pop: pops[i], land: lands[i] };
       if (!hold && nudge) {
-        const h = nudge.cells.find(([at]) => at === i);
-        if (h && shown[i] === 0) l.mark = h[1];
+        const h = nudge.find(([at]) => at === i);
+        if (h && shown[i] === 0) l.ghost = h[1];
       }
       if (!hold && lesson?.hint && coach === 'task') {
         const h = lesson.hint.find(([at]) => at === i);
         if (h && shown[i] === 0) l.ghost = h[1];
       }
       if (hold) {
+        const pv = hold.piece.cells[0][2];
+        if (shown[i] > 0 && !engine.pairs(pv, shown[i])) l.dim = true;
         if (target) {
           const x = i % N;
           const y = (i / N) | 0;
@@ -436,50 +388,39 @@ export default function Game() {
     const before = g.board.slice();
     const moves = slideMoves(before, dir);
     lastDir.current = dir;
-    const score = g.score;
     const res = store.sweep(dir);
     if (!res) {
       fx.invalid();
       shake();
       return;
     }
-    setShownScore(score);
+    fx.sweep();
     setShown(new Array(N * N).fill(0));
     setSliding({ moves, id: Date.now() });
-    /* Everything happens when the tiles hit the wall: the thud, the merges
-       where two tiles met, their points, and the board's knock. */
     later(SLIDE, () => {
       setSliding(null);
       setShown(g.board.slice());
-      setShownScore(null);
-      fx.sweep();
-      const now = Date.now();
-      setPops((pp) => ({ ...pp, ...Object.fromEntries(res.made.map((m) => [m.at, now])) }));
-      res.made.forEach((m) => float(m.at, m.level));
-      if (res.made.length) {
-        const top = Math.max(...res.made.map((m) => m.level));
-        fx.merge(top);
-        thump(top);
-      }
       // The board meets the wall it was pushed against.
       const [ux, uy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
       sx.value = withSequence(withTiming(ux * 5, { duration: 50 }), withTiming(0, back(240, 2.5)));
       sy.value = withSequence(withTiming(uy * 5, { duration: 50 }), withTiming(0, back(240, 2.5)));
     });
-    afterMove(SLIDE + 100);
+    res.made.forEach((m, k) =>
+      later(SLIDE + k * STEP, () => {
+        setPops((pp) => ({ ...pp, [m.at]: Date.now() }));
+        fx.merge(m.level);
+        float(m.at, m.level);
+        thump(m.level);
+      }),
+    );
+    afterMove(SLIDE + res.made.length * STEP);
   };
 
   const sweepRef = useRef(sweep);
   sweepRef.current = sweep;
-  // With no sweep in hand the board is stiff: it barely gives under the finger.
-  const looseRef = useRef(true);
-  looseRef.current = g.sweeps > 0 && !g.over;
   const swipe = useMemo(() => {
     const axis = (dx: number, dy: number) => (Math.abs(dx) > Math.abs(dy) ? 'x' : 'y');
-    const lean = (d: number) => {
-      const m = looseRef.current ? 8 : 2;
-      return Math.max(-m, Math.min(m, d * (looseRef.current ? 0.1 : 0.03)));
-    };
+    const lean = (d: number) => Math.max(-8, Math.min(8, d * 0.1));
     return PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) + Math.abs(gs.dy) > 8,
@@ -495,7 +436,7 @@ export default function Game() {
       onPanResponderRelease: (_, gs) => {
         const x = axis(gs.dx, gs.dy) === 'x';
         const d = x ? gs.dx : gs.dy;
-        if (Math.abs(d) < Math.max(SWIPE, cell * 0.5)) {
+        if (Math.abs(d) < SWIPE) {
           sx.value = withTiming(0, enter(dur.fast));
           sy.value = withTiming(0, enter(dur.fast));
           return;
@@ -508,147 +449,135 @@ export default function Game() {
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cell]);
+  }, []);
 
   // After a long pause in a normal game, hatch one move that merges.
-  // Only while this screen is in front: not under pause or a dialog.
-  const [focused, setFocused] = useState(true);
-  useFocusEffect(
-    useCallback(() => {
-      setFocused(true);
-      return () => setFocused(false);
-    }, []),
-  );
   useEffect(() => {
-    if (!focused || !hints || store.lesson !== null || g.over || hold || idleShown.current >= 2) return;
+    if (!hints || store.lesson !== null || g.over || hold || idleShown.current >= 1) return;
     const id = setTimeout(() => {
       const m = bestMove(g);
       if (!m) return;
       idleShown.current++;
       setNudge(m);
-      later(4000, () => setNudge(null));
-    }, idleShown.current ? 30000 : 15000);
+      later(3000, () => setNudge(null));
+    }, 15000);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store.version, hold, store.lesson, hints, focused, nudge]);
+  }, [store.version, hold, store.lesson, hints]);
 
   // While tiles are in flight the board under them is empty; keep the last best.
   const bestRef = useRef(0);
   if (!sliding) bestRef.current = Math.max(...shown, 0);
   const best = bestRef.current;
 
-  const fits = (p: Piece | null) => !!p && !p.used && engine.canPlaceAnywhere(g.board, p);
-
   return (
     <View style={[{ flex: 1 }, noSelect]}>
       <Screen>
-        {/* One column exactly as wide as the board, so every edge lines up with it. */}
-        <View style={{ flex: 1, width: boardW, alignSelf: 'center' }}>
-          {/* header: the score leads, the best tile is the progress, pause on the right */}
-          {/* Two stats on one baseline, labels over them; pause on the right. */}
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-            <View style={{ flex: 1 }}>
-              <Label meta>Очки</Label>
-              <Text allowFontScaling={false} style={[type.number, { color: c.text }]} accessibilityLabel={`Очки: ${g.score}`}>
-                {(shownScore ?? g.score).toLocaleString('ru-RU')}
-              </Text>
-            </View>
-            {lesson || !best ? null : (
-              <View style={{ marginRight: space.xl }}>
-                <Label meta>Лучшая</Label>
-                <BestTile v={best} gap={gap} />
-              </View>
-            )}
-            <SquareButton label="Пауза" gap={gap} onPress={() => router.push('/pause')}>
-              <PauseIcon color={c.text} />
-            </SquareButton>
+        {/* header: the score leads, the best tile is the progress, pause on the right */}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+          <View>
+            <Label meta>Очки</Label>
+            <Text allowFontScaling={false} style={[type.number, { color: c.text }]} accessibilityLabel={`Очки: ${g.score}`}>
+              {g.score.toLocaleString('ru-RU')}
+            </Text>
           </View>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.lg }}>
+            <View style={{ alignItems: 'flex-end', gap: space.xs }}>
+              <Label meta>Лучшая</Label>
+              <BestTile v={best} />
+            </View>
+            <IconButton label="Пауза" onPress={() => router.push('/pause')}>
+              <PauseIcon color={c.text} />
+            </IconButton>
+          </View>
+        </View>
 
-          {/* The free height is split 3:2 above and below the board, so the
-              board and the tray read as one group without crowding. */}
-          <View style={{ flex: 1, paddingTop: space.lg }}>
-            <View style={{ flex: 3 }} />
-            {lesson ? (
-              <View style={{ marginBottom: space.lg }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Label meta>{`Обучение · ${(store.lesson ?? 0) + 1} из ${LESSONS.length}`}</Label>
-                  <Pressable accessibilityRole="button" onPress={skipLessons} hitSlop={12}>
-                    <Text style={[type.secondary, { color: c.muted }]}>Пропустить</Text>
-                  </Pressable>
-                </View>
-                <Heading level="title">{coach === 'done' ? 'Получилось' : coach === 'retry' ? 'Ещё раз' : lesson.title}</Heading>
-                <Body muted small style={{ marginTop: space.xs }}>
-                  {coach === 'done' ? lesson.done : coach === 'retry' ? 'Пары не вышло. Ставим заново.' : lesson.text}
-                </Body>
+        {/* the board, centred in the free height; a hint floats over its foot when there is one */}
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: space.lg }}>
+          {lesson ? (
+            <View style={{ width: boardSize, marginBottom: space.lg, minHeight: 104 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Label meta>{`Обучение · ${(store.lesson ?? 0) + 1} из ${LESSONS.length}`}</Label>
+                <TextLink label="Пропустить" onPress={skipLessons} />
               </View>
-            ) : null}
-            <Animated.View style={boardStyle} {...swipe.panHandlers}>
-              <View
-                ref={boardRef}
-                onLayout={measureBoard}
-                collapsable={false}
-                accessible
-                accessibilityLabel={`Доска 6 на 6. Сдвигов осталось: ${g.sweeps}`}
-                accessibilityActions={[
-                  { name: 'left', label: 'Сдвиг влево' },
-                  { name: 'right', label: 'Сдвиг вправо' },
-                  { name: 'up', label: 'Сдвиг вверх' },
-                  { name: 'down', label: 'Сдвиг вниз' },
-                ]}
-                onAccessibilityAction={(e) => sweep(e.nativeEvent.actionName as Dir)}>
-                <Field w={N} h={N} values={values} cell={cell} gap={gap} look={look} />
-                {sliding ? (
-                  <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-                    {sliding.moves.map((m) => (
-                      <SlidingTile key={`${sliding.id}-${m.from}`} m={m} cell={cell} gap={gap} />
-                    ))}
-                  </View>
-                ) : null}
+              <Heading level="heading">{coach === 'done' ? 'Получилось' : coach === 'retry' ? 'Ещё раз' : lesson.title}</Heading>
+              <Body muted small style={{ marginTop: space.xs }}>
+                {coach === 'done' ? lesson.done : coach === 'retry' ? 'Пары не вышло. Ставим заново.' : lesson.text}
+              </Body>
+            </View>
+          ) : null}
+          <Animated.View style={boardStyle} {...swipe.panHandlers}>
+            <View
+              ref={boardRef}
+              onLayout={measureBoard}
+              collapsable={false}
+              accessibilityLabel="Доска. Смахните, чтобы сдвинуть"
+              accessibilityActions={[
+                { name: 'left', label: 'Сдвиг влево' },
+                { name: 'right', label: 'Сдвиг вправо' },
+                { name: 'up', label: 'Сдвиг вверх' },
+                { name: 'down', label: 'Сдвиг вниз' },
+              ]}
+              onAccessibilityAction={(e) => sweep(e.nativeEvent.actionName as Dir)}>
+              <Field w={N} h={N} values={values} cell={cell} gap={gap} look={look} />
+              {sliding ? (
                 <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-                  {flights.map((f) => (
-                    <SlidingTile key={f.id} m={f.m} cell={cell} gap={gap} ms={f.ms} />
-                  ))}
-                  {floats.map((f) => (
-                    <Float key={f.id} at={f.at} v={f.v} cell={cell} gap={gap} />
+                  {sliding.moves.map((m) => (
+                    <SlidingTile key={`${sliding.id}-${m.from}`} m={m} cell={cell} gap={gap} />
                   ))}
                 </View>
-              </View>
-              {/* The sweeps are set into the board's frame: its bottom edge is
-                  thicker and carries one yellow block per sweep in hand, the way
-                  Mondrian lets colour into a line. A swipe knocks one out the
-                  way the board went, and the line closes over it; a new tray
-                  sets them back. */}
-              <View
-                pointerEvents="none"
-                style={{ height: plate, backgroundColor: c.line, flexDirection: 'row', justifyContent: 'flex-end', gap, paddingRight: gap / 2, paddingBottom: gap / 2 }}>
-                {[1, 0].map((k) => (
-                  <Inlay key={k} on={g.sweeps > k} k={k} dir={lastDir.current} w={Math.round(cell / 2)} delay={refillDelay.current} />
+              ) : null}
+              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                {flights.map((f) => (
+                  <SlidingTile key={f.id} m={f.m} cell={cell} gap={gap} ms={f.ms} />
+                ))}
+                {floats.map((f) => (
+                  <Float key={f.id} at={f.at} v={f.v} cell={cell} gap={gap} />
                 ))}
               </View>
-            </Animated.View>
-            <View style={{ flex: 2 }} />
-          </View>
-
-          {/* tray: bare paper, three slots under the board's columns */}
-          <View style={{ height: trayCell * 3 + space.lg, marginTop: space.sm, flexDirection: 'row' }}>
-            {g.tray.map((p, slot) => (
-              <View
-                key={slot}
-                {...responders[slot].panHandlers}
-                accessibilityLabel={p && !p.used ? `Фигура ${slot + 1}${fits(p) ? '' : ', не помещается'}` : `Пустой слот ${slot + 1}`}
-                style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: space.sm }}>
-                {p ? (
-                  <TrayPiece
-                    key={`${trayId.current}-${slot}-${JSON.stringify(p.cells)}`}
-                    delay={refillDelay.current + slot * 70}
-                    pulse={nudge?.slot === slot && !hold}
-                    opacity={p.used || hold?.slot === slot || returning === slot ? 0 : fits(p) ? 1 : 0.25}>
-                    <Field variant="piece" {...pieceGrid(p)} cell={trayCell} gap={gap} />
-                  </TrayPiece>
-                ) : null}
-              </View>
+            </View>
+          </Animated.View>
+          {/* The sweeps are the board's thickness: one layer under it per
+              sweep left. A sweep pulls a layer out the way the board went; a
+              new tray slides them back in. */}
+          <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: boardSize, alignItems: 'center' }}>
+            {[0, 1].map((k) => (
+              <Plate key={k} on={g.sweeps > k} k={k} dir={lastDir.current} width={boardSize - 2 * (k + 1) * space.sm} />
             ))}
           </View>
+        </View>
+
+        {/* tray: an L1 surface with three slots */}
+        <View
+          style={{
+            height: trayCell * 3 + space.xxl,
+            flexDirection: 'row',
+            backgroundColor: c.surface,
+            borderWidth: 1,
+            borderColor: c.hair,
+          }}>
+          {g.tray.map((p, slot) => (
+            <View
+              key={slot}
+              {...responders[slot].panHandlers}
+              accessibilityLabel={p && !p.used ? `Фигура ${slot + 1}` : `Пустой слот ${slot + 1}`}
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderLeftWidth: slot ? 1 : 0,
+                borderColor: c.hair,
+              }}>
+              {p ? (
+                <TrayPiece
+                  key={`${trayId.current}-${slot}-${JSON.stringify(p.cells)}`}
+                  delay={slot * 70}
+                  opacity={p.used || hold?.slot === slot || returning === slot ? 0 : g.over ? 0.35 : 1}>
+                  <Field variant="piece" {...pieceGrid(p)} cell={trayCell} gap={gap} />
+                </TrayPiece>
+              ) : null}
+            </View>
+          ))}
         </View>
       </Screen>
 
@@ -658,7 +587,7 @@ export default function Game() {
             <Panel>
               <Heading>Цель: собрать 96</Heading>
               <Body muted style={{ marginTop: space.sm }}>
-                Лесенка: 3, 6, 12, 24, 48, 96. Партия кончается, когда ни одна фигура из лотка не встаёт на доску и сдвиг уже не помогает. Держите место и пары.
+                Лесенка: 3, 6, 12, 24, 48, 96. Партия кончается, когда ни одна фигура из лотка не встаёт на доску, так что держите место и пары.
               </Body>
               <View style={{ marginTop: space.xl }}>
                 <Button kind="primary" size="lg" label="Начать игру" onPress={skipLessons} />
@@ -688,7 +617,7 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
   const b = at(m.to);
   const k = useSharedValue(0);
   useEffect(() => {
-    k.value = withTiming(1, ms === SLIDE ? enter(ms) : { duration: ms, easing: Easing.inOut(Easing.quad) });
+    k.value = withTiming(1, ms === SLIDE ? enter(ms) : { duration: ms, easing: Easing.in(Easing.quad) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const st = useAnimatedStyle(() => ({
@@ -698,7 +627,7 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
   return (
     <Animated.View
       style={[
-        { position: 'absolute', left: -0.5, top: -0.5, width: cell + 1, height: cell + 1, padding: pad + 0.5, backgroundColor: c.line },
+        { position: 'absolute', left: 0, top: 0, width: cell, height: cell, padding: pad, backgroundColor: c.line },
         st,
       ]}>
       <View style={{ flex: 1, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center' }}>
@@ -708,6 +637,7 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
             color: c.ink[rk],
             fontFamily: font.tile,
             fontSize: Math.max(12, Math.round(cell * (m.value >= 100 ? 0.28 : m.value >= 10 ? 0.34 : 0.4))),
+            fontVariant: ['tabular-nums'],
           }}>
           {m.value}
         </Text>
@@ -718,8 +648,9 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
 
 
 /** The best tile, drawn as a tile of the board: its fill inside the line. */
-function BestTile({ v, gap }: { v: number; gap: number }) {
+function BestTile({ v }: { v: number }) {
   const { c } = useTheme();
+  const size = 36;
   const rk = rank(v);
   const k = useSharedValue(1);
   const first = useRef(true);
@@ -732,10 +663,10 @@ function BestTile({ v, gap }: { v: number; gap: number }) {
   return (
     <Animated.View
       accessibilityLabel={v ? `Лучшая плитка ${v}` : 'Лучшей плитки пока нет'}
-      style={[{ width: HIT, height: HIT, padding: gap / 2, backgroundColor: c.line }, st]}>
+      style={[{ width: size, height: size, padding: 3, backgroundColor: c.line }, st]}>
       <View style={{ flex: 1, backgroundColor: v ? c.tile[rk] : c.canvas, alignItems: 'center', justifyContent: 'center' }}>
         {v ? (
-          <Text allowFontScaling={false} style={{ fontFamily: font.tile, fontSize: v >= 100 ? 13 : v >= 10 ? 16 : 19, includeFontPadding: false, color: c.ink[rk] }}>
+          <Text allowFontScaling={false} style={{ fontFamily: font.tile, fontSize: v >= 10 ? 14 : 16, color: c.ink[rk], fontVariant: ['tabular-nums'] }}>
             {v}
           </Text>
         ) : null}
@@ -744,91 +675,68 @@ function BestTile({ v, gap }: { v: number; gap: number }) {
   );
 }
 
-/** A square control in the board's material: canvas inside the line. */
-function SquareButton({ label, gap, onPress, children }: { label: string; gap: number; onPress: () => void; children: React.ReactNode }) {
+/** One sweep layer under the board. */
+function Plate({ on, k, dir, width }: { on: boolean; k: number; dir: Dir; width: number }) {
   const { c } = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={({ pressed }) => ({ width: HIT, height: HIT, padding: gap / 2, backgroundColor: c.line, opacity: pressed ? 0.7 : 1 })}>
-      <View style={{ flex: 1, backgroundColor: c.canvas, alignItems: 'center', justifyContent: 'center' }}>{children}</View>
-    </Pressable>
-  );
-}
-
-/** One sweep, set into the board's bottom edge: yellow while in hand. */
-function Inlay({ on, k, dir, w, delay }: { on: boolean; k: number; dir: Dir; w: number; delay: number }) {
-  const { c } = useTheme();
-  const x = useSharedValue(on ? 0 : 1);
+  const x = useSharedValue(0);
   const y = useSharedValue(0);
+  const o = useSharedValue(on ? 1 : 0);
   const first = useRef(true);
   useEffect(() => {
     if (first.current) return void (first.current = false);
     if (on) {
-      // Set back with a new tray: grows in from the left, one after the other.
-      y.value = 0;
-      x.value = -1;
-      x.value = withDelay(delay + k * 90, withTiming(0, back(300, 1.8)));
+      x.value = 0;
+      y.value = -PLATE * 2;
+      y.value = withDelay(k * 80, withTiming(0, back(300, 2.2)));
+      o.value = withDelay(k * 80, withTiming(1, { duration: 120 }));
     } else {
       const [ux, uy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
-      x.value = withTiming(ux || 1, { duration: 200, easing: Easing.in(Easing.quad) });
-      y.value = withTiming(uy, { duration: 200, easing: Easing.in(Easing.quad) });
+      x.value = withTiming(ux * 80, { duration: 220, easing: Easing.in(Easing.quad) });
+      y.value = withTiming(uy * 24, { duration: 220, easing: Easing.in(Easing.quad) });
+      o.value = withTiming(0, { duration: 220 });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on]);
-  const st = useAnimatedStyle(() => ({ transform: [{ translateX: x.value * w }, { translateY: y.value * 12 }] }));
-  return (
-    <View style={{ width: w, overflow: 'hidden' }}>
-      <Animated.View style={[{ flex: 1, backgroundColor: c.tile[3] }, st]} />
-    </View>
-  );
+  const st = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateX: x.value }, { translateY: y.value }] }));
+  return <Animated.View style={[{ width, height: PLATE, marginTop: k ? 2 : 4, backgroundColor: c.line }, st]} />;
 }
 
-/** "+N" rising from the cell where a merge happened: a small label in the
-    line's colour, square-cornered like everything on the board. */
+/** "+N" rising from the cell where a merge happened. */
 function Float({ at, v, cell, gap }: { at: number; v: number; cell: number; gap: number }) {
   const { c } = useTheme();
-  const calm = useCalm();
   const k = useSharedValue(0);
   useEffect(() => {
-    if (!calm) k.value = withTiming(1, { duration: 760, easing: Easing.out(Easing.cubic) });
+    k.value = withTiming(1, { duration: 760, easing: Easing.out(Easing.cubic) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const pad = gap / 2;
   const st = useAnimatedStyle(() => ({
     opacity: k.value < 0.6 ? 1 : 1 - (k.value - 0.6) / 0.4,
-    transform: [{ translateY: -k.value * cell * 0.5 }],
+    transform: [{ translateY: -k.value * cell * 0.7 }, { scale: 0.8 + Math.min(1, k.value * 4) * 0.2 }],
   }));
   return (
     <Animated.View
-      style={[{ position: 'absolute', left: pad + (at % N) * cell, top: pad + ((at / N) | 0) * cell - 4, width: cell, alignItems: 'center' }, st]}>
-      <View style={{ backgroundColor: c.line, paddingHorizontal: 4, paddingVertical: 1 }}>
-        <Text allowFontScaling={false} style={{ fontFamily: font.bodySemi, fontSize: v >= 24 ? 14 : 12, lineHeight: 16, color: c.canvas }}>
-          {`+${v}`}
-        </Text>
-      </View>
+      style={[
+        { position: 'absolute', left: pad + (at % N) * cell, top: pad + ((at / N) | 0) * cell - cell * 0.3, width: cell, alignItems: 'center' },
+        st,
+      ]}>
+      <Text
+        allowFontScaling={false}
+        style={{ fontFamily: font.tile, fontSize: Math.round(cell * (v >= 24 ? 0.34 : 0.28)), color: c.text, textShadowColor: c.canvas, textShadowRadius: 4 }}>
+        {`+${v}`}
+      </Text>
     </Animated.View>
   );
 }
 
-/** A tray piece. New ones spring in one after another; the suggested one
-    breathes. Own shared values, not `entering`, so Safari keeps their size. */
-function TrayPiece({ delay, opacity, pulse, children }: { delay: number; opacity: number; pulse?: boolean; children: React.ReactNode }) {
+/** A tray piece. New ones spring in one after another. Own shared values, not
+    `entering`, so Safari keeps their size. */
+function TrayPiece({ delay, opacity, children }: { delay: number; opacity: number; children: React.ReactNode }) {
   const k = useSharedValue(0);
-  const p = useSharedValue(1);
   useEffect(() => {
     k.value = withDelay(delay, withTiming(1, back(300, 2.2)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => {
-    p.value = pulse ? withRepeat(withSequence(withTiming(1.12, { duration: 500 }), withTiming(1, { duration: 500 })), -1) : withTiming(1, { duration: 150 });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pulse]);
-  const st = useAnimatedStyle(() => ({
-    transform: [{ scale: (0.4 + k.value * 0.6) * p.value }],
-    opacity: Math.min(1, k.value * 2) * opacity,
-  }));
+  const st = useAnimatedStyle(() => ({ transform: [{ scale: 0.4 + k.value * 0.6 }], opacity: Math.min(1, k.value * 2) * opacity }));
   return <Animated.View style={st}>{children}</Animated.View>;
 }

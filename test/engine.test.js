@@ -96,27 +96,14 @@ test('reaching the goal tile wins', () => {
   assert.ok(g.won);
 });
 
-test('the game ends when nothing in hand fits and no sweep helps', () => {
+test('the game ends when nothing in hand fits', () => {
   const g = E.newGame({}, E.seeded(4));
   g.board.fill(3);
   g.board[idx(0, 0)] = 0;
   g.tray = [piece(1, [[0, 0], [1, 0]]), piece(2, [[0, 0], [0, 1]]), piece(1, [[0, 0], [1, 0]])];
-  g.sweeps = 0;
   assert.ok(!E.anyMove(g));
   g.tray[1] = piece(2);
   assert.ok(E.anyMove(g));
-});
-
-test('a sweep in hand that would move tiles keeps the game going', () => {
-  const g = E.newGame({}, E.seeded(4));
-  g.board.fill(3);
-  g.board[idx(0, 0)] = 0;
-  g.tray = [piece(1, [[0, 0], [1, 0]]), piece(2, [[0, 0], [0, 1]]), piece(1, [[0, 0], [1, 0]])];
-  g.sweeps = 1;
-  assert.ok(E.anyMove(g), 'the hole can be swept, so the game is not over');
-  // A full board of 6s and 12s that never pair: nothing slides, sweeps do not help.
-  for (let i = 0; i < g.board.length; i++) g.board[i] = ((i % 6) + ((i / 6) | 0)) % 2 ? 6 : 12;
-  assert.ok(!E.anyMove(g));
 });
 
 test('every tray holds both 1s and 2s', () => {
