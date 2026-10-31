@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { Field } from '@/components/Field';
+import { fx } from '@/sound/sfx';
 import { Overlay } from '@/components/Overlay';
 import { Body, Button, Heading, Label, Panel, Stat, TileBadge } from '@/components/ui';
 import { sceneByKey } from '@/design/mock';
@@ -17,6 +18,7 @@ export default function Over() {
   const final = sceneByKey('late');
   const target = final.score;
   const [shown, setShown] = useState(calm ? target : 0);
+  useEffect(() => fx.over(), []);
 
   useEffect(() => {
     if (calm) return setShown(target);

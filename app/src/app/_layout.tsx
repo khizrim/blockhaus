@@ -50,6 +50,7 @@ function Navigator() {
         <Stack.Screen name="settings" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="howto" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="kit" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="sounds" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="pause" options={overlay} />
         <Stack.Screen name="win" options={overlay} />
         <Stack.Screen name="over" options={overlay} />

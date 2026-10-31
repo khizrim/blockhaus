@@ -1,14 +1,17 @@
 import { router } from 'expo-router';
+import { useEffect } from 'react';
 import { View } from 'react-native';
 import Animated, { Easing, FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { Field } from '@/components/Field';
+import { fx } from '@/sound/sfx';
 import { Overlay } from '@/components/Overlay';
 import { Body, Button, Heading, Panel, Stat } from '@/components/ui';
 import { dur, space } from '@/design/system';
 
 /* The win. One tile, the 96, is the picture: the only colour on the card. */
 export default function Win() {
+  useEffect(() => fx.win(), []);
   return (
     <Overlay>
       <Panel>

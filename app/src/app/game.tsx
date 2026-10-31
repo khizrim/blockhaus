@@ -15,6 +15,7 @@ import { dur, enter, exit, space, type } from '@/design/system';
 import { N, pieceGrid, sceneByKey, type Piece } from '@/design/mock';
 import { useTheme } from '@/design/theme';
 import { pairs } from '@/design/tokens';
+import { fx } from '@/sound/sfx';
 
 /* The game screen, fully drawn, with no rules behind it. Pieces can be picked
    up and set down so the drag, the partner highlight, the ghost and the landing
@@ -110,6 +111,7 @@ export default function Game() {
     dy.value = withTiming(pageY - oy, enter(dur.fast));
     lift.value = withTiming(1, enter(dur.fast));
     setHold({ slot, piece: p, x: pageX, y: pageY });
+    fx.pick();
     setHint('Яркие плитки: с ними фигура сольётся.');
   };
 
@@ -136,15 +138,37 @@ export default function Game() {
       }
       setBoard(next);
       setLands((l) => ({ ...l, ...landed }));
-      setTray((tr) => {
-        const nt = tr.map((p, k) => (k === h.slot && p ? { ...p, used: true } : p));
-        // A spent tray comes back full, the way the real one will.
-        return nt.every((p) => !p || p.used) ? scene.tray.map((p) => (p ? { ...p, used: false } : p)) : nt;
-      });
+      fx.place(h.piece.cells.length);
+      /* No rules yet, but the sound of a merge is previewed where one would
+         happen: each partner next to the landed piece pops and plays the note
+         of the value the merge would make, climbing like a chain. */
+      const pv = h.piece.cells[0][2];
+      const partners = board
+        .map((v, i) => ({ v, i }))
+        .filter(({ v, i }) => {
+          const x = i % N;
+          const y = (i / N) | 0;
+          return pairs(pv, v) && h.piece.cells.some(([cx, cy]) => Math.abs(t.gx + cx - x) + Math.abs(t.gy + cy - y) === 1);
+        });
+      if (partners.length) {
+        const made = pv < 3 ? 3 : pv * 2;
+        const chain = partners.map((_, k) => made * 2 ** k);
+        setTimeout(() => {
+          fx.cascade(chain);
+          partners.forEach(({ i }, k) => setTimeout(() => setPops((pp) => ({ ...pp, [i]: Date.now() })), k * 120));
+        }, 90);
+      }
+      const nt = tray.map((p, k) => (k === h.slot && p ? { ...p, used: true } : p));
+      // A spent tray comes back full, the way the real one will.
+      if (nt.every((p) => !p || p.used)) {
+        setTray(scene.tray.map((p) => (p ? { ...p, used: false } : p)));
+        setTimeout(fx.tray, 250);
+      } else setTray(nt);
       lift.value = 0;
       setHint('Фигура на месте. Правил пока нет, ничего не сливается.');
     } else {
       lift.value = withTiming(0, exit(dur.fast));
+      fx.invalid();
       setHint('Здесь не помещается.');
     }
     setHold(null);
@@ -218,11 +242,15 @@ export default function Game() {
     sx.value = withSequence(withTiming(vx, exit(dur.fast)), withTiming(0, enter(dur.base)));
     sy.value = withSequence(withTiming(vy, exit(dur.fast)), withTiming(0, enter(dur.base)));
     setSweeps((s) => s - 1);
+    fx.sweep();
     setHint(sweeps === 1 ? 'Сдвигов больше нет. Новый лоток даст ещё два.' : 'Сдвиг. Настоящее движение появится вместе с правилами.');
   };
 
   const tapCell = (i: number) => {
-    if (board[i] > 0) setPops((p) => ({ ...p, [i]: Date.now() }));
+    if (board[i] <= 0) return;
+    setPops((p) => ({ ...p, [i]: Date.now() }));
+    // Tapping a tile plays the note its merge makes: a way to hear the ladder.
+    fx.merge(Math.max(3, board[i]));
   };
 
   const sweepRow = (
@@ -235,7 +263,7 @@ export default function Game() {
       </View>
       <View style={{ flexDirection: 'row', gap: space.sm }}>
         {(['left', 'down', 'up', 'right'] as const).map((d) => (
-          <IconButton key={d} label={SWEEP_LABEL[d]} disabled={sweeps === 0} onPress={() => sweep(d)}>
+          <IconButton key={d} quiet label={SWEEP_LABEL[d]} disabled={sweeps === 0} onPress={() => sweep(d)}>
             <Arrow dir={d} color={c.text} s={16} />
           </IconButton>
         ))}

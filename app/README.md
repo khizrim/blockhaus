@@ -27,3 +27,7 @@ npx expo start --web  # or open in a browser
 - Tap a tile to replay the merge pop. Sweep buttons nudge the board and spend a sweep.
 - Pause menu has prototype scenes and shortcuts to the win and game-over screens. The design kit lists every colour, type style, control and scene.
 - Theme, sound, haptics and hints toggles live in memory only.
+
+## Sound
+
+All sounds are synthesised by `scripts/make-sounds.py` (numpy only) into `assets/sounds/*.wav`; there are no third-party samples. Pieces sound like painted wood (pick tick, a knock per piece size, two muffled taps when a drop does not fit, a felt slide for a sweep). Merges are a soft marimba climbing the C major pentatonic one step per rung, 3 = C5 up to 96 = C6, so a cascade audibly climbs. `src/sound/sfx.ts` plays them with the matching haptic, follows the Sound and Vibration settings, respects the silent switch and mixes with other apps' audio. Settings → Прототип → Все звуки auditions every sound.

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dur, enter, exit, HIT, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, LADDER, rank } from '@/design/tokens';
+import { fx } from '@/sound/sfx';
 
 /* ---------- screen shell ---------- */
 
@@ -120,7 +121,10 @@ export function Button({ label, onPress, kind = 'secondary', size = 'md', disabl
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled }}
       disabled={disabled}
-      onPress={onPress}
+      onPress={() => {
+        fx.tap();
+        onPress?.();
+      }}
       onPressIn={() => (press.value = withTiming(1, enter(dur.fast)))}
       onPressOut={() => (press.value = withTiming(0, exit(dur.fast)))}
       style={[{ opacity: disabled ? 0.4 : 1 }, style]}>
@@ -149,7 +153,13 @@ export function Button({ label, onPress, kind = 'secondary', size = 'md', disabl
 export function TextLink({ label, onPress }: { label: string; onPress: () => void }) {
   const { c } = useTheme();
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={{ minHeight: HIT, justifyContent: 'center' }}>
+    <Pressable
+      onPress={() => {
+        fx.tap();
+        onPress();
+      }}
+      accessibilityRole="button"
+      style={{ minHeight: HIT, justifyContent: 'center' }}>
       {({ pressed }) => <Text style={[type.bodyStrong, { color: c.text, opacity: pressed ? 0.6 : 1 }]}>{label}</Text>}
     </Pressable>
   );
@@ -162,11 +172,14 @@ export function IconButton({
   children,
   disabled,
   plain,
+  quiet,
 }: {
   onPress?: () => void;
   label: string;
   children: ReactNode;
   disabled?: boolean;
+  /** No tap sound: the action plays its own. */
+  quiet?: boolean;
   /** No surface: for top bars. */
   plain?: boolean;
 }) {
@@ -176,7 +189,10 @@ export function IconButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
-      onPress={onPress}
+      onPress={() => {
+        if (!quiet) fx.tap();
+        onPress?.();
+      }}
       disabled={disabled}
       style={({ pressed }) => ({
         width: HIT,
@@ -313,7 +329,11 @@ export function Toggle({ value, onChange, label }: { value: boolean; onChange: (
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
       accessibilityLabel={label}
-      onPress={() => onChange(!value)}
+      onPress={() => {
+        onChange(!value);
+        // After the change, so switching sound on is heard and switching it off is not.
+        setTimeout(() => fx.toggle(!value), 50);
+      }}
       style={{ height: HIT, justifyContent: 'center' }}>
       <View style={{ width: 48, height: 28, backgroundColor: value ? c.text : c.surface, borderWidth: 1, borderColor: value ? c.text : c.hair }}>
         <Animated.View
@@ -343,7 +363,10 @@ export function Segmented<T extends string>({
             key={o.value}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
-            onPress={() => onChange(o.value)}
+            onPress={() => {
+              fx.tap();
+              onChange(o.value);
+            }}
             style={{ flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.text : 'transparent' }}>
             <Text style={[type.secondaryStrong, { color: on ? c.bg : c.text }]}>{o.label}</Text>
           </Pressable>
@@ -406,7 +429,12 @@ export function Row({ label, note, children, onPress }: { label: string; note?: 
   );
   if (!onPress) return inner();
   return (
-    <Pressable accessibilityRole="button" onPress={onPress}>
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => {
+        fx.tap();
+        onPress();
+      }}>
       {({ pressed }) => inner(pressed)}
     </Pressable>
   );

@@ -1,5 +1,7 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
+
+import { setFeedback } from '@/sound/sfx';
 
 import { dark, light, type Palette } from './tokens';
 
@@ -28,6 +30,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [sound, setSound] = useState(true);
   const [haptics, setHaptics] = useState(true);
   const [hints, setHints] = useState(true);
+  useEffect(() => setFeedback({ sound, haptics }), [sound, haptics]);
   const isDark = mode === 'dark' || (mode === 'system' && system === 'dark');
   const value = useMemo(
     () => ({ mode, setMode, sound, setSound, haptics, setHaptics, hints, setHints, isDark, c: isDark ? dark : light }),

@@ -67,6 +67,7 @@ export default function Settings() {
               ))}
               <Row label="Экран победы" onPress={() => router.push('/win')} />
               <Row label="Экран проигрыша" onPress={() => router.push('/over')} />
+              <Row label="Все звуки" onPress={() => router.push('/sounds')} />
               <Row label="Дизайн-кит" onPress={() => router.push('/kit')} />
             </List>
           </Section>
