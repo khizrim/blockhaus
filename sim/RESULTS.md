@@ -82,3 +82,17 @@ Merge-only sweeps refused any swipe that merged nothing, and players felt the ga
 A player who swipes does better than before; one who only places loses a little. Also tried: `tilt` (tiles slide, nothing merges on a sweep) no bot reached 96, so it was dropped. The game still ends: a swipe counts toward the end check only if it merges or the piece can land.
 
 The daily (30 pieces) scores come down because swipes spend pieces: medals 250 / 330 / 420 (were 250 / 350 / 450).
+
+## A cascade pays more (2026-11-01)
+
+Points used to be the plain sum of merge levels, so a five-merge cascade scored the same as five merges made one by one. Shipped now: in a placed piece's cascade (the hand's or the one a swipe pushes in) the third and fourth merge score their level ×2 and the fifth and later ×3 (`chainScore: [1, 1, 2, 2, 3]`). Merges made by the slide of a sweep score plain.
+
+First tried ×2 from the second merge and ×3 from the third (`[1, 2, 3]`). Cascades of three or more merges happen in 32–40% of placements, mostly on their own (1+2=3, then 3+3, then 6+6), so that curve lifted every score alike: the bonus made 40% of a casual bot's points and 30% of an expert's, and the expert/casual score gap shrank. Scores of the same 120 classic games per profile under each curve (bots don't aim for cascades, so tile play is identical):
+
+| curve | casual | regular | expert | swRegular | expert / casual | swRegular / regular |
+|---|---|---|---|---|---|---|
+| none | 438 | 1557 | 2325 | 4008 | 5.3× | 2.6× |
+| [1, 2, 3] | 729 | 2250 | 3372 | 5148 | 4.6× | 2.3× |
+| **[1, 1, 2, 2, 3]** | 552 | 1818 | 2808 | 4500 | 5.1× | 2.5× |
+
+`node sim/daily.js 300 - 1,1,2,2,3`, game of the day: median regular 342 → 402, casual 258 → 318. Medals kept at the same share of runs (all six profiles pooled): 250 / 330 / 420 → 300 / 380 / 500.

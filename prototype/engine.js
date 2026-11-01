@@ -73,6 +73,12 @@
     // board. 'merge': a sweep is allowed only if it merges something.
     // 'none': sweeps are truly free (too easy, kept to measure).
     sweepCost: 'none',
+    // A placement's cascade pays more the longer it runs: its k-th merge
+    // scores its level times chainScore[k-1], the last entry repeating
+    // (empty = every merge scores its level). Merges made by the slide of a
+    // sweep score plain, so the bonus rewards setting a cascade up, not
+    // swiping.
+    chainScore: [],
     goal: 192,
   };
 
@@ -326,12 +332,18 @@
     !(g.cfg.pieceLimit && g.moves >= g.cfg.pieceLimit) &&
     (g.tray.some(p => p && !p.used && canPlaceAnywhere(g.board, p)) || canSweep(g));
 
-  function score(g, levels) {
-    for (const lvl of levels) {
-      g.score += lvl;
+  /** Adds a move's merges to the score. `steps` are {level} objects; each
+      gets `pts`, the points it scored. With `cascade`, the k-th one is worth
+      its level times cfg.chainScore[k-1] (the last entry repeats). */
+  function score(g, steps, cascade) {
+    const m = (cascade && g.cfg.chainScore) || [];
+    steps.forEach((st, k) => {
+      const lvl = st.level;
+      st.pts = lvl * (m.length ? m[Math.min(k, m.length - 1)] : 1);
+      g.score += st.pts;
       g.merges++;
       if (lvl > g.bestTile) g.bestTile = lvl;
-    }
+    });
     if (g.bestTile >= g.cfg.goal) g.won = true;
   }
 
@@ -342,7 +354,7 @@
     const res = applyPlacement(g.board, p, ox, oy);
     p.used = true;
     g.moves++;
-    score(g, res.steps.map(s => s.level));
+    score(g, res.steps, true);
     res.bonus = !g.cfg.freeSweeps && !!g.cfg.chainBonus && res.steps.length >= g.cfg.chainBonus && g.sweeps < g.cfg.sweepsMax;
     if (res.bonus) g.sweeps++;
     res.refilled = false;
@@ -406,7 +418,7 @@
     res.spawned = g.cfg.freeSweeps && g.cfg.sweepCost === 'spawn' ? spawnAfter(g, dir) : null;
     res.swept = g.board.slice();
     res.pushed = g.cfg.freeSweeps && g.cfg.sweepCost === 'push' ? pushAfter(g, dir) : null;
-    score(g, res.made.map(m => m.level));
+    score(g, res.made, false);
     g.over = !anyMove(g);
     return res;
   }
@@ -448,6 +460,11 @@
   const DEFAULTS = {
     ...ORIGINAL, dealer: 'need', shapes: SHIPPED_SHAPES, chainBonus: 2, sweepsMax: 3, sweepChain: true,
     freeSweeps: true, sweepCost: 'push', goal: 384,
+    // A cascade from a placed piece pays ×2 for its third and fourth merge
+    // and ×3 from the fifth (sim/RESULTS.md). The short chains that happen on
+    // their own (1+2=3, then 3+3) score plain, so the bonus marks a long
+    // cascade rather than lifting every score alike.
+    chainScore: [1, 1, 2, 2, 3],
   };
   // The balance before free sweeps (2026-11-01): two per tray, a chain earns
   // one more, up to three; goal 192.
