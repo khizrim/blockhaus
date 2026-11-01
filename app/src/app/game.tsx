@@ -5,7 +5,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequ
 
 import { Field, type CellLook } from '@/components/Field';
 import { Overlay } from '@/components/Overlay';
-import { Body, Button, Heading, IconButton, Label, Panel, PauseIcon, Screen, TextLink, TileBadge } from '@/components/ui';
+import { Body, Button, Heading, IconButton, Label, Panel, PauseIcon, Screen, TextLink } from '@/components/ui';
 import { pieceGrid } from '@/design/mock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dur, enter, exit, HIT, space, type } from '@/design/system';
@@ -19,6 +19,7 @@ import { slideMoves, type Move } from '@/game/slide';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
 import { TileNum } from '@/components/TileNum';
+import { Formula } from '@/components/Formula';
 import { INTRO_STEP, MedalTrack, Track, milestonesFor } from '@/components/Track';
 
 /* The game. The rules are the engine the prototype and the balance simulator
@@ -41,8 +42,8 @@ const noSelect = { userSelect: 'none' } as object;
 const SWIPE = 24; // px of travel that counts as a swipe
 const SLIDE = dur.base; // ms for tiles to travel in a sweep
 const PUSH_MS = 260; // ms for the pushed piece to ride in from the far edge
-/** The lesson line: one line of title type. */
-const LESSON_H = 30;
+/** The lesson line: one formula in tiles. */
+const LESSON_H = 34;
 const EXPLAIN_AFTER = 1100; // ms from a proved step to its explanation card
 const LESSON_READ = 1400; // ms more to read the formula of a step with no card
 
@@ -868,14 +869,12 @@ export default function Game() {
               proved) and, under it, the mechanic. The way out of the lessons is in pause. */}
           {lesson ? (
             <View style={{ width: col, marginBottom: step }}>
-              <Animated.View style={[{ height: LESSON_H, justifyContent: 'center' }, lineStyle]}>
-                <Text
-                  accessibilityRole="header"
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  style={[type.title, { color: c.text }]}>
-                  {coach === 'task' ? lesson.title : lesson.done}
-                </Text>
+              <Animated.View
+                accessible
+                accessibilityRole="header"
+                accessibilityLabel={lesson.title}
+                style={[{ height: LESSON_H, justifyContent: 'center' }, lineStyle]}>
+                <Formula terms={lesson.formula} size={LESSON_H} open={coach === 'task'} fit={col} />
               </Animated.View>
             </View>
           ) : isDaily ? (
@@ -923,11 +922,15 @@ export default function Game() {
                 <View style={StyleSheet.absoluteFill}>
                   <Overlay>
                     <Panel>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-                        <TileBadge v={lesson.result} size={Math.round(cell * 0.8)} />
-                        <Heading>{lesson.done}</Heading>
-                      </View>
-                      <Body style={{ marginTop: space.sm }}>{lesson.rule}</Body>
+                      <Formula terms={lesson.formula} size={Math.min(44, Math.round(cell * 0.8))} fit={Math.min(col, 360) - space.lg * 2 - space.xl * 2 - 2} />
+                      {lesson.also ? (
+                        <View style={{ gap: space.sm, marginTop: space.lg }}>
+                          {lesson.also.map((row, k) => (
+                            <Formula key={k} terms={row} size={Math.min(32, Math.round(cell * 0.56))} />
+                          ))}
+                        </View>
+                      ) : null}
+                      <Body style={{ marginTop: space.lg }}>{lesson.rule}</Body>
                       <View style={{ marginTop: space.lg }}>
                         <Button kind="primary" size="lg" label="Понятно" onPress={nextLesson} />
                       </View>
