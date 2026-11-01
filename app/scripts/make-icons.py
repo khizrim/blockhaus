@@ -15,6 +15,7 @@ LINE = (17, 18, 21, 255)
 WHITE = (255, 255, 255, 255)
 CLEAR = (0, 0, 0, 0)
 RED, YELLOW, BLUE = (217, 52, 43, 255), (244, 194, 28, 255), (31, 79, 178, 255)
+CANVAS_DARK = (56, 58, 66, 255)  # empty field in the dark theme
 OUT = 'assets/images'
 ADAPTIVE = (18 / 108, 18 / 108, 72 / 108)  # window inside the 108dp layer
 
@@ -34,7 +35,7 @@ def enamel(d, box, c, sides, e):
     if 'l' in sides: d.rectangle([l, t, l + e, b], fill=hi)
 
 
-def poster(S, win=(0, 0, 1), mono=False, frame=False):
+def poster(S, win=(0, 0, 1), mono=False, frame=False, paper=PAPER):
     """Three colour fields and one paper field split by thick lines.
 
     win = (left, top, size) of the visible window as fractions of S.
@@ -53,7 +54,7 @@ def poster(S, win=(0, 0, 1), mono=False, frame=False):
     edge = 'tlrb' if frame else ''  # sides closed by the outer line
     fields = [
         ([o, o, vx - L / 2, hy - L / 2], RED, 'rb'),
-        ([vx + L / 2, o, S - 1 - o, hr - L / 2], PAPER, None),
+        ([vx + L / 2, o, S - 1 - o, hr - L / 2], paper, None),
         ([vx + L / 2, hr + L / 2, S - 1 - o, S - 1 - o], BLUE, 'lt'),
         ([o, hy + L / 2, vx - L / 2, S - 1 - o], YELLOW, 'tr'),
     ]
@@ -65,8 +66,32 @@ def poster(S, win=(0, 0, 1), mono=False, frame=False):
     return im
 
 
+def glyph(S, inset=0.17):
+    """Single-tone mark for the iOS tinted and clear appearances."""
+    im = Image.new('RGBA', (S, S), (0, 0, 0, 255))
+    d = ImageDraw.Draw(im)
+    x0 = inset * S
+    w = S - 2 * x0
+    L = w * 0.09
+    r = round(S * 0.035)
+    vx, hy, hr, e = x0 + w * 0.6, x0 + w * 0.58, x0 + w * 0.36, x0 + w
+    d.rounded_rectangle([x0, x0, vx - L / 2, hy - L / 2], r, fill=WHITE)
+    d.rounded_rectangle([vx + L / 2, x0, e, hr - L / 2], r, outline=WHITE, width=round(S * 0.034))
+    d.rounded_rectangle([vx + L / 2, hr + L / 2, e, e], r, fill=WHITE)
+    d.rounded_rectangle([x0, hy + L / 2, vx - L / 2, e], r, fill=WHITE)
+    return im
+
+
 # iOS / store icon: full bleed; the system rounds the corners.
 poster(1024).convert('RGB').save(f'{OUT}/icon.png')
+# iOS dark appearance: the paper field turns into the dark theme's canvas,
+# so no bright patch glows on a dark home screen.
+poster(1024, paper=CANVAS_DARK).convert('RGB').save(f'{OUT}/ios-icon-dark.png')
+# iOS tinted / clear (glass): the system turns luminance into one glass tone,
+# so the full poster came out as four mismatched greys. Give it a single-tone
+# glyph instead: the poster in miniature, three solid fields and the paper
+# field left empty as an outline, white on black.
+glyph(1024).convert('RGB').save(f'{OUT}/ios-icon-tinted.png')
 # Android adaptive: the whole drawing lives in the foreground (full bleed, so
 # the mask never shows a gap); the background is plain ink behind it.
 Image.new('RGBA', (432, 432), LINE).save(f'{OUT}/android-icon-background.png')

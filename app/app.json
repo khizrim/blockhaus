@@ -8,7 +8,11 @@
     "scheme": "blockhaus",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/icon.png",
+      "icon": {
+        "light": "./assets/images/icon.png",
+        "dark": "./assets/images/ios-icon-dark.png",
+        "tinted": "./assets/images/ios-icon-tinted.png"
+      },
       "bundleIdentifier": "com.khizrim.blockhaus",
       "supportsTablet": false,
       "buildNumber": "1",
