@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg';
 
-import { Depth, faceOf, panelDepth, type DepthKind } from '@/design/depth';
+import { Enamel, panelEnamel } from '@/design/depth';
 import { dur, enter } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, mix, rank } from '@/design/tokens';
@@ -68,7 +68,7 @@ export const Field = memo(function Field({
   sameKey,
   style,
 }: Props) {
-  const { c, depth, isDark } = useTheme();
+  const { c, isDark } = useTheme();
   const board = variant === 'board';
   const hg = board ? gap / 2 : gap;
   const pad = board ? hg : 0;
@@ -109,7 +109,6 @@ export const Field = memo(function Field({
         look={look?.(i)}
         gap={gap}
         palette={c}
-        depth={depth}
         dark={isDark}
       />,
     );
@@ -123,7 +122,7 @@ export const Field = memo(function Field({
           height: h * cell + pad * 2,
           backgroundColor: board ? c.line : 'transparent',
         },
-        board ? panelDepth(depth, c.bg, isDark, gap) : null,
+        board ? panelEnamel(c.bg, isDark) : null,
         style,
       ]}>
       {cells}
@@ -151,7 +150,6 @@ type CellProps = {
   br: boolean;
   look?: CellLook;
   palette: ReturnType<typeof useTheme>['c'];
-  depth: DepthKind;
   dark: boolean;
 };
 
@@ -251,7 +249,7 @@ const Cell = memo(function Cell(p: CellProps) {
           ]}
         />
         {!look?.shadow && !look?.ghost ? (
-          <Depth kind={p.depth} fill={fill} open={{ t: !p.t, r: !p.r, b: !p.b, l: !p.l }} size={cell} empty={v <= 0} dark={p.dark} />
+          <Enamel fill={fill} open={{ t: !p.t, r: !p.r, b: !p.b, l: !p.l }} size={cell} empty={v <= 0} dark={p.dark} />
         ) : null}
         {look?.absorb ? (
           <View
@@ -262,7 +260,7 @@ const Cell = memo(function Cell(p: CellProps) {
         ) : null}
         {v > 0 ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF' }, flashStyle]} /> : null}
         {p.numbers && v > 0 ? (
-          <Animated.View style={[numStyle, { marginBottom: faceOf(p.depth, cell) }]}>
+          <Animated.View style={numStyle}>
             <TileNum v={v} color={ink} size={Math.max(12, Math.round(cell * (long ? 0.28 : v >= 10 ? 0.34 : 0.4)))} />
           </Animated.View>
         ) : null}

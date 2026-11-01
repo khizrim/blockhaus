@@ -16,7 +16,6 @@ import {
   Toggle,
   TopBar,
 } from "@/components/ui";
-import { DEPTHS, type DepthKind } from "@/design/depth";
 import { scenes } from "@/design/mock";
 import { space, type } from "@/design/system";
 import { useTheme, type ThemeMode } from "@/design/theme";
@@ -56,11 +55,6 @@ export default function Settings() {
                 { value: "dark", label: "Тёмная" },
               ]}
             />
-          </Section>
-
-          {/* Prototype: volume directions, to compare on the real screens. */}
-          <Section title="Объём">
-            <Segmented<DepthKind> value={t.depth} onChange={t.setDepth} options={DEPTHS} />
           </Section>
 
           <Section title="Игра">
