@@ -96,3 +96,30 @@ First tried ×2 from the second merge and ×3 from the third (`[1, 2, 3]`). Casc
 | **[1, 1, 2, 2, 3]** | 552 | 1818 | 2808 | 4500 | 5.1× | 2.5× |
 
 `node sim/daily.js 300 - 1,1,2,2,3`, game of the day: median regular 342 → 402, casual 258 → 318. Medals kept at the same share of runs (all six profiles pooled): 250 / 330 / 420 → 300 / 380 / 500.
+
+## Sweeps earned by cascades, weekday dailies (2026-11-01)
+
+A second rule set for the free game, `engine.CASCADE`, chosen from nine
+variants (doc "Blockhaus: развитие механики и вовлечения"): each tray brings
+one sweep, a placed cascade of four merges or more earns one more, two at
+most in hand, a sweep is a plain slide. `SWEEPERS=1 node sim/simulate.js 100 shipped cascade`:
+
+| | expert 384 | swExpert 384 |
+|---|---|---|
+| shipped (free push sweeps) | 3% | 51% |
+| cascade | 16% | 15% |
+
+The placing player and the swiping one end up level: a sweep is bought by
+placing well.
+
+Weekday rules of the game of the day (`engine.WEEKDAY`), medal lines from
+`node sim/daily.js 400 weekdays`, each kept at the plain day's share of runs
+(the plain lines scaled by the rule's percentile over the plain one):
+
+| rule | day | bronze | silver | gold |
+|---|---|---|---|---|
+| plain | Tue, Thu, Sat | 300 | 380 | 500 |
+| domino | Mon | 330 | 400 | 530 |
+| stone | Wed | 210 | 310 | 460 |
+| still (no sweeps) | Fri | 160 | 200 | 290 |
+| big start | Sun | 450 | 510 | 860 |
