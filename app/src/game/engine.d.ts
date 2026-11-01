@@ -4,11 +4,11 @@
 
 export type Cell = [number, number, number];
 export type Piece = { cells: Cell[]; used: boolean };
-export type Step = { absorbed: number[]; anchor: number; level: number; /** Points it scored: the level, times its place in a placed piece's cascade (up to cfg.chainScore). */ pts: number };
+export type Step = { absorbed: number[]; anchor: number; level: number; /** Points it scored: the level, times the multiplier for its place in a placed piece's cascade (cfg.chainScore). */ pts: number };
 export type Config = Record<string, unknown>;
 
 export type Game = {
-  cfg: Config & { sweepChain?: boolean; freeSweeps?: boolean; sweepCost?: 'spawn' | 'merge' | 'push' | 'tilt' | 'none'; chainScore?: number; goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
+  cfg: Config & { sweepChain?: boolean; freeSweeps?: boolean; sweepCost?: 'spawn' | 'merge' | 'push' | 'tilt' | 'none'; chainScore?: number[]; goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
   rng: () => number;
   board: number[];
   tray: Piece[];

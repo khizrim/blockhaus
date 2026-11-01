@@ -1424,8 +1424,8 @@ function Plate({ on, k, dir, width }: { on: boolean; k: number; dir: Dir; width:
   return <Animated.View style={[{ width, height: PLATE, marginTop: k ? 2 : 4, backgroundColor: c.line }, st]} />;
 }
 
-/** "+N" rising from the cell where a merge happened. A later merge of a
-    placed piece's cascade pays double or triple, and says so: "+36 ×3". */
+/** "+N" rising from the cell where a merge happened. A late merge of a
+    placed piece's cascade pays double or triple, and says so: "+48 ×2". */
 function Float({ at, v, times = 1, cell, gap }: { at: number; v: number; times?: number; cell: number; gap: number }) {
   const { c } = useTheme();
   const k = useSharedValue(0);

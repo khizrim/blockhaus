@@ -85,20 +85,14 @@ The daily (30 pieces) scores come down because swipes spend pieces: medals 250 /
 
 ## A cascade pays more (2026-11-01)
 
-Points used to be the plain sum of merge levels, so a five-merge cascade scored the same as five merges made one by one, and the score measured little but how much material went through the board. Shipped now (`chainScore: 3`): in a placed piece's cascade (the hand's or the one a swipe pushes in) the second merge scores its level ×2, the third and later ×3. Merges made by the slide of a sweep score plain, so the bonus rewards setting a cascade up, not swiping.
+Points used to be the plain sum of merge levels, so a five-merge cascade scored the same as five merges made one by one. Shipped now: in a placed piece's cascade (the hand's or the one a swipe pushes in) the third and fourth merge score their level ×2 and the fifth and later ×3 (`chainScore: [1, 1, 2, 2, 3]`). Merges made by the slide of a sweep score plain.
 
-`node sim/daily.js 300 0 3`, game of the day, score percentiles:
+First tried ×2 from the second merge and ×3 from the third (`[1, 2, 3]`). Cascades of three or more merges happen in 32–40% of placements, mostly on their own (1+2=3, then 3+3, then 6+6), so that curve lifted every score alike: the bonus made 40% of a casual bot's points and 30% of an expert's, and the expert/casual score gap shrank. Scores of the same 120 classic games per profile under each curve (bots don't aim for cascades, so tile play is identical):
 
-| profile | p50 before | p50 ×3 cap | p90 before | p90 ×3 cap |
-|---|---|---|---|---|
-| casual | 258 | 411 | 336 | 537 |
-| regular | 342 | 507 | 420 | 639 |
-| expert | 351 | 510 | 426 | 618 |
-| swCasual | 315 | 411 | 375 | 519 |
-| swRegular | 333 | 456 | 399 | 573 |
-| swExpert | 336 | 468 | 402 | 582 |
+| curve | casual | regular | expert | swRegular | expert / casual | swRegular / regular |
+|---|---|---|---|---|---|---|
+| none | 438 | 1557 | 2325 | 4008 | 5.3× | 2.6× |
+| [1, 2, 3] | 729 | 2250 | 3372 | 5148 | 4.6× | 2.3× |
+| **[1, 1, 2, 2, 3]** | 552 | 1818 | 2808 | 4500 | 5.1× | 2.5× |
 
-- Scores rise about 1.4–1.6×. Players who place gain more than players who swipe (regular +48%, swRegular +37%), which pushes back a little on swiping being the dominant strategy.
-- The bots never aim for cascades, so a player who builds them gains more than this.
-- Medals kept at the same share of runs (all six profiles pooled): 250 / 330 / 420 → 360 / 470 / 600.
-- Classic game: the regular bot's median score 1530 → 2235; it passes 1919 in 60% of runs instead of 33%, still around the 96 rung.
+`node sim/daily.js 300 - 1,1,2,2,3`, game of the day: median regular 342 → 402, casual 258 → 318. Medals kept at the same share of runs (all six profiles pooled): 250 / 330 / 420 → 300 / 380 / 500.

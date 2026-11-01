@@ -74,10 +74,11 @@
     // 'none': sweeps are truly free (too easy, kept to measure).
     sweepCost: 'none',
     // A placement's cascade pays more the longer it runs: its k-th merge
-    // scores its level times k, up to this many times (0 = every merge
-    // scores its level). Merges made by the slide of a sweep score plain,
-    // so the bonus rewards setting a cascade up, not swiping.
-    chainScore: 0,
+    // scores its level times chainScore[k-1], the last entry repeating
+    // (empty = every merge scores its level). Merges made by the slide of a
+    // sweep score plain, so the bonus rewards setting a cascade up, not
+    // swiping.
+    chainScore: [],
     goal: 192,
   };
 
@@ -333,12 +334,12 @@
 
   /** Adds a move's merges to the score. `steps` are {level} objects; each
       gets `pts`, the points it scored. With `cascade`, the k-th one is worth
-      its level times min(k, cfg.chainScore). */
+      its level times cfg.chainScore[k-1] (the last entry repeats). */
   function score(g, steps, cascade) {
-    const cap = cascade ? g.cfg.chainScore || 0 : 0;
+    const m = (cascade && g.cfg.chainScore) || [];
     steps.forEach((st, k) => {
       const lvl = st.level;
-      st.pts = lvl * (cap ? Math.min(k + 1, cap) : 1);
+      st.pts = lvl * (m.length ? m[Math.min(k, m.length - 1)] : 1);
       g.score += st.pts;
       g.merges++;
       if (lvl > g.bestTile) g.bestTile = lvl;
@@ -459,9 +460,11 @@
   const DEFAULTS = {
     ...ORIGINAL, dealer: 'need', shapes: SHIPPED_SHAPES, chainBonus: 2, sweepsMax: 3, sweepChain: true,
     freeSweeps: true, sweepCost: 'push', goal: 384,
-    // A cascade from a placed piece pays ×2 for its second merge and ×3
-    // from the third on (sim/daily.js): skill shows up in the score.
-    chainScore: 3,
+    // A cascade from a placed piece pays ×2 for its third and fourth merge
+    // and ×3 from the fifth (sim/RESULTS.md). The short chains that happen on
+    // their own (1+2=3, then 3+3) score plain, so the bonus marks a long
+    // cascade rather than lifting every score alike.
+    chainScore: [1, 1, 2, 2, 3],
   };
   // The balance before free sweeps (2026-11-01): two per tray, a chain earns
   // one more, up to three; goal 192.

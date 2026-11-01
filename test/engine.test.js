@@ -319,7 +319,7 @@ test('a piece limit ends the game after that many placements', () => {
   assert.equal(E.place(g, 2, 5, 5), null);
 });
 
-test('a placed cascade pays more for each later merge, up to ×chainScore', () => {
+test('a placed cascade pays more from its third merge, ×3 from the fifth', () => {
   // The same 1 into a 2, a 3, a 6 and a 12: levels 3, 6, 12, 24.
   const setUp = cfg => {
     const g = E.newGame(cfg, E.seeded(1));
@@ -328,15 +328,17 @@ test('a placed cascade pays more for each later merge, up to ×chainScore', () =
     g.tray = [piece(1), piece(1), piece(2)];
     return g;
   };
-  const plain = setUp({ chainScore: 0 });
+  const plain = setUp({ chainScore: [] });
   E.place(plain, 0, 1, 1);
   assert.equal(plain.score, 3 + 6 + 12 + 24);
 
   const g = setUp({});
-  assert.equal(g.cfg.chainScore, 3);
   const res = E.place(g, 0, 1, 1);
-  assert.deepEqual(res.steps.map(s => s.pts), [3, 12, 36, 72]);
-  assert.equal(g.score, 3 + 12 + 36 + 72);
+  assert.deepEqual(res.steps.map(s => s.pts), [3, 6, 24, 48]);
+  assert.equal(g.score, 3 + 6 + 24 + 48);
+
+  const steep = setUp({ chainScore: [1, 2, 3] });
+  assert.deepEqual(E.place(steep, 0, 1, 1).steps.map(s => s.pts), [3, 12, 36, 72]);
 });
 
 test('merges made by the slide of a sweep score their plain level', () => {

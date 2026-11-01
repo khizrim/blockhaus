@@ -13,15 +13,15 @@ export const DAILY = { pieceLimit: 30, startTiles: 6 };
    on 2026-11-01 for sweeps that push the next piece in, which spend pieces of
    the thirty, so silver and gold came down a little; raised on 2026-11-01
    for the cascade bonus, each line kept at the same share of runs with
-   sim/daily.js, 250/330/420 -> 360/470/600): bronze is
+   sim/daily.js, 250/330/420 -> 300/380/500): bronze is
    about a casual player's best quarter, silver a regular player's median,
    gold the top tenth of a strong one. */
 export const MEDALS = [
   // `tile`: the board colour the medal wears on screen (umber, 0 = grey, yellow);
   // the emoji stay for the text people paste into chats.
-  { at: 360, name: 'бронза', of: 'бронзы', emoji: '🥉', rank: 1, tile: 9 },
-  { at: 470, name: 'серебро', of: 'серебра', emoji: '🥈', rank: 2, tile: 0 },
-  { at: 600, name: 'золото', of: 'золота', emoji: '🥇', rank: 3, tile: 3 },
+  { at: 300, name: 'бронза', of: 'бронзы', emoji: '🥉', rank: 1, tile: 9 },
+  { at: 380, name: 'серебро', of: 'серебра', emoji: '🥈', rank: 2, tile: 0 },
+  { at: 500, name: 'золото', of: 'золота', emoji: '🥇', rank: 3, tile: 3 },
 ] as const;
 export type Medal = (typeof MEDALS)[number];
 export const medalOf = (score: number): Medal | null => [...MEDALS].reverse().find((m) => score >= m.at) ?? null;
