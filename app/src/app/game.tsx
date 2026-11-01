@@ -808,7 +808,7 @@ export default function Game() {
   /* Where each milestone's square sits, in the board's own coordinates, so
      the milestone tile can fly into it. Mirrors Track's layout. */
   const milestones = milestonesFor(g.cfg.goal);
-  const trackTop = isDaily ? gap * 2 + step / 2 : step / 2;
+  const trackTop = step / 2;
   const trackHome = (v: number) => {
     const k = milestones.indexOf(v);
     if (k < 0 || !g.cfg.freeSweeps || isDaily) return null;
@@ -898,13 +898,6 @@ export default function Game() {
             </View>
           ) : null}
           <Animated.View style={boardStyle} {...swipe.panHandlers}>
-            {/* The game of the day wears a yellow frame: another game at a glance. */}
-            {isDaily ? (
-              <View
-                pointerEvents="none"
-                style={{ position: 'absolute', left: -gap * 2, top: -gap * 2, right: -gap * 2, bottom: -gap * 2, borderWidth: gap, borderColor: c.tile[3] }}
-              />
-            ) : null}
             <View
               ref={boardRef}
               onLayout={measureBoard}
@@ -975,7 +968,7 @@ export default function Game() {
               intro={trackIntro}
             />
           ) : (
-            <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: col, alignItems: 'center', marginTop: isDaily ? gap * 2 : 0 }}>
+            <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: col, alignItems: 'center' }}>
               {Array.from({ length: g.cfg.sweepsMax }, (_, k) => k).map((k) => (
                 <Plate key={k} on={g.sweeps - (bonusHeld ? 1 : 0) > k} k={k} dir={lastDir.current} width={col - 2 * (k + 1) * space.sm} />
               ))}
