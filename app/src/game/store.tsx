@@ -2,23 +2,36 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import engine, { type Dir, type Game, type Piece, type PlaceResult, type SweepResult } from './engine';
-import { DAILY, dayKey, dayStream, newDailyGame, prevDay } from './daily';
+import { dailyConfig, dayKey, dayStream, medalOf, newDailyGame, prevDay } from './daily';
 import { LESSONS } from './lessons';
+import { POSTERS, TASK_POINTS, rankOf, tasksFor, type MetaSnapshot, type MoveEvent, type RankInfo, type Task, type TaskState } from './meta';
 
 /* The one running game and the player's record, shared by every screen and
    saved after every move, so closing the app never loses a game. */
 
-export type Stats = { best: number; bestTile: number; played: number; wins: number };
+export type Stats = { best: number; bestTile: number; played: number; wins: number; /** Every point of every game: the workshop's. */ total: number };
+/** How sweeps work in the free game: free (each pushes a piece in) or earned by cascades. */
+export type Rules = 'free' | 'cascade';
+const rulesConfig = (r: Rules) => (r === 'cascade' ? engine.CASCADE : undefined);
 
 const KEY = 'blockhaus:v1';
-const EMPTY: Stats = { best: 0, bestTile: 0, played: 0, wins: 0 };
-const FIELDS = ['board', 'tray', 'sweeps', 'score', 'merges', 'bestTile', 'moves', 'won', 'over'] as const;
+const EMPTY: Stats = { best: 0, bestTile: 0, played: 0, wins: 0, total: 0 };
+// `used`: sweeps made in this game, for the tasks and posters that ask for none.
+const FIELDS = ['board', 'tray', 'sweeps', 'score', 'merges', 'bestTile', 'moves', 'won', 'over', 'used'] as const;
 
 type GameFields = Pick<Game, (typeof FIELDS)[number]>;
 export type DailyResult = { score: number; bestTile: number; board: number[] };
 type SavedDaily = { key: string; draws: number; game: GameFields; winSeen: boolean; result: DailyResult | null };
-export type Streak = { last: string; count: number; best: number };
-type Saved = { game: GameFields; stats: Stats; winSeen: boolean; learned?: boolean; daily?: SavedDaily; streak?: Streak; dailyIntro?: boolean };
+/** `shield`: a gold medal keeps the streak through one missed day (one at most). */
+export type Streak = { last: string; count: number; best: number; shield?: number };
+type Saved = {
+  game: GameFields; stats: Stats; winSeen: boolean; learned?: boolean; daily?: SavedDaily; streak?: Streak; dailyIntro?: boolean;
+  /** Rules of the free game on the board, and the ones the next free game starts with. */
+  gameRules?: Rules; rules?: Rules;
+  tasks?: TaskState; posters?: Record<string, string>;
+};
+/** Something the player just earned, for the board to show. */
+export type News = { id: number; kind: 'task' | 'poster'; ref: string; title: string };
 
 /** Today's game of the day, as screens see it. */
 export type Daily = { key: string; started: boolean; done: boolean; result: DailyResult | null };
@@ -57,6 +70,15 @@ type Store = {
   /** The card that explains the game of the day was shown once. */
   dailyIntro: boolean;
   markDailyIntro: () => void;
+  /** Rules of the free game on the board, and of the next one. */
+  rules: Rules;
+  nextRules: Rules;
+  setRules: (r: Rules) => void;
+  rank: RankInfo;
+  tasks: { list: Task[]; progress: number[]; done: boolean[] };
+  /** Posters on the wall, by id: the day each was earned. */
+  posters: Record<string, string>;
+  news: News | null;
   /** Prototype only: put a still position on the board. */
   loadPosition: (p: { board: number[]; tray: (Piece | { cells: [number, number, number][]; used?: boolean } | null)[]; score: number; merges: number; sweeps: number }) => void;
 };
@@ -67,7 +89,7 @@ function restore(s: GameFields, rng?: () => number, cfg?: Record<string, unknown
   // Built on a throwaway stream (newGame deals a tray), then handed the real
   // one, so a replayed daily stream is not advanced by the restore itself.
   const g = engine.newGame(cfg);
-  for (const f of FIELDS) (g as Record<string, unknown>)[f] = s[f];
+  for (const f of FIELDS) if (s[f] !== undefined) (g as Record<string, unknown>)[f] = s[f];
   if (rng) g.rng = rng;
   return g;
 }
@@ -87,13 +109,27 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const dailyRef = useRef<{ key: string; game: Game; stream: ReturnType<typeof dayStream>; winSeen: boolean; result: DailyResult | null } | null>(null);
   const [streak, setStreak] = useState<Streak>({ last: '', count: 0, best: 0 });
   const [dailyIntro, setDailyIntro] = useState(false);
+  const [nextRules, setNextRules] = useState<Rules>('free');
+  const [tasks, setTasks] = useState<TaskState>({ key: '', progress: [0, 0, 0] });
+  const [posters, setPosters] = useState<Record<string, string>>({});
+  const [news, setNews] = useState<News | null>(null);
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+  const postersRef = useRef(posters);
+  postersRef.current = posters;
+  const totalRef = useRef(stats.total);
+  totalRef.current = stats.total;
+  const rulesOf = (g: Game): Rules => (g.cfg.freeSweeps === false && g.cfg.chainBonus === engine.CASCADE.chainBonus && g.cfg.sweepsPerTray === engine.CASCADE.sweepsPerTray ? 'cascade' : 'free');
 
   useEffect(() => {
     AsyncStorage.getItem(KEY)
       .then((raw) => {
         if (!raw) return;
         const s = JSON.parse(raw) as Saved;
-        gRef.current = restore(s.game);
+        gRef.current = restore(s.game, undefined, rulesConfig(s.gameRules ?? 'free'));
+        if (s.rules) setNextRules(s.rules);
+        if (s.tasks) setTasks(s.tasks);
+        if (s.posters) setPosters(s.posters);
         setStats({ ...EMPTY, ...s.stats });
         setWinSeen(!!s.winSeen);
         setLearned(!!s.learned || (s.stats?.played ?? 0) > 0);
@@ -102,7 +138,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (s.daily) {
           // Replay the day's stream to where the run left off.
           const stream = dayStream(s.daily.key, s.daily.draws);
-          dailyRef.current = { key: s.daily.key, game: restore(s.daily.game, stream.next, DAILY), stream, winSeen: s.daily.winSeen, result: s.daily.result };
+          dailyRef.current = { key: s.daily.key, game: restore(s.daily.game, stream.next, dailyConfig(s.daily.key)), stream, winSeen: s.daily.winSeen, result: s.daily.result };
         }
       })
       .catch(() => {})
@@ -122,8 +158,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (d && mode === 'daily') d.winSeen = winSeen;
     const daily = d ? { key: d.key, draws: d.stream.draws, game: fields(d.game), winSeen: d.winSeen, result: d.result } : undefined;
     const ws = mode === 'daily' ? classic.current!.winSeen : winSeen;
-    AsyncStorage.setItem(KEY, JSON.stringify({ game: fields(g), stats, winSeen: ws, learned, daily, streak, dailyIntro } satisfies Saved)).catch(() => {});
-  }, [ready, version, stats, winSeen, learned, lesson, mode, streak, dailyIntro]);
+    AsyncStorage.setItem(
+      KEY,
+      JSON.stringify({ game: fields(g), stats, winSeen: ws, learned, daily, streak, dailyIntro, gameRules: rulesOf(g), rules: nextRules, tasks, posters } satisfies Saved),
+    ).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, version, stats, winSeen, learned, lesson, mode, streak, dailyIntro, nextRules, tasks, posters]);
 
   const bump = () => setVersion((v) => v + 1);
 
@@ -131,6 +171,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const record = useCallback((g: Game) => {
     if (g.moves === 0) return;
     setStats((s) => ({
+      ...s,
       best: Math.max(s.best, g.score),
       bestTile: Math.max(s.bestTile, g.bestTile),
       played: s.played + 1,
@@ -143,12 +184,66 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const d = dailyRef.current;
     if (!d || d.result) return;
     d.result = { score: g.score, bestTile: g.bestTile, board: g.board.slice() };
+    const gold = (medalOf(g.score, d.key)?.rank ?? 0) >= 3;
     setStreak((s) => {
       if (s.last === d.key) return s;
-      const count = s.last === prevDay(d.key) ? s.count + 1 : 1;
-      return { last: d.key, count, best: Math.max(s.best, count) };
+      // A shield carries the streak over one missed day, and is spent.
+      const kept = s.last === prevDay(d.key) || (!!s.shield && s.last === prevDay(prevDay(d.key)));
+      const spent = kept && s.last !== prevDay(d.key);
+      const count = kept ? s.count + 1 : 1;
+      const shield = gold ? 1 : spent ? 0 : (s.shield ?? 0);
+      return { last: d.key, count, best: Math.max(s.best, count), shield };
     });
   }, []);
+
+  /* The meta after each move: workshop points, the day's tasks, posters. */
+  const newsId = useRef(0);
+  const tell = (n: Omit<News, 'id'>) => setNews({ ...n, id: ++newsId.current });
+  const meta = useCallback(
+    (g: Game, s0: number, e: Omit<MoveEvent, 'bestTile' | 'score' | 'sweepsUsed' | 'daily' | 'cascadeMode' | 'won'>) => {
+      if (lesson !== null) return;
+      const today = dayKey();
+      const ev: MoveEvent = { ...e, bestTile: g.bestTile, score: g.score, sweepsUsed: g.used ?? 0, daily: mode === 'daily', cascadeMode: rulesOf(g) === 'cascade', won: g.won };
+      // Read and written through refs: several moves can land before React
+      // renders, and each must build on the last.
+      let bonus = 0;
+      const list = tasksFor(today);
+      const t = tasksRef.current;
+      const prev = t.key === today ? t.progress : [0, 0, 0];
+      const next = mode === 'daily' ? prev : list.map((task, i) => Math.min(task.goal, task.measure(ev, prev[i])));
+      next.forEach((p, i) => {
+        if (p >= list[i].goal && prev[i] < list[i].goal) {
+          bonus += TASK_POINTS;
+          tell({ kind: 'task', ref: list[i].id, title: list[i].text });
+        }
+      });
+      tasksRef.current = { key: today, progress: next };
+      setTasks(tasksRef.current);
+      const tasksDone = next.filter((p, i) => p >= list[i].goal).length;
+      const total = totalRef.current + g.score - s0 + bonus;
+      totalRef.current = total;
+      setStats((st) => ({ ...st, total }));
+      const d = dailyRef.current;
+      const snap: MetaSnapshot = {
+        rank: rankOf(total).level,
+        streak: streak.count,
+        tasksDone,
+        dailyGold: !!d?.result && (medalOf(d.result.score, d.key)?.rank ?? 0) >= 3,
+      };
+      let have = postersRef.current;
+      for (const p of POSTERS) {
+        if (have[p.id] || !p.check(ev, snap)) continue;
+        have = { ...have, [p.id]: today };
+        tell({ kind: 'poster', ref: p.id, title: p.title });
+      }
+      if (have !== postersRef.current) {
+        postersRef.current = have;
+        setPosters(have);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lesson, mode, streak.count],
+  );
 
   const afterMove = useCallback(
     (g: Game) => {
@@ -162,27 +257,32 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const place = useCallback(
     (slot: number, ox: number, oy: number) => {
       const g = gRef.current;
+      const s0 = g.score;
       const res = engine.place(g, slot, ox, oy);
       if (res) {
         afterMove(g);
+        meta(g, s0, { kind: 'place', merges: res.steps.length, pushed: 0 });
         bump();
       }
       return res;
     },
-    [afterMove],
+    [afterMove, meta],
   );
 
   const sweep = useCallback(
     (dir: Dir) => {
       const g = gRef.current;
+      const s0 = g.score;
       const res = engine.sweep(g, dir);
       if (res) {
+        g.used = (g.used ?? 0) + 1;
         afterMove(g);
+        meta(g, s0, { kind: 'sweep', merges: res.made.length, pushed: res.pushed?.steps.length ?? 0 });
         bump();
       }
       return res;
     },
-    [afterMove],
+    [afterMove, meta],
   );
 
   const startDaily = useCallback(() => {
@@ -216,10 +316,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (!g.over && lesson === null) record(g);
     setLesson(null);
     saved.current = null;
-    gRef.current = engine.newGame();
+    gRef.current = engine.newGame(rulesConfig(nextRules));
     setWinSeen(false);
     bump();
-  }, [record, lesson, mode]);
+  }, [record, lesson, mode, nextRules]);
 
   const startLesson = useCallback(
     (k: number) => {
@@ -246,18 +346,21 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const finishLessons = useCallback(() => {
     setLearned(true);
     setLesson(null);
-    gRef.current = saved.current && saved.current.moves > 0 && !saved.current.over ? saved.current : engine.newGame();
+    gRef.current = saved.current && saved.current.moves > 0 && !saved.current.over ? saved.current : engine.newGame(rulesConfig(nextRules));
     saved.current = null;
     setWinSeen(false);
     bump();
-  }, []);
+  }, [nextRules]);
 
   const value = useMemo<Store>(() => {
     const g = gRef.current;
     const today = dayKey();
     const d = dailyRef.current?.key === today ? dailyRef.current : null;
-    // A streak lives while its last day is today or yesterday.
-    const alive = streak.last === today || streak.last === prevDay(today);
+    // A streak lives while its last day is today or yesterday, or the day
+    // before with a shield in hand.
+    const alive = streak.last === today || streak.last === prevDay(today) || (!!streak.shield && streak.last === prevDay(prevDay(today)));
+    const list = tasksFor(today);
+    const progress = tasks.key === today ? tasks.progress : [0, 0, 0];
     return {
       ready,
       mode,
@@ -267,6 +370,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
       leaveDaily,
       dailyIntro,
       markDailyIntro: () => setDailyIntro(true),
+      rules: rulesOf(g),
+      nextRules,
+      setRules: setNextRules,
+      rank: rankOf(stats.total),
+      tasks: { list, progress, done: list.map((t, i) => progress[i] >= t.goal) },
+      posters,
+      news,
       game: g,
       version,
       stats: {
@@ -288,6 +398,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       resetProgress: () => {
         setStats(EMPTY);
         setLearned(false);
+        setTasks({ key: '', progress: [0, 0, 0] });
+        setPosters({});
         gRef.current = engine.newGame();
         setWinSeen(false);
         bump();
@@ -308,7 +420,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         bump();
       },
     };
-  }, [ready, version, stats, winSeen, place, sweep, newGame, learned, lesson, startLesson, finishLessons, mode, streak, startDaily, leaveDaily, dailyIntro]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, version, stats, winSeen, place, sweep, newGame, learned, lesson, startLesson, finishLessons, mode, streak, startDaily, leaveDaily, dailyIntro, nextRules, tasks, posters, news]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

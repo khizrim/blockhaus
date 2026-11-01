@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
@@ -14,7 +14,8 @@ import { useTheme } from '@/design/theme';
 import { rank } from '@/design/tokens';
 import { pieceGrid } from '@/design/mock';
 import { DayClock, MedalTrack, StreakDays, Track, milestonesFor } from '@/components/Track';
-import { MEDALS, dayLabel, medalOf, nextMedal, shareOrCopy, shareText } from '@/game/daily';
+import { dayLabel, medalOf, medalsFor, nextMedal, shareText } from '@/game/daily';
+import { shareImage } from '@/game/shareImage';
 import { canRemind, useReminder } from '@/game/remind';
 import { useGame } from '@/game/store';
 
@@ -33,13 +34,16 @@ export default function Over() {
   const steps = milestonesFor(final.cfg.goal);
   const next = steps.find((v) => v > final.bestTile) ?? null;
   const isDaily = mode === 'daily';
-  const medal = medalOf(final.score);
-  const miss = nextMedal(final.score);
+  const medal = medalOf(final.score, daily.key);
+  const miss = nextMedal(final.score, daily.key);
+  const MEDALS = medalsFor(daily.key);
   const stuck = final.tray.filter((p) => p && !p.used);
   const [shareNote, setShareNote] = useState<string | null>(null);
+  const shot = useRef<ComponentRef<typeof View>>(null);
   const share = async () => {
     if (!daily.result) return;
-    const r = await shareOrCopy(shareText(daily.key, daily.result, streak.count));
+    // The poster itself goes out as a picture; a browser sends the text.
+    const r = await shareImage(shot, shareText(daily.key, daily.result, streak.count));
     setShareNote(r === 'copied' ? 'Результат скопирован' : r === 'failed' ? 'Не получилось поделиться' : null);
   };
   const target = final.score;
@@ -58,6 +62,7 @@ export default function Over() {
 
   return (
     <Overlay>
+      <View ref={shot} collapsable={false}>
       <Poster label={summary}>
         <View style={{ flexDirection: 'row', gap: L }}>
           <PosterBoard values={final.board} />
@@ -69,7 +74,7 @@ export default function Over() {
                   <Block fill={medalFill} style={{ height: lower }} />
                 </Animated.View>
                 <Block style={{ height: upper, alignItems: 'center', justifyContent: 'center' }}>
-                  <StreakDays count={streak.count} size={Math.floor((side - space.sm * 2 - 6 * 3) / 7)} />
+                  <StreakDays count={streak.count} shield={streak.shield} size={Math.floor((side - space.sm * 2 - 6 * 3) / 7)} />
                 </Block>
               </>
             ) : (
@@ -112,6 +117,7 @@ export default function Over() {
           </Block>
         </Animated.View>
       </Poster>
+      </View>
 
         <View style={{ width: W, gap: space.md, marginTop: space.lg }}>
           {isDaily ? (

@@ -7,7 +7,7 @@ import { Platform, Share } from 'react-native';
    a day; finishing it keeps the streak going. */
 
 /** Thirty pieces on a board that starts with six tiles. */
-export const DAILY = { pieceLimit: 30, startTiles: 6 };
+export const DAILY = engine.DAILY;
 
 /* Medal lines from the simulator (400 seeded runs of this format; rechecked
    on 2026-11-01 for sweeps that push the next piece in, which spend pieces of
@@ -23,9 +23,40 @@ export const MEDALS = [
   { at: 380, name: 'серебро', of: 'серебра', emoji: '🥈', rank: 2, tile: 0 },
   { at: 500, name: 'золото', of: 'золота', emoji: '🥇', rank: 3, tile: 3 },
 ] as const;
-export type Medal = (typeof MEDALS)[number];
-export const medalOf = (score: number): Medal | null => [...MEDALS].reverse().find((m) => score >= m.at) ?? null;
-export const nextMedal = (score: number): Medal | null => MEDALS.find((m) => score < m.at) ?? null;
+export type Medal = { at: number; name: string; of: string; emoji: string; rank: number; tile: number };
+
+/* Weekday rules: some days of the week bend one rule of the game of the
+   day (engine.WEEKDAY), the same for everyone. Each rule's medal lines keep
+   the plain day's lines at the same share of runs (sim/daily.js weekdays,
+   2026-11-01: each line scaled by the rule's percentile over the plain one). */
+export type DayRule = 'domino' | 'stone' | 'still' | 'big';
+export const RULES: Record<DayRule, { name: string; about: string; medals: [number, number, number] }> = {
+  domino: { name: 'День домино', about: 'Все фигуры — домино.', medals: [330, 400, 530] },
+  stone: { name: 'День камней', about: 'В середине доски два камня. На них нельзя ставить, сдвиг упирается в них.', medals: [210, 310, 460] },
+  still: { name: 'День без сдвигов', about: 'Свайпы не работают, только постановка.', medals: [160, 200, 290] },
+  big: { name: 'День больших плиток', about: 'Доска начинается с крупных плиток.', medals: [450, 510, 860] },
+};
+const weekday = (key: string) => {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay();
+};
+/** The rule bent on this date, or null on a plain day. */
+export function ruleOf(key: string): DayRule | null {
+  const w = (engine.WEEKDAY as Record<number, { rule: DayRule }>)[weekday(key)];
+  return w ? w.rule : null;
+}
+/** The game of the day's config on this date. */
+export function dailyConfig(key: string): Record<string, unknown> {
+  const w = (engine.WEEKDAY as Record<number, Record<string, unknown>>)[weekday(key)];
+  return { ...DAILY, ...(w ?? {}) };
+}
+export function medalsFor(key: string = dayKey()): Medal[] {
+  const r = ruleOf(key);
+  if (!r) return [...MEDALS];
+  return MEDALS.map((m, i) => ({ ...m, at: RULES[r].medals[i] }));
+}
+export const medalOf = (score: number, key?: string): Medal | null => [...medalsFor(key)].reverse().find((m) => score >= m.at) ?? null;
+export const nextMedal = (score: number, key?: string): Medal | null => medalsFor(key).find((m) => score < m.at) ?? null;
 
 /** Local date as YYYY-MM-DD: the day changes at the player's midnight. */
 export function dayKey(d = new Date()): string {
@@ -56,7 +87,7 @@ export function dayStream(key: string, skip = 0) {
 
 export function newDailyGame(key: string): { game: Game; stream: ReturnType<typeof dayStream> } {
   const stream = dayStream(key);
-  return { game: engine.newGame(DAILY, stream.next), stream };
+  return { game: engine.newGame(dailyConfig(key), stream.next), stream };
 }
 
 const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
@@ -97,9 +128,10 @@ export function shareText(key: string, r: { score: number; bestTile: number; boa
   const rows = [];
   for (let y = 0; y < engine.N; y++) rows.push(r.board.slice(y * engine.N, (y + 1) * engine.N).map(square).join(''));
   const days = plural(streak, 'день', 'дня', 'дней');
-  const m = medalOf(r.score);
+  const m = medalOf(r.score, key);
+  const rule = ruleOf(key);
   return [
-    `Blockhaus, игра дня ${dayLabel(key)}`,
+    `Blockhaus, игра дня ${dayLabel(key)}${rule ? ` · ${RULES[rule].name.toLowerCase()}` : ''}`,
     `${m ? `${m.emoji} ` : ''}${r.score.toLocaleString('ru-RU')} очков за ${DAILY.pieceLimit} фигур · серия ${streak} ${days}`,
     '',
     ...rows,

@@ -114,7 +114,7 @@ function kickMusic() {
 }
 
 /** Play one sound, regardless of the haptic. */
-export function play(name: SoundName) {
+export function play(name: SoundName, rate = 1) {
   kickMusic();
   if (!soundOn) return;
   init();
@@ -123,6 +123,9 @@ export function play(name: SoundName) {
   const p = v.players[v.next];
   v.next = (v.next + 1) % VOICES;
   try {
+    // The pitch moves with the rate: a step up the chain is a step up the scale.
+    p.shouldCorrectPitch = false;
+    p.setPlaybackRate(rate);
     p.seekTo(0).catch(() => {});
     p.play();
   } catch {
@@ -155,11 +158,14 @@ export const fx = {
     play('invalid');
     buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));
   },
-  /** One merge producing `value`. */
-  merge: (value: number) => {
+  /** One merge producing `value`. `step` is its place in a placed piece's
+      cascade: each later step plays a semitone higher (up to five) and
+      presses a little harder, so a long chain is heard before its ×2 shows. */
+  merge: (value: number, step = 0) => {
     const r = rungOf(value);
-    play(`merge-${r}` as SoundName);
-    buzz(() => Haptics.impactAsync(r >= 6 ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Soft));
+    play(`merge-${r}` as SoundName, step ? 2 ** (Math.min(step, 5) / 12) : 1);
+    const style = step >= 4 ? Haptics.ImpactFeedbackStyle.Heavy : step >= 2 || r >= 6 ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Soft;
+    buzz(() => Haptics.impactAsync(style));
   },
   /** A chain: each step one beat after the last, so it climbs audibly. */
   cascade: (values: number[], beat = 120) => {

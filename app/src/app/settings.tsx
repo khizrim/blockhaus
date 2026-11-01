@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useState, type ReactNode } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Overlay } from "@/components/Overlay";
 import {
@@ -19,7 +19,10 @@ import {
 import { scenes } from "@/design/mock";
 import { space, type } from "@/design/system";
 import { useTheme, type ThemeMode } from "@/design/theme";
-import { useGame } from "@/game/store";
+import { useGame, type Rules } from "@/game/store";
+import { PALETTES, RANKS } from "@/game/meta";
+import { dark, light, swatches } from "@/design/tokens";
+import { Enamel } from "@/design/depth";
 import engine from "@/game/engine";
 import { Track, milestonesFor } from "@/components/Track";
 import { canRemind, useReminder } from "@/game/remind";
@@ -31,7 +34,7 @@ export default function Settings() {
   const { c } = t;
   const [confirm, setConfirm] = useState(false);
   const [trackW, setTrackW] = useState(0);
-  const { stats, resetProgress, loadPosition } = useGame();
+  const { stats, resetProgress, loadPosition, nextRules, setRules, rank } = useGame();
   const reminder = useReminder();
   const best = stats.best.toLocaleString("ru-RU");
   const openScene = (key: string) => {
@@ -60,6 +63,59 @@ export default function Settings() {
                 { value: "dark", label: "Тёмная" },
               ]}
             />
+          </Section>
+
+          <Section title="Палитра">
+            {/* The masters' palettes open with the workshop rank. */}
+            <View style={{ flexDirection: "row", gap: space.sm }}>
+              {PALETTES.map((p) => {
+                const open = rank.level >= p.rank;
+                const on = t.palette === p.id;
+                return (
+                  <Pressable
+                    key={p.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on, disabled: !open }}
+                    accessibilityLabel={open ? `Палитра ${p.name}` : `Палитра ${p.name}, откроется на ранге ${RANKS[p.rank]}`}
+                    disabled={!open}
+                    onPress={() => t.setPalette(p.id)}
+                    style={{ flex: 1, padding: 3, backgroundColor: on ? c.line : c.hair, opacity: open ? 1 : 0.45 }}
+                  >
+                    <View style={{ backgroundColor: c.surface, padding: space.sm, gap: space.sm }}>
+                      <View style={{ flexDirection: "row", gap: 3 }}>
+                        {swatches(p.id, t.isDark ? dark : light).map((f, k) => (
+                          <View key={k} style={{ flex: 1, aspectRatio: 1, backgroundColor: f, overflow: "hidden" }}>
+                            <Enamel fill={f} size={24} dark={t.isDark} />
+                          </View>
+                        ))}
+                      </View>
+                      <Text numberOfLines={1} adjustsFontSizeToFit style={[type.secondaryStrong, { color: c.text }]}>
+                        {p.name}
+                      </Text>
+                      <Text numberOfLines={1} adjustsFontSizeToFit style={[type.secondary, { color: c.muted }]}>
+                        {open ? (on ? "Выбрана" : " ") : RANKS[p.rank]}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Section>
+
+          <Section title="Сдвиги">
+            <Segmented<Rules>
+              value={nextRules}
+              onChange={setRules}
+              options={[
+                { value: "free", label: "Свободные" },
+                { value: "cascade", label: "За каскады" },
+              ]}
+            />
+            <Label meta>
+              {nextRules === "cascade"
+                ? "Один сдвиг на каждые три фигуры и ещё один за каскад из четырёх слияний. Со следующей партии."
+                : "Свайп всегда работает и вталкивает фигуру из лотка. Со следующей партии."}
+            </Label>
           </Section>
 
           <Section title="Игра">

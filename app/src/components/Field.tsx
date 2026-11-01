@@ -195,6 +195,11 @@ const Cell = memo(function Cell(p: CellProps) {
 
   let fill = v > 0 ? c.tile[rk] : c.canvas;
   let ink = v > 0 ? c.ink[rk] : 'transparent';
+  // A stone: a block of the line colour, a piece of the board's frame.
+  if (v < 0) {
+    fill = c.line;
+    ink = 'transparent';
+  }
   if (look?.shadow) {
     fill = c.line;
     ink = 'transparent';
@@ -248,7 +253,7 @@ const Cell = memo(function Cell(p: CellProps) {
             },
           ]}
         />
-        {!look?.shadow && !look?.ghost ? (
+        {!look?.shadow && !look?.ghost && v >= 0 ? (
           <Enamel fill={fill} open={{ t: !p.t, r: !p.r, b: !p.b, l: !p.l }} size={cell} empty={v <= 0} dark={p.dark} />
         ) : null}
         {look?.absorb ? (
