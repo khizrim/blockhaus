@@ -39,6 +39,7 @@ const SLIDE = dur.base; // ms for tiles to travel in a sweep
 const PUSH_MS = 260; // ms for the pushed piece to ride in from the far edge
 /** The lesson line: one line of title type. */
 const LESSON_H = 30;
+const LESSON_READ = 4200; // ms the explanation stays after a proved step
 const RULE_H = 44; // two lines of secondary text under the lesson title
 /** Under the goal in the first real game: how it ends. */
 const END_RULE = 'Вехи по пути копятся под доской. Игра кончается, когда ходов больше нет.';
@@ -255,7 +256,8 @@ export default function Game() {
         if (!milestoneFired) fx.milestone(24 * 2 ** Math.min(k, 4));
         setCoach('done');
         kickLine();
-        later(1700, () => {
+        // Long enough to read what happened before the next step slides in.
+        later(LESSON_READ, () => {
           if (lessonNow.current !== k) return;
           if (k + 1 < LESSONS.length) return store.startLesson(k + 1);
           finale();
@@ -811,12 +813,18 @@ export default function Game() {
                   {lesson ? (coach === 'task' ? lesson.title : lesson.done) : isDaily ? dailyLine : `Цель: ${g.cfg.goal}`}
                 </Text>
               </Animated.View>
-              {/* The mechanic in words: why the move works. Stays put while
-                  the title turns into the formula, so it can be read twice. */}
+              {/* First the task alone; after the move, what happened and why.
+                  The room is kept during the task so nothing jumps. */}
               {lesson || goalLine ? (
-                <Text numberOfLines={2} style={[type.secondary, { color: c.muted, height: RULE_H - 4, marginTop: 4 }]}>
-                  {lesson ? lesson.rule : END_RULE}
-                </Text>
+                <View style={{ height: RULE_H }}>
+                  {lesson && coach === 'done' ? (
+                    <Explain key={`rule-${store.lesson}`} text={lesson.rule} color={c.text} />
+                  ) : !lesson ? (
+                    <Text numberOfLines={2} style={[type.secondary, { color: c.muted, marginTop: 4 }]}>
+                      {END_RULE}
+                    </Text>
+                  ) : null}
+                </View>
               ) : null}
             </View>
           ) : null}
@@ -1361,6 +1369,23 @@ function Incoming({ piece, ox, oy, dir, delay, cell, gap }: { piece: Piece; ox: 
   return (
     <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: gap / 2 + ox * cell, top: gap / 2 + oy * cell }, st]}>
       <Field variant="piece" {...pieceGrid(piece)} cell={cell} gap={gap} />
+    </Animated.View>
+  );
+}
+
+/** The lesson's explanation: it rises in under the formula once the step is proved. */
+function Explain({ text, color }: { text: string; color: string }) {
+  const k = useSharedValue(0);
+  useEffect(() => {
+    k.value = withDelay(180, withTiming(1, enter(dur.base)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const st = useAnimatedStyle(() => ({ opacity: k.value, transform: [{ translateY: (1 - k.value) * 6 }] }));
+  return (
+    <Animated.View style={st}>
+      <Text numberOfLines={2} style={[type.secondary, { color, marginTop: 4 }]}>
+        {text}
+      </Text>
     </Animated.View>
   );
 }
