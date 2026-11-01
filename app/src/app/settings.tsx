@@ -20,6 +20,7 @@ import { scenes } from "@/design/mock";
 import { space, type } from "@/design/system";
 import { useTheme, type ThemeMode } from "@/design/theme";
 import { useGame } from "@/game/store";
+import { canRemind, useReminder } from "@/game/remind";
 
 /* Settings: a plain list. Sections are labelled, rows are 56 tall and split by
    hairlines, controls sit on the right. */
@@ -28,6 +29,7 @@ export default function Settings() {
   const { c } = t;
   const [confirm, setConfirm] = useState(false);
   const { stats, resetProgress, loadPosition } = useGame();
+  const reminder = useReminder();
   const best = stats.best.toLocaleString("ru-RU");
   const openScene = (key: string) => {
     const sc = scenes.find((x) => x.key === key);
@@ -72,13 +74,22 @@ export default function Settings() {
                   onChange={t.setHaptics}
                 />
               </Row>
-              <Row label="Подсказки" note="Строка помощи под доской">
+              <Row label="Подсказки" note="Доска покажет ход, если долго думать">
                 <Toggle
                   label="Подсказки"
                   value={t.hints}
                   onChange={t.setHints}
                 />
               </Row>
+              {canRemind ? (
+                <Row label="Напоминание" note="Об игре дня, каждый день в 9:00">
+                  <Toggle
+                    label="Напоминание"
+                    value={reminder.on}
+                    onChange={(v) => (v ? reminder.enable() : reminder.disable())}
+                  />
+                </Row>
+              ) : null}
             </List>
           </Section>
 
