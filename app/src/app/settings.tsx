@@ -20,6 +20,8 @@ import { scenes } from "@/design/mock";
 import { space, type } from "@/design/system";
 import { useTheme, type ThemeMode } from "@/design/theme";
 import { useGame } from "@/game/store";
+import engine from "@/game/engine";
+import { Track, milestonesFor } from "@/components/Track";
 import { canRemind, useReminder } from "@/game/remind";
 
 /* Settings: a plain list. Sections are labelled, rows are 56 tall and split by
@@ -28,6 +30,7 @@ export default function Settings() {
   const t = useTheme();
   const { c } = t;
   const [confirm, setConfirm] = useState(false);
+  const [trackW, setTrackW] = useState(0);
   const { stats, resetProgress, loadPosition } = useGame();
   const reminder = useReminder();
   const best = stats.best.toLocaleString("ru-RU");
@@ -109,18 +112,30 @@ export default function Settings() {
 
           <Section title="Прогресс">
             <List>
-              <Row
-                label="Рекорд"
-                note={`Лучшая плитка ${stats.bestTile || "—"}, партий: ${stats.played}, побед: ${stats.wins}`}
+              {/* The way to the goal as the player has walked it, then the numbers. */}
+              <View
+                onLayout={(e) => setTrackW(Math.floor(e.nativeEvent.layout.width))}
+                style={{ paddingVertical: space.lg }}
               >
-                <Text
-                  style={[
-                    type.bodyStrong,
-                    { color: c.text, fontVariant: ["tabular-nums"] },
-                  ]}
-                >
-                  {best}
-                </Text>
+                {trackW ? (
+                  <Track
+                    steps={milestonesFor(engine.DEFAULTS.goal)}
+                    best={stats.bestTile}
+                    next={milestonesFor(engine.DEFAULTS.goal).find((v) => v > stats.bestTile) ?? null}
+                    width={trackW}
+                    gap={4}
+                    top={0}
+                  />
+                ) : null}
+              </View>
+              <Row label="Рекорд">
+                <Text style={[type.bodyStrong, { color: c.text, fontVariant: ["tabular-nums"] }]}>{best}</Text>
+              </Row>
+              <Row label="Партии">
+                <Text style={[type.bodyStrong, { color: c.text, fontVariant: ["tabular-nums"] }]}>{stats.played}</Text>
+              </Row>
+              <Row label="Победы">
+                <Text style={[type.bodyStrong, { color: c.text, fontVariant: ["tabular-nums"] }]}>{stats.wins}</Text>
               </Row>
             </List>
             <Button
