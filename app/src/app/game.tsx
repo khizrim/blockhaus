@@ -927,7 +927,7 @@ function FloorFlash({ d, color, style }: { d: number; color: string; style: obje
     shadow falls on the board, and a glint crosses its face. The hero tile
     rises higher, turns over, and then flies home to the track. */
 function LiftTile({ v, d, at, cell, gap, hero, home }: { v: number; d: number; at: { x: number; y: number }; cell: number; gap: number; hero?: boolean; home?: { x: number; y: number; w: number; h: number } | null }) {
-  const { c, depth, isDark } = useTheme();
+  const { c, isDark } = useTheme();
   const pad = gap / 2;
   const rk = rank(v);
   const lift = useSharedValue(0); // 0 on the board, 1 at the top of the lift
@@ -988,7 +988,7 @@ function LiftTile({ v, d, at, cell, gap, hero, home }: { v: number; d: number; a
   });
   const face = (
     <View style={{ flex: 1, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-      <Depth kind={depth} fill={c.tile[rk]} open={{ t: true, r: true, b: true, l: true }} size={cell} dark={isDark} />
+      <Enamel fill={c.tile[rk]} size={cell} dark={isDark} />
       <TileNum v={v} color={c.ink[rk]} size={Math.max(12, Math.round(cell * (v >= 100 ? 0.28 : v >= 10 ? 0.34 : 0.4)))} />
       <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: -cell * 0.3, bottom: -cell * 0.3, width: cell * 0.28, backgroundColor: '#FFFFFF' }, glintSt]} />
     </View>
@@ -998,7 +998,7 @@ function LiftTile({ v, d, at, cell, gap, hero, home }: { v: number; d: number; a
     <>
       <Animated.View pointerEvents="none" style={[box, { padding: pad, backgroundColor: c.line }, socketSt]}>
         <View style={{ flex: 1, backgroundColor: c.canvas }}>
-          <Depth kind={depth} fill={c.canvas} open={{ t: true, r: true, b: true, l: true }} size={cell} empty dark={isDark} />
+          <Enamel fill={c.canvas} size={cell} empty dark={isDark} />
         </View>
       </Animated.View>
       <Animated.View pointerEvents="none" style={[box, { left: at.x + pad, top: at.y + pad, width: cell - gap, height: cell - gap, backgroundColor: '#000000' }, shadowSt]} />
@@ -1037,7 +1037,7 @@ function Track({ steps, best, width, gap, top }: { steps: number[]; best: number
 }
 
 function TrackStep({ v, on, goal, w, h, frame }: { v: number; on: boolean; goal: boolean; w: number; h: number; frame: number }) {
-  const { c, depth, isDark } = useTheme();
+  const { c, isDark } = useTheme();
   const rk = rank(v);
   const k = useSharedValue(1);
   const was = useRef(on);
@@ -1050,7 +1050,7 @@ function TrackStep({ v, on, goal, w, h, frame }: { v: number; on: boolean; goal:
   return (
     <Animated.View style={[{ width: w, height: h, padding: frame, backgroundColor: on || goal ? c.line : c.hair }, st]}>
       <View style={{ flex: 1, backgroundColor: on ? c.tile[rk] : c.canvas, alignItems: 'center', justifyContent: 'center' }}>
-        <Depth kind={depth} fill={on ? c.tile[rk] : c.canvas} open={{ t: true, r: true, b: true, l: true }} size={h} empty={!on} dark={isDark} />
+        <Enamel fill={on ? c.tile[rk] : c.canvas} size={h} empty={!on} dark={isDark} />
         <TileNum v={v} color={on ? c.ink[rk] : goal ? c.text : c.faint} size={Math.max(11, Math.round(h * 0.36))} />
       </View>
     </Animated.View>
