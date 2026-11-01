@@ -47,3 +47,25 @@ Win means making a 96, the top of the ladder.
 | fold the line | 52 | 125 | 28 | 197 | 58 | 118 |
 
 A small, even lift: about three points of win rate and a few moves longer for every profile. The bot sweeps only when a sweep beats its best placement and never sets a fold up, so a player who builds lines for it will gain more than this.
+
+## Free sweeps and a higher goal (2026-11-01)
+
+`SWEEPERS=1 node sim/simulate.js 200 limited freeNone freeMerge spawn192 spawn384 spawn768`. Win % against each variant's own goal. The `sw*` profiles are a new bot that may swipe before each piece (it tries every sweep, then the best placement on the board that leaves); they are far stronger than the naive bots, and a person who swipes a lot sits between the two families.
+
+| | goal | casual | regular | expert | swCasual | swRegular | swExpert | swExpert moves |
+|---|---|---|---|---|---|---|---|---|
+| limited (before) | 192 | 1 | 26 | 59 | 96 | 100 | 100 | 1049 |
+| free, no price | 768 | 0 | 1 | 1 | 58 | 97 | 99 | 1637 |
+| free, merge only | 768 | 0 | 1 | 1 | 0 | 3 | 6 | 221 |
+| **free, new tile per sweep** | 192 | 1 | 35 | 66 | 91 | 98 | 100 | 446 |
+| **free, new tile per sweep** | **384** | 0 | 4 | 27 | 56 | 92 | 97 | 446 |
+| free, new tile per sweep | 768 | 0 | 1 | 3 | 10 | 62 | 75 | 446 |
+
+- **Sweeps with no price break the game**: a swiping player reaches 1536 and runs past 1600 pieces. The game never really ends.
+- **"Only if it merges"** is the opposite: a swipe can no longer make room, and the swiping bots fall below the naive ones.
+- **First shipped, then replaced: every sweep slides a new 1 or 2 in from the edge the tiles left** (`sweepCost: 'spawn'`, as in Threes). Swiping is free but fills the board, so games end; a swiping player's runs are less than half as long as with counted sweeps (which, with two per tray plus chain bonuses, already let the bot swipe almost every piece).
+- **Goal 384**: for a player who swipes it is a little harder than 192 was with counted sweeps (swCasual 96% → 56%), and the naive players rarely get there. 768 would be out of reach for most.
+
+Game of the day (30 pieces, 6 start tiles), 400 runs: with spawn, scores rise 10% (casual) to 45% (swiping bots).
+
+**Shipped after Khizri's pick (2026-11-01): a sweep goes only if it merges** (`sweepCost: 'merge'`), no new tiles. Goal stays 384, which makes it a long climb: at 384 swCasual 6%, swRegular 23%, swExpert 40%, regular 8% (100-game run in the thread; at 192 they would be 46 / 65 / 82 / 31%). The milestones on the way carry the motivation. Game-of-the-day scores barely move under this rule (regular median 357 vs 354), so the medals stay at 250 / 350 / 450.

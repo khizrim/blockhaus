@@ -8,7 +8,7 @@ export type Step = { absorbed: number[]; anchor: number; level: number };
 export type Config = Record<string, unknown>;
 
 export type Game = {
-  cfg: Config & { sweepChain?: boolean; goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
+  cfg: Config & { sweepChain?: boolean; freeSweeps?: boolean; sweepCost?: 'spawn' | 'merge' | 'none'; goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
   rng: () => number;
   board: number[];
   tray: Piece[];
@@ -22,12 +22,14 @@ export type Game = {
 };
 
 export type PlaceResult = { laid: number[]; steps: Step[]; refilled: boolean; /** The chain earned a sweep. */ bonus: boolean };
-export type SweepResult = { made: { at: number; level: number }[]; moved: boolean };
+export type SweepResult = { made: { at: number; level: number }[]; moved: boolean; /** With free sweeps: the new low tile slid in at the far edge. */ spawned?: { at: number; value: number } | null };
 export type Dir = 'left' | 'right' | 'up' | 'down';
 
 declare const engine: {
   N: number;
-  DEFAULTS: Config;
+  DEFAULTS: Config & { goal: number };
+  /** The balance before free sweeps: two per tray, goal 192. */
+  LIMITED: Config;
   pairs(a: number, b: number): boolean;
   merged(a: number, b: number): number;
   rank(v: number): number;

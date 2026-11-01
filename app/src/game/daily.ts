@@ -9,7 +9,8 @@ import { Platform, Share } from 'react-native';
 /** Thirty pieces on a board that starts with six tiles. */
 export const DAILY = { pieceLimit: 30, startTiles: 6 };
 
-/* Medal lines from the simulator (400 seeded runs of this format): bronze is
+/* Medal lines from the simulator (400 seeded runs of this format; rechecked
+   for free sweeps that must merge on 2026-11-01, scores barely moved): bronze is
    about a casual player's best quarter, silver a regular player's median,
    gold the top tenth of a strong one. */
 export const MEDALS = [

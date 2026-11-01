@@ -32,6 +32,18 @@ const GROUPS: { title: string; items: { name: SoundName; label: string; note: st
       { name: 'merge-7', label: 'Получилась 48', note: 'Ля' },
       { name: 'merge-8', label: 'Получилась 96', note: 'До октавой выше' },
       { name: 'merge-9', label: 'Получилась 192', note: 'Ре над октавой' },
+      { name: 'merge-10', label: 'Получилась 384', note: 'Ми над октавой' },
+      { name: 'merge-11', label: 'Получилась 768', note: 'Соль над октавой' },
+    ],
+  },
+  {
+    title: 'Вехи: новый рекорд партии от 24',
+    items: [
+      { name: 'milestone-6', label: 'Первая 24', note: 'Колокол на соль' },
+      { name: 'milestone-7', label: 'Первая 48', note: 'Колокол на ля' },
+      { name: 'milestone-8', label: 'Первая 96', note: 'Колокол на до' },
+      { name: 'milestone-9', label: 'Первая 192', note: 'Колокол на ре' },
+      { name: 'milestone-11', label: 'Первая 768', note: 'После цели, колокол на соль' },
     ],
   },
   {

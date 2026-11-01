@@ -91,6 +91,23 @@ export const scenes: Scene[] = [
     merges: 260,
     sweeps: 1,
   },
+  {
+    key: 'milestone',
+    title: 'Веха за ход',
+    // Two 24s in the top row: a swipe left makes the first 48 of the game.
+    board: rows(
+      '24 0 0 24 0 0',
+      '6 0 3 0 0 0',
+      '12 0 0 0 2 0',
+      '3 0 1 0 0 0',
+      '0 0 0 6 0 0',
+      '2 0 0 0 0 1',
+    ),
+    tray: [S1, D3, S2],
+    score: 320,
+    merges: 40,
+    sweeps: 2,
+  },
 ];
 
 export const sceneByKey = (k?: string) => scenes.find((s) => s.key === k) ?? scenes[0];

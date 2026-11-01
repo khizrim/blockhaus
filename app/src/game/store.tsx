@@ -226,7 +226,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const L = LESSONS[k];
       if (!L) return;
       if (lesson === null) saved.current = gRef.current;
-      const g = engine.newGame();
+      // Lessons keep counted sweeps: no new tile slides in to spoil the position.
+      const g = engine.newGame(engine.LIMITED);
       g.board = L.board.slice();
       g.tray = L.tray.map((p) => ({ cells: p.cells.map((c) => [...c] as [number, number, number]), used: p.used }));
       g.sweeps = L.sweeps;
@@ -296,7 +297,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         ng.sweeps = p.sweeps;
         ng.moves = 1;
         ng.bestTile = Math.max(...p.board);
-        ng.won = ng.bestTile >= 192;
+        ng.won = ng.bestTile >= ng.cfg.goal;
         ng.over = !engine.anyMove(ng);
         gRef.current = ng;
         setWinSeen(false);

@@ -11,6 +11,7 @@ short, soft at the attack and quiet: a puzzle you play for an hour must not
 tire the ear.
 """
 import os
+import sys
 import wave
 
 import numpy as np
@@ -80,6 +81,8 @@ def layer(a, b, delay=0.0, gain=1.0):
 
 
 def write(name, x, peak=0.5):
+    if ONLY and not any(name.startswith(o) for o in ONLY):
+        return
     x = fade_out(pad(x))
     x = x / (np.max(np.abs(x)) + 1e-9) * peak
     data = (x * 32767).astype('<i2')
@@ -121,9 +124,13 @@ def note(semis_from_c5):
 
 
 # Major pentatonic from C5, one step per rung. Rung 3 (the first merge, 1+2)
-# is C5; 96, rung 8, is C6 an octave above; 192, the goal, steps on to D6.
+# is C5; 96, rung 8, is C6 an octave above; 192 steps on to D6, 384 to E6
+# and 768 to G6.
 PENT = [0, 2, 4, 7, 9, 12, 14, 16, 19]
 RUNG_NOTE = {r: note(PENT[r - 3]) for r in range(3, 12)}
+
+
+ONLY = set(sys.argv[1:])
 
 
 def main():
@@ -144,8 +151,20 @@ def main():
     write('invalid', layer(a, lowpass(knock(160, d=d, bright=0.3), 1000), 0.075, 0.8), 0.4)
 
     # Merges, one per rung the merge produces.
-    for r in range(3, 10):
+    for r in range(3, 12):
         write(f'merge-{r}', marimba(RUNG_NOTE[r]), 0.5)
+
+    # A milestone (a new best of 24, rung 6, and up): the rung's note struck with its
+    # octave and fifth a beat apart, like a bell, then a soft held shimmer.
+    for r in range(6, 12):
+        f = RUNG_NOTE[r]
+        out = np.zeros(int(SR * 1.3))
+        out = layer(out, marimba(f, 0.9) * 0.8, 0.0)
+        out = layer(out, marimba(f * 1.5, 0.8) * 0.5, 0.07)
+        out = layer(out, marimba(f * 2, 0.9) * 0.55, 0.14)
+        bell = modes([f * 2, f * 2 * 2.76], [0.25, 0.06], [0.9, 0.3], 1.1, attack=0.01)
+        out = layer(out, bell, 0.14)
+        write(f'milestone-{r}', out, 0.5)
 
     # Sweep: the board slides on felt. Band-limited noise with a falling
     # cutoff, then a knock as it settles.

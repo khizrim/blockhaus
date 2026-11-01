@@ -10,6 +10,7 @@ import { dur, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { Enamel, panelEnamel } from '@/design/depth';
 import { font } from '@/design/tokens';
+import engine from '@/game/engine';
 import { dayLabel, medalOf, shareOrCopy, shareText } from '@/game/daily';
 import { useGame } from '@/game/store';
 
@@ -47,7 +48,7 @@ export function PosterMenu() {
   };
   const recordLine = stats.played || stats.best
     ? `Рекорд ${stats.best.toLocaleString('ru-RU')} · лучшая плитка ${stats.bestTile}`
-    : 'Сложите 1 и 2, дойдите до 192';
+    : `Сложите 1 и 2, дойдите до ${engine.DEFAULTS.goal}`;
 
   const L = 8; // poster line weight, on the 8pt grid
   const A = Math.round(Math.min(H * 0.44, W * 1.05)); // poster height
