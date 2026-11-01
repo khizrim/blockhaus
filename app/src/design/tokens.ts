@@ -94,7 +94,8 @@ export function pairs(a: number, b: number): boolean {
 }
 
 export const font = {
-  /** Dela Gothic One: the wordmark only. It is a logo, not a type style. */
+  /** Dela Gothic One: the wordmark, and the score on the game-over card, the one
+      number that is a poster rather than a reading. Nowhere else. */
   wide: 'DelaGothicOne_400Regular',
   /** Onest for everything else, in three weights: 400, 500, 600. */
   body: 'Onest_400Regular',

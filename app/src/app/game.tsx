@@ -5,7 +5,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequ
 
 import { Field, type CellLook } from '@/components/Field';
 import { Overlay } from '@/components/Overlay';
-import { Body, Button, Heading, IconButton, Label, Panel, PauseIcon, Screen, TextLink, TileBadge } from '@/components/ui';
+import { Body, Button, Heading, IconButton, Label, Panel, PauseIcon, Screen, TextLink } from '@/components/ui';
 import { pieceGrid } from '@/design/mock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dur, enter, exit, HIT, space, type } from '@/design/system';
@@ -19,6 +19,7 @@ import { slideMoves, type Move } from '@/game/slide';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
 import { TileNum } from '@/components/TileNum';
+import { Formula } from '@/components/Formula';
 import { INTRO_STEP, MedalTrack, Track, milestonesFor } from '@/components/Track';
 
 /* The game. The rules are the engine the prototype and the balance simulator
@@ -41,8 +42,6 @@ const noSelect = { userSelect: 'none' } as object;
 const SWIPE = 24; // px of travel that counts as a swipe
 const SLIDE = dur.base; // ms for tiles to travel in a sweep
 const PUSH_MS = 260; // ms for the pushed piece to ride in from the far edge
-/** The lesson line: one line of title type. */
-const LESSON_H = 30;
 const EXPLAIN_AFTER = 1100; // ms from a proved step to its explanation card
 const LESSON_READ = 1400; // ms more to read the formula of a step with no card
 
@@ -221,6 +220,8 @@ export default function Game() {
   /* The board takes what is left of the height after the fixed parts:
      header ~64, the lesson card when there is one, the tray, and the 8pt
      paddings around them. Never wider than the screen, never under 240. */
+  // The line above the board: a lesson's formula, its tiles at the tray's cell.
+  const LESSON_H = trayMax;
   const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || isDaily ? LESSON_H + space.lg : 0) + (g.cfg.freeSweeps ? 44 : 18) + trayMax * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
@@ -868,14 +869,12 @@ export default function Game() {
               proved) and, under it, the mechanic. The way out of the lessons is in pause. */}
           {lesson ? (
             <View style={{ width: col, marginBottom: step }}>
-              <Animated.View style={[{ height: LESSON_H, justifyContent: 'center' }, lineStyle]}>
-                <Text
-                  accessibilityRole="header"
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  style={[type.title, { color: c.text }]}>
-                  {coach === 'task' ? lesson.title : lesson.done}
-                </Text>
+              <Animated.View
+                accessible
+                accessibilityRole="header"
+                accessibilityLabel={lesson.title}
+                style={[{ height: LESSON_H, justifyContent: 'center' }, lineStyle]}>
+                <Formula terms={lesson.formula} cell={trayCell} gap={gap} open={coach === 'task'} fit={col} />
               </Animated.View>
             </View>
           ) : isDaily ? (
@@ -923,11 +922,14 @@ export default function Game() {
                 <View style={StyleSheet.absoluteFill}>
                   <Overlay>
                     <Panel>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-                        <TileBadge v={lesson.result} size={Math.round(cell * 0.8)} />
-                        <Heading>{lesson.done}</Heading>
+                      {/* The proved formula and the related rows, all at the
+                          tray's size, so the card reads as one table. */}
+                      <View style={{ gap: space.md }}>
+                        {[lesson.formula, ...(lesson.also ?? [])].map((row, k) => (
+                          <Formula key={k} terms={row} cell={trayCell} gap={gap} fit={Math.min(col, 360) - space.lg * 2 - space.xl * 2 - 2} />
+                        ))}
                       </View>
-                      <Body style={{ marginTop: space.sm }}>{lesson.rule}</Body>
+                      <Body style={{ marginTop: space.lg }}>{lesson.rule}</Body>
                       <View style={{ marginTop: space.lg }}>
                         <Button kind="primary" size="lg" label="Понятно" onPress={nextLesson} />
                       </View>

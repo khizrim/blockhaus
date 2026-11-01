@@ -1,11 +1,13 @@
-import { useEffect, useRef } from 'react';
-import { View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 
 import { TileNum } from '@/components/TileNum';
 import { Enamel } from '@/design/depth';
 import { useTheme } from '@/design/theme';
+import { type } from '@/design/system';
 import { rank } from '@/design/tokens';
+import { minutesLeft } from '@/game/daily';
 
 const back = (d: number, k = 1.8) => ({ duration: d, easing: Easing.out(Easing.back(k)) });
 export const INTRO_STEP = 110; // ms between the track's squares as it assembles
@@ -132,6 +134,57 @@ export function StreakDays({ count, size = 14, gap = 3 }: { count: number; size?
           </View>
         </View>
       ))}
+    </View>
+  );
+}
+
+/** Time to the next game of the day as the board would show it: a framed
+    strip of 24 hours, the ones left lit blue, going out one by one towards
+    midnight, and the hours and minutes beside it. Ticks on its own. */
+export function DayClock({ width, top = 0 }: { width: number; top?: number }) {
+  const { c, isDark } = useTheme();
+  const [mins, setMins] = useState(() => minutesLeft());
+  useEffect(() => {
+    const id = setInterval(() => setMins(minutesLeft()), 20000);
+    return () => clearInterval(id);
+  }, []);
+  const left = Math.ceil(mins / 60);
+  const clock = `${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')}`;
+  const frame = 3;
+  const label = 44;
+  const strip = width - label - frame * 2 - 8;
+  const cw = (strip - frame * 23) / 24;
+  return (
+    <View
+      accessible
+      accessibilityLabel={`Новая игра дня через ${Math.floor(mins / 60)} ч ${mins % 60} мин`}
+      style={{ width, flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: top }}>
+      <View style={{ height: 12 + frame * 2, padding: frame, backgroundColor: c.line, flexDirection: 'row', gap: frame }}>
+        {Array.from({ length: 24 }, (_, k) => k >= 24 - left).map((on, k) => (
+          <View key={k} style={{ width: cw, backgroundColor: on ? c.tile[1] : c.canvas, overflow: 'hidden' }}>
+            {on ? <Enamel fill={c.tile[1]} size={12} dark={isDark} /> : null}
+          </View>
+        ))}
+      </View>
+      <Text allowFontScaling={false} style={[type.secondaryStrong, { width: label, color: c.text, fontVariant: ['tabular-nums'], textAlign: 'right' }]}>
+        {clock}
+      </Text>
+    </View>
+  );
+}
+
+/** A medal as a tile: a square in the medal's colour, the score on it.
+    Without a medal, an empty framed square with the score in ink. */
+export function MedalMark({ medal, score, size = 24 }: { medal: { tile: number } | null; score: number; size?: number }) {
+  const { c, isDark } = useTheme();
+  const fill = medal ? (medal.tile ? c.tile[medal.tile] : c.faint) : c.canvas;
+  const ink = medal ? (medal.tile ? c.ink[medal.tile] : c.line) : c.text;
+  return (
+    <View style={{ height: size, padding: 2, backgroundColor: medal ? c.line : c.hair }}>
+      <View style={{ flex: 1, minWidth: size * 1.6, paddingHorizontal: 6, backgroundColor: fill, alignItems: 'center', justifyContent: 'center' }}>
+        <Enamel fill={fill} size={size} empty={!medal} dark={isDark} />
+        <TileNum v={score} color={ink} size={Math.max(12, Math.round(size * 0.5))} />
+      </View>
     </View>
   );
 }

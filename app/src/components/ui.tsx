@@ -105,8 +105,8 @@ type BtnProps = {
   kind?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
   size?: 'md' | 'lg';
   disabled?: boolean;
-  /** Right-aligned extra, e.g. the score on Continue. */
-  trailing?: string;
+  /** Right-aligned extra, e.g. the score on Continue, or a small mark. */
+  trailing?: ReactNode;
   style?: ViewStyle;
   accessibilityLabel?: string;
 };
@@ -148,7 +148,7 @@ export function Button({ label, onPress, kind = 'secondary', size = 'md', disabl
         ]}>
         {primary ? <Enamel fill={bg} size={44} dark={isDark} /> : null}
         <Text style={[type.bodyStrong, { color: fg }]}>{label}</Text>
-        {trailing ? <Text style={[type.bodyStrong, { color: fg, opacity: 0.7, fontVariant: ['tabular-nums'] }]}>{trailing}</Text> : null}
+        {typeof trailing === 'string' ? <Text style={[type.bodyStrong, { color: fg, opacity: 0.7, fontVariant: ['tabular-nums'] }]}>{trailing}</Text> : trailing}
       </Animated.View>
     </Pressable>
   );

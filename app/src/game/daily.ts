@@ -63,10 +63,15 @@ export function dayLabel(key: string): string {
   return `${d} ${MONTHS[m - 1]}`;
 }
 
-/** How long until the next game of the day, the player's midnight: «7 ч 20 мин», «40 мин». */
-export function untilTomorrow(now = new Date()): string {
+/** Minutes until the next game of the day, the player's midnight. */
+export function minutesLeft(now = new Date()): number {
   const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  const mins = Math.max(1, Math.ceil((next.getTime() - now.getTime()) / 60000));
+  return Math.max(1, Math.ceil((next.getTime() - now.getTime()) / 60000));
+}
+
+/** How long until the next game of the day: «7 ч 20 мин», «40 мин». */
+export function untilTomorrow(now = new Date()): string {
+  const mins = minutesLeft(now);
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   return h ? `${h} ч${m ? ` ${m} мин` : ''}` : `${m} мин`;
