@@ -1,20 +1,32 @@
 import { router } from 'expo-router';
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
-import Animated, { Easing, FadeIn, FadeInDown } from 'react-native-reanimated';
+import { View } from 'react-native';
+import Animated, { Easing, FadeIn, ZoomIn } from 'react-native-reanimated';
 
-import { Field } from '@/components/Field';
+import { Overlay } from '@/components/Overlay';
+import { Block, Poster, PosterBoard, ScoreBand, usePoster } from '@/components/Poster';
+import { TileNum } from '@/components/TileNum';
+import { Track, milestonesFor } from '@/components/Track';
+import { Body, Button } from '@/components/ui';
+import { dur, space } from '@/design/system';
+import { useTheme } from '@/design/theme';
+import { rank } from '@/design/tokens';
 import engine from '@/game/engine';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
-import { Overlay } from '@/components/Overlay';
-import { Body, Button, Heading, Panel, Stat } from '@/components/ui';
-import { dur, space } from '@/design/system';
 
-/* The win. One tile, the goal, is the picture: the only colour on the card. */
+/* The win, as the same poster as game over. The board as it stands; beside
+   it one tall block, the goal tile itself, in its own colour, the whole
+   height of the board. The score, the track lit to the end. No sentence:
+   the block is the news. */
 const GOAL = engine.DEFAULTS.goal;
 export default function Win() {
+  const { c } = useTheme();
   const { game, markWinSeen, newGame, mode } = useGame();
+  const { L, inner, board, side } = usePoster();
+  const goal = Math.max(GOAL, game.bestTile);
+  const rk = rank(goal);
+  const steps = milestonesFor(game.cfg.goal);
   useEffect(() => {
     fx.win();
     markWinSeen();
@@ -22,45 +34,39 @@ export default function Win() {
   }, []);
   return (
     <Overlay>
-      <Panel>
-        {/* The box holds the size; the animation lives inside it. On the web
-            the entering animation drops its own view's size when it ends, and
-            the heading slid up under the tile. */}
-        <View style={{ alignSelf: 'flex-start', width: 96, height: 96 }}>
-          <Animated.View
-            entering={FadeInDown.delay(dur.base).duration(dur.slow).easing(Easing.out(Easing.cubic)).withInitialValues({ opacity: 0, transform: [{ translateY: 8 }] })}
-            style={StyleSheet.absoluteFill}>
-            <Field w={1} h={1} values={[Math.max(GOAL, game.bestTile)]} cell={96} gap={8} variant="piece" />
+      <Poster label={`Вы собрали ${goal}. ${game.score} очков.`}>
+        <View style={{ flexDirection: 'row', gap: L }}>
+          <PosterBoard values={game.board} />
+          <Animated.View entering={ZoomIn.delay(dur.base).duration(dur.slow).easing(Easing.out(Easing.back(1.6)))}>
+            <Block fill={c.tile[rk]} style={{ width: side, height: board, alignItems: 'center', justifyContent: 'center' }}>
+              <TileNum v={goal} color={c.ink[rk]} size={Math.round(side * 0.34)} />
+            </Block>
           </Animated.View>
         </View>
-        <Heading style={{ marginTop: space.xl }}>Вы собрали {Math.max(GOAL, game.bestTile)}</Heading>
+        <ScoreBand value={game.score} />
+        <Animated.View entering={FadeIn.delay(dur.slow).duration(dur.base)}>
+          <Block style={{ padding: space.md }}>
+            <Track steps={steps} best={game.bestTile} next={null} width={inner - space.md * 2} gap={4} top={0} />
+          </Block>
+        </Animated.View>
+      </Poster>
+      <View style={{ width: '100%', gap: space.md, marginTop: space.lg }}>
         {game.score >= 1919 ? (
           // The score milestone, named once, where there is room to read it.
-          <Body muted style={{ marginTop: space.sm }}>
-            По пути вы прошли 1919 очков: в этом году открылся Баухаус.
-          </Body>
+          <Body muted small style={{ textAlign: 'center' }}>1919 очков: в этом году открылся Баухаус</Body>
         ) : null}
-        <Body muted style={{ marginTop: space.sm }}>
-          {mode === 'daily' ? 'Игра дня выиграна. Доиграйте её до конца, чтобы записать результат.' : 'Партия выиграна. Можно продолжить на очки или начать новую.'}
-        </Body>
-        <Animated.View entering={FadeIn.delay(dur.slow).duration(dur.base)} style={{ flexDirection: 'row', gap: space.xxl, marginTop: space.xl }}>
-          <Stat label="Очки" value={game.score.toLocaleString('ru-RU')} />
-          <Stat label="Слияния" value={String(game.merges)} />
-          <Stat label="Ходы" value={String(game.moves)} />
-        </Animated.View>
-        <View style={{ gap: space.md, marginTop: space.xl }}>
-          <Button kind="primary" size="lg" label="Играть дальше" onPress={() => router.back()} />
-          {mode === 'daily' ? null : (
-            <Button
-              label="Новая игра"
-              onPress={() => {
-                newGame();
-                router.back();
-              }}
-            />
-          )}
-        </View>
-      </Panel>
+        {mode === 'daily' ? <Body muted small style={{ textAlign: 'center' }}>Доиграйте до конца, чтобы записать результат</Body> : null}
+        <Button kind="primary" size="lg" label="Играть дальше" onPress={() => router.back()} />
+        {mode === 'daily' ? null : (
+          <Button
+            label="Новая игра"
+            onPress={() => {
+              newGame();
+              router.back();
+            }}
+          />
+        )}
+      </View>
     </Overlay>
   );
 }
