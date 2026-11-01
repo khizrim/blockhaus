@@ -228,7 +228,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (lesson === null) saved.current = gRef.current;
       // The real rules: sweeps are free and each pushes the lesson's next
       // tray piece in from the far edge; a lesson's tray holds only what it teaches.
+      // The score runs on through the lessons instead of starting over each step.
+      const carry = lesson !== null ? gRef.current.score : 0;
       const g = engine.newGame();
+      g.score = carry;
       g.board = L.board.slice();
       g.tray = L.tray.map((p) => ({ cells: p.cells.map((c) => [...c] as [number, number, number]), used: p.used }));
       g.sweeps = L.sweeps;

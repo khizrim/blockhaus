@@ -11,7 +11,7 @@ import { useTheme } from '@/design/theme';
 import { Enamel, panelEnamel } from '@/design/depth';
 import { font } from '@/design/tokens';
 import engine from '@/game/engine';
-import { dayLabel, medalOf, shareOrCopy, shareText } from '@/game/daily';
+import { dayLabel, medalOf, shareOrCopy, shareText, untilTomorrow } from '@/game/daily';
 import { useGame } from '@/game/store';
 
 import { Grow } from './marks';
@@ -47,7 +47,7 @@ export function PosterMenu() {
     go.play();
   };
   const recordLine = stats.played || stats.best
-    ? `Рекорд ${stats.best.toLocaleString('ru-RU')} · лучшая плитка ${stats.bestTile}`
+    ? `Дошли до ${stats.bestTile} из ${engine.DEFAULTS.goal} · рекорд ${stats.best.toLocaleString('ru-RU')}`
     : `Сложите 1 и 2, дойдите до ${engine.DEFAULTS.goal}`;
 
   const L = 8; // poster line weight, on the 8pt grid
@@ -117,7 +117,7 @@ export function PosterMenu() {
             daily.done ? (
               <Button
                 label="Поделиться игрой дня"
-                trailing={`${medalOf(daily.result!.score)?.emoji ?? ''} ${daily.result!.score.toLocaleString('ru-RU')}`.trim()}
+                trailing={`${medalOf(daily.result!.score)?.name ?? ''} ${daily.result!.score.toLocaleString('ru-RU')}`.trim()}
                 accessibilityLabel={`Поделиться игрой дня, ${daily.result!.score} очков`}
                 onPress={shareDaily}
               />
@@ -128,6 +128,11 @@ export function PosterMenu() {
                 onPress={openDaily}
               />
             )
+          ) : null}
+          {learned && daily.done && !dailyNote ? (
+            <Text style={[type.secondary, { color: c.muted, textAlign: 'center' }]}>
+              {`Новая игра дня через ${untilTomorrow()}${streak.count > 1 ? ` · серия ${streak.count}` : ''}`}
+            </Text>
           ) : null}
           {dailyNote ? <Text style={[type.secondary, { color: c.muted, textAlign: 'center' }]}>{dailyNote}</Text> : null}
           <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.xxl, marginTop: space.xs }}>

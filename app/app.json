@@ -72,6 +72,12 @@
           "recordAudioAndroid": false,
           "enableBackgroundPlayback": false
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#111215"
+        }
       ]
     ],
     "experiments": {

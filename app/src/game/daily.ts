@@ -15,9 +15,11 @@ export const DAILY = { pieceLimit: 30, startTiles: 6 };
    about a casual player's best quarter, silver a regular player's median,
    gold the top tenth of a strong one. */
 export const MEDALS = [
-  { at: 250, name: 'бронза', of: 'бронзы', emoji: '🥉', rank: 1 },
-  { at: 330, name: 'серебро', of: 'серебра', emoji: '🥈', rank: 2 },
-  { at: 420, name: 'золото', of: 'золота', emoji: '🥇', rank: 3 },
+  // `tile`: the board colour the medal wears on screen (umber, 0 = grey, yellow);
+  // the emoji stay for the text people paste into chats.
+  { at: 250, name: 'бронза', of: 'бронзы', emoji: '🥉', rank: 1, tile: 9 },
+  { at: 330, name: 'серебро', of: 'серебра', emoji: '🥈', rank: 2, tile: 0 },
+  { at: 420, name: 'золото', of: 'золота', emoji: '🥇', rank: 3, tile: 3 },
 ] as const;
 export type Medal = (typeof MEDALS)[number];
 export const medalOf = (score: number): Medal | null => [...MEDALS].reverse().find((m) => score >= m.at) ?? null;
@@ -59,6 +61,15 @@ const MONTHS = ['января', 'февраля', 'марта', 'апреля', 
 export function dayLabel(key: string): string {
   const [, m, d] = key.split('-').map(Number);
   return `${d} ${MONTHS[m - 1]}`;
+}
+
+/** How long until the next game of the day, the player's midnight: «7 ч 20 мин», «40 мин». */
+export function untilTomorrow(now = new Date()): string {
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const mins = Math.max(1, Math.ceil((next.getTime() - now.getTime()) / 60000));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h ? `${h} ч${m ? ` ${m} мин` : ''}` : `${m} мин`;
 }
 
 /* The board as coloured squares, for sharing in any chat: the Mondrian in
