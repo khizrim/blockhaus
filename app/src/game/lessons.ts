@@ -13,6 +13,8 @@ export type Lesson = {
   /** What just happened and the mechanic behind it, shown only after the move proves the step. */
   rule: string;
   done: string;
+  /** The tile the step makes, shown on its explanation card. */
+  result: number;
   board: number[];
   tray: Piece[];
   sweeps: number;
@@ -38,6 +40,7 @@ export const LESSONS: Lesson[] = [
     title: 'Поставьте 1 рядом с 2',
     rule: 'Единица и двойка сложились в 3. Только так: две единицы или две двойки не сливаются.',
     done: '1 + 2 = 3',
+    result: 3,
     board: board([[3, 2, 2]]),
     tray: [none(), piece([[0, 0, 1]]), none()],
     sweeps: 0,
@@ -48,6 +51,7 @@ export const LESSONS: Lesson[] = [
     title: 'Сделайте вторую тройку',
     rule: 'Две тройки слились в 6. Дальше сливаются только одинаковые: 6 и 6 дадут 12.',
     done: '3 + 3 = 6',
+    result: 6,
     board: board([[1, 2, 3], [3, 2, 2]]),
     tray: [none(), piece([[0, 0, 1]]), none()],
     sweeps: 0,
@@ -58,6 +62,7 @@ export const LESSONS: Lesson[] = [
     title: 'Поставьте 1 в центр',
     rule: 'Новая 3 нашла соседку, вышло 6, потом 12 и 24. Слияния идут цепочкой.',
     done: '3 → 6 → 12 → 24',
+    result: 24,
     board: board([[1, 2, 3], [3, 2, 2], [2, 1, 6], [2, 3, 12]]),
     tray: [none(), piece([[0, 0, 1]]), none()],
     sweeps: 0,
@@ -68,6 +73,7 @@ export const LESSONS: Lesson[] = [
     title: 'Каждой 1 своя 2',
     rule: 'Каждая двойка нашла свою единицу. Клетки фигуры сливаются каждая сама по себе.',
     done: '3 + 3 = 6, сразу',
+    result: 6,
     board: board([[2, 3, 1], [3, 3, 1]]),
     tray: [none(), piece([[0, 0, 2], [1, 0, 2]]), none()],
     sweeps: 0,
@@ -78,6 +84,7 @@ export const LESSONS: Lesson[] = [
     title: 'Смахните доску вбок',
     rule: 'Всё съехало к краю, 1 и 2 слились. С другого края въехала первая фигура из лотка.',
     done: '1 + 2 = 3 у края',
+    result: 3,
     board: board([[0, 2, 1], [5, 2, 2]]),
     tray: [piece([[0, 0, 6]]), none(), none()],
     sweeps: 2,
