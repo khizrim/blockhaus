@@ -151,6 +151,7 @@ export default function Game() {
   const [flights, setFlights] = useState<{ id: string; m: Move; ms: number }[]>([]);
   // While a swipe is held past the threshold: where the next piece will ride in.
   const [aim, setAim] = useState<{ id: string; piece: Piece; ox: number; oy: number; dir: Dir } | null>(null);
+  const aimDir = useRef<Dir | null>(null);
   const [incoming, setIncoming] = useState<{ id: number; piece: Piece; ox: number; oy: number; dir: Dir; delay: number } | null>(null);
   const [floats, setFloats] = useState<{ id: string; at: number; v: number; times: number }[]>([]);
   const [returning, setReturning] = useState<number | null>(null);
@@ -201,6 +202,15 @@ export default function Game() {
     setSliding(null);
     setReturning(null);
     setHeld(null);
+    /* The milestone wave and the lessons' break-up draw copies of the board
+       over it and take them down from a timer. clearTimers just dropped that
+       timer, so they go here too, or the copies stay on the board as tiles
+       that never move, even into a new game. */
+    setRipple(null);
+    setScatter(null);
+    setTrackHold(0);
+    setAim(null);
+    aimDir.current = null;
   };
   useEffect(() => clearTimers, []);
 
@@ -737,7 +747,6 @@ export default function Game() {
   /* The pushed piece's cells show up hatched in its colour as soon as the
      finger has gone far enough to count as a swipe, and move when the swipe
      changes direction. Letting go hands over to Incoming. */
-  const aimDir = useRef<Dir | null>(null);
   const aimAt = (dir: Dir | null) => {
     if (dir === aimDir.current) return;
     aimDir.current = dir;
