@@ -39,6 +39,9 @@ const SLIDE = dur.base; // ms for tiles to travel in a sweep
 const PUSH_MS = 260; // ms for the pushed piece to ride in from the far edge
 /** The lesson line: one line of title type. */
 const LESSON_H = 30;
+const RULE_H = 44; // two lines of secondary text under the lesson title
+/** Under the goal in the first real game: how it ends. */
+const END_RULE = 'Вехи по пути копятся под доской. Игра кончается, когда ходов больше нет.';
 
 type Hold = { slot: number; piece: Piece };
 
@@ -206,7 +209,7 @@ export default function Game() {
   /* The board takes what is left of the height after the fixed parts:
      header ~64, the lesson card when there is one, the tray, and the 8pt
      paddings around them. Never wider than the screen, never under 240. */
-  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || goalLine || isDaily ? LESSON_H + space.lg : 0) + (g.cfg.freeSweeps ? 44 : 18) + trayMax * 3 + 32 + 48;
+  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || goalLine || isDaily ? LESSON_H + space.lg : 0) + (store.lesson !== null || goalLine ? RULE_H : 0) + (g.cfg.freeSweeps ? 44 : 18) + trayMax * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
   /* One column for the whole screen: the header, the lesson, the board and
@@ -795,18 +798,27 @@ export default function Game() {
 
         {/* the lesson and the board, centred between the header and the tray, never closer than one step */}
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: step }}>
-          {/* One line above the board, nothing else: the move in plain words,
-              then the rule it proved as a formula. The way out of the lessons is in pause. */}
+          {/* Above the board: the move in plain words (then the formula it
+              proved) and, under it, the mechanic. The way out of the lessons is in pause. */}
           {lesson || goalLine || isDaily ? (
-            <Animated.View style={[{ width: col, marginBottom: step, height: LESSON_H, justifyContent: 'center' }, lineStyle]}>
-              <Text
-                accessibilityRole="header"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                style={[type.title, { color: c.text }]}>
-                {lesson ? (coach === 'task' ? lesson.title : lesson.done) : isDaily ? dailyLine : `Цель: ${g.cfg.goal}`}
-              </Text>
-            </Animated.View>
+            <View style={{ width: col, marginBottom: step }}>
+              <Animated.View style={[{ height: LESSON_H, justifyContent: 'center' }, lineStyle]}>
+                <Text
+                  accessibilityRole="header"
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  style={[type.title, { color: c.text }]}>
+                  {lesson ? (coach === 'task' ? lesson.title : lesson.done) : isDaily ? dailyLine : `Цель: ${g.cfg.goal}`}
+                </Text>
+              </Animated.View>
+              {/* The mechanic in words: why the move works. Stays put while
+                  the title turns into the formula, so it can be read twice. */}
+              {lesson || goalLine ? (
+                <Text numberOfLines={2} style={[type.secondary, { color: c.muted, height: RULE_H - 4, marginTop: 4 }]}>
+                  {lesson ? lesson.rule : END_RULE}
+                </Text>
+              ) : null}
+            </View>
           ) : null}
           <Animated.View style={boardStyle} {...swipe.panHandlers}>
             {/* The game of the day wears a yellow frame: another game at a glance. */}
