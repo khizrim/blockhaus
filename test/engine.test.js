@@ -351,3 +351,38 @@ test('merges made by the slide of a sweep score their plain level', () => {
   assert.deepEqual(res.made.map(m => [m.level, m.pts]), [[6, 6], [12, 12]]);
   assert.equal(g.score, 18 + res.pushed.steps.reduce((s, st) => s + st.pts, 0));
 });
+
+test('cascade mode: one sweep a tray, a cascade of four earns one more, two at most', () => {
+  const g = E.newGame(E.CASCADE, E.seeded(5));
+  assert.equal(g.sweeps, 1);
+  assert.equal(g.cfg.freeSweeps, false);
+  // A 1 dropped among a 2, a 3, a 6 and a 12 makes four merges.
+  g.board = empty();
+  g.board[idx(0, 1)] = 2; g.board[idx(2, 1)] = 3; g.board[idx(1, 0)] = 6; g.board[idx(1, 2)] = 12;
+  g.tray = [piece(1), piece(1), piece(2)];
+  const r = E.place(g, 0, 1, 1);
+  assert.equal(r.steps.length, 4);
+  assert.ok(r.bonus);
+  assert.equal(g.sweeps, 2);
+  // A sweep is a plain slide: no tray piece rides in.
+  const s = E.sweep(g, 'left');
+  assert.ok(s && !s.pushed);
+  assert.equal(g.sweeps, 1);
+  assert.ok(!g.tray[1].used);
+});
+
+test('a stone walls a sweep and never merges', () => {
+  const b = empty();
+  b[idx(2, 0)] = E.STONE; b[idx(4, 0)] = 3; b[idx(5, 0)] = 3; b[idx(3, 1)] = 2;
+  E.applySweep(b, 'left', true);
+  assert.equal(b[idx(2, 0)], E.STONE);
+  assert.equal(b[idx(3, 0)], 6);
+  assert.equal(b[idx(0, 1)], 2);
+  const c = empty();
+  c[idx(1, 0)] = E.STONE;
+  assert.ok(!E.fits(c, piece(1), 1, 0));
+  E.applyPlacement(c, piece(1), 0, 0);
+  assert.equal(c[idx(1, 0)], E.STONE);
+  const g = E.newGame({ stones: [14] }, E.seeded(1));
+  assert.equal(g.board[14], E.STONE);
+});

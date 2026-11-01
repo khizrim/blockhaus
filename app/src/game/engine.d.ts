@@ -8,7 +8,7 @@ export type Step = { absorbed: number[]; anchor: number; level: number; /** Poin
 export type Config = Record<string, unknown>;
 
 export type Game = {
-  cfg: Config & { sweepChain?: boolean; freeSweeps?: boolean; sweepCost?: 'spawn' | 'merge' | 'push' | 'tilt' | 'none'; chainScore?: number[]; goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
+  cfg: Config & { sweepChain?: boolean; freeSweeps?: boolean; sweepCost?: 'spawn' | 'merge' | 'push' | 'tilt' | 'none'; stones?: number[]; chainScore?: number[]; goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
   rng: () => number;
   board: number[];
   tray: Piece[];
@@ -19,6 +19,8 @@ export type Game = {
   moves: number;
   won: boolean;
   over: boolean;
+  /** Kept by the app, not the engine: sweeps made in this game. */
+  used?: number;
 };
 
 export type PlaceResult = { laid: number[]; steps: Step[]; refilled: boolean; /** The chain earned a sweep. */ bonus: boolean };
@@ -35,6 +37,16 @@ declare const engine: {
   DEFAULTS: Config & { goal: number };
   /** The balance before free sweeps: two per tray, goal 192. */
   LIMITED: Config;
+  /** Sweeps earned by cascades: one per tray, one more for a cascade of four merges, two at most. */
+  CASCADE: Config;
+  /** The game of the day: thirty pieces, six start tiles. */
+  DAILY: { pieceLimit: number; startTiles: number };
+  /** Weekday rules of the game of the day, by Date.getDay(). */
+  WEEKDAY: Record<number, Config & { rule: string }>;
+  /** A cell that is taken but holds no tile. */
+  STONE: number;
+  /** The lanes of a sweep cut at stones. */
+  laneRuns(board: number[], dir: Dir): number[][];
   pairs(a: number, b: number): boolean;
   merged(a: number, b: number): number;
   rank(v: number): number;

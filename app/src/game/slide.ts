@@ -9,7 +9,8 @@ export type Move = { from: number; to: number; value: number; merges: boolean };
 
 export function slideMoves(board: number[], dir: Dir, chain: boolean): Move[] {
   const moves: Move[] = [];
-  for (const lane of engine.lanes(dir)) {
+  // Stones cut the lanes: tiles stop at them as at the wall.
+  for (const lane of engine.laneRuns(board, dir)) {
     const tiles = lane.filter((i) => board[i] !== 0);
     engine.collapse(tiles.map((i) => board[i]), chain).forEach((t, slot) => {
       for (const k of t.from) moves.push({ from: tiles[k], to: lane[slot], value: board[tiles[k]], merges: t.levels.length > 0 });

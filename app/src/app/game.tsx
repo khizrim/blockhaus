@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, FadeOut, SlideInUp, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Field, type CellLook } from '@/components/Field';
 import { Overlay } from '@/components/Overlay';
@@ -13,14 +13,16 @@ import { Enamel } from '@/design/depth';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Game as EngineGame, type Piece, type Step } from '@/game/engine';
-import { DAILY, MEDALS, medalOf } from '@/game/daily';
+import { DAILY, RULES, medalOf, medalsFor, ruleOf } from '@/game/daily';
 import { LESSONS } from '@/game/lessons';
 import { slideMoves, type Move } from '@/game/slide';
-import { useGame } from '@/game/store';
+import { useGame, type News } from '@/game/store';
+import { POSTERS } from '@/game/meta';
+import { WallPoster } from '@/components/WallPoster';
 import { fx } from '@/sound/sfx';
 import { TileNum } from '@/components/TileNum';
 import { Formula } from '@/components/Formula';
-import { INTRO_STEP, MedalTrack, Track, milestonesFor } from '@/components/Track';
+import { INTRO_STEP, MedalTrack, TaskSquares, Track, milestonesFor } from '@/components/Track';
 
 /* The game. The rules are the engine the prototype and the balance simulator
    run; this screen only shows them. A placement lands first, then each merge
@@ -105,7 +107,16 @@ export default function Game() {
   /* The daily's rules stay in sight: pieces left and the next medal. */
   const piecesLeft = Math.max(0, DAILY.pieceLimit - g.moves);
   // A medal reached mid-game rings once, on the move that reached it.
-  const medalRank = isDaily ? (medalOf(g.score)?.rank ?? 0) : 0;
+  const medalRank = isDaily ? (medalOf(g.score, store.daily.key)?.rank ?? 0) : 0;
+  const MEDALS = medalsFor(store.daily.key);
+  const dayRule = isDaily ? ruleOf(store.daily.key) : null;
+  const [ruleSeen, setRuleSeen] = useState(false);
+  // The news card on screen: shown once, then it slides away.
+  const [newsShown, setNewsShown] = useState(store.news?.id ?? 0);
+  /* The free game with sweeps earned by cascades keeps both: the layers
+     of sweeps in hand right under the board, the milestones under them. */
+  const counted = !g.cfg.freeSweeps && g.cfg.sweepsMax > 0;
+  const showTrack = !isDaily && (g.cfg.freeSweeps || store.rules === 'cascade');
   const lastMedal = useRef({ rank: medalRank, daily: isDaily });
   useEffect(() => {
     // Opening the daily with medals already won is not a new medal.
@@ -241,7 +252,7 @@ export default function Game() {
      paddings around them. Never wider than the screen, never under 240. */
   // The line above the board: a lesson's formula, its tiles at the tray's cell.
   const LESSON_H = trayMax;
-  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || isDaily ? LESSON_H + space.lg : 0) + (g.cfg.freeSweeps ? 44 : 18) + trayMax * 3 + 32 + 48;
+  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || isDaily ? LESSON_H + space.lg : 0) + (showTrack ? 44 : 18) + (counted && showTrack ? g.cfg.sweepsMax * (PLATE + 2) + 4 : 0) + trayMax * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
   /* One column for the whole screen: the header, the lesson, the board and
@@ -368,11 +379,11 @@ export default function Game() {
   };
   /** One merge lands: the note, the points, the press. A milestone rings its
       bell instead of the note and sends a wave of its colour across the board. */
-  const land = (at: number, level: number, milestone: boolean, board: number[], pts = level) => {
+  const land = (at: number, level: number, milestone: boolean, board: number[], pts = level, step = 0) => {
     setPops((pp) => ({ ...pp, [at]: Date.now() }));
     if (milestone) {
       // The goal itself rings with the win card that follows, not a bell.
-      if (level === g.cfg.goal) fx.merge(level);
+      if (level === g.cfg.goal) fx.merge(level, step);
       else fx.milestone(level);
       setRipple({ at, v: level, id: Date.now(), board: board.slice() });
       if (store.lesson !== null) lessonPeak.current = Math.max(lessonPeak.current, level);
@@ -383,7 +394,7 @@ export default function Game() {
         fx.bonus();
       });
       later(RIPPLE_MS, () => setRipple(null));
-    } else fx.merge(level);
+    } else fx.merge(level, step);
     float(at, pts, Math.round(pts / level));
     thump(milestone ? Math.max(level, 192) : level);
   };
@@ -566,7 +577,7 @@ export default function Game() {
       later(t0 + FLY, () => {
         setShown(snap);
         setFlights((f) => f.filter((x) => !st.absorbed.some((a) => x.m.from === a)));
-        land(st.anchor, st.level, marks[k], snap, st.pts);
+        land(st.anchor, st.level, marks[k], snap, st.pts, k);
       });
     });
     return base + Math.max(0, steps.length - 1) * STEP + (steps.length ? FLY : 0);
@@ -689,7 +700,8 @@ export default function Game() {
     const allMarks = milestonesIn([...res.made.map((m) => m.level), ...(push ? push.steps.map((st) => st.level) : [])]);
     const marks = allMarks.slice(0, res.made.length);
     if (push?.refilled) trayId.current++;
-    setShown(new Array(N * N).fill(0));
+    // Stones stay put while the tiles slide around them.
+    setShown(before.map((v) => (v < 0 ? v : 0)));
     setSliding({ moves, id: Date.now() });
     /* A tile that merges more than once in a line (3 3 6 -> 12) lands showing
        its first merge, and each later merge steps it up on its own pop, so
@@ -852,10 +864,11 @@ export default function Game() {
   const trackTop = step / 2;
   const trackHome = (v: number) => {
     const k = milestones.indexOf(v);
-    if (k < 0 || !g.cfg.freeSweeps || isDaily) return null;
+    if (k < 0 || !showTrack) return null;
     const size = Math.floor((col - gap * (milestones.length - 1)) / milestones.length);
     const h = Math.max(28, Math.min(44, Math.round(size * 0.5)));
-    return { x: k * (size + gap), y: cell * N + gap + trackTop, w: size, h };
+    const plates = counted ? g.cfg.sweepsMax * (PLATE + 2) + 2 : 0;
+    return { x: k * (size + gap), y: cell * N + gap + trackTop + plates, w: size, h };
   };
 
   // While tiles are in flight the board under them is empty; keep the last best.
@@ -995,18 +1008,29 @@ export default function Game() {
           {isDaily ? (
             /* The game of the day climbs to medals, not to 384. */
             <MedalTrack medals={MEDALS} score={g.score} width={col} gap={gap} top={trackTop} />
-          ) : g.cfg.freeSweeps ? (
+          ) : showTrack ? (
             /* With free sweeps there is nothing to count under the board:
-               the milestones on the way to the goal sit there instead. */
-            <Track
-              steps={milestones}
-              best={trackHold ? Math.min(trackBest, trackHold / 2) : trackBest}
-              next={nextStep}
-              width={col}
-              gap={gap}
-              top={trackTop}
-              intro={trackIntro}
-            />
+               the milestones on the way to the goal sit there instead. With
+               sweeps earned by cascades the layers come first, then the track. */
+            <View>
+              {counted ? (
+                <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: col, alignItems: 'center', height: g.cfg.sweepsMax * (PLATE + 2) + 2 }}>
+                  {Array.from({ length: g.cfg.sweepsMax }, (_, k) => k).map((k) => (
+                    <Plate key={k} on={g.sweeps - (bonusHeld ? 1 : 0) > k} k={k} dir={lastDir.current} width={col - 2 * (k + 1) * space.sm} />
+                  ))}
+                </View>
+              ) : null}
+              <Track
+                steps={milestones}
+                best={trackHold ? Math.min(trackBest, trackHold / 2) : trackBest}
+                next={nextStep}
+                progress={nextStep ? progressTo(shown, nextStep) : 0}
+                width={col}
+                gap={gap}
+                top={trackTop}
+                intro={trackIntro}
+              />
+            </View>
           ) : (
             <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: col, alignItems: 'center' }}>
               {Array.from({ length: g.cfg.sweepsMax }, (_, k) => k).map((k) => (
@@ -1063,6 +1087,7 @@ export default function Game() {
               <Body muted style={{ marginTop: space.sm }}>
                 Сегодня у всех одна и та же доска и одни и те же фигуры. Партия короткая: {DAILY.pieceLimit} фигур. Наберите очки на медаль и сравните результат с друзьями.
               </Body>
+              {dayRule ? <Body style={{ marginTop: space.sm }}>{`${RULES[dayRule].name}: ${RULES[dayRule].about.charAt(0).toLowerCase()}${RULES[dayRule].about.slice(1)}`}</Body> : null}
               <View style={{ flexDirection: 'row', gap: space.xl, marginTop: space.lg }}>
                 {MEDALS.map((m) => (
                   <View key={m.rank} style={{ gap: space.xs, alignItems: 'flex-start' }}>
@@ -1080,6 +1105,34 @@ export default function Game() {
           </Overlay>
         </View>
       ) : null}
+
+      {/* A weekday rule says itself before the first piece of the day. */}
+      {isDaily && store.dailyIntro && dayRule && !ruleSeen && g.moves === 0 ? (
+        <View style={StyleSheet.absoluteFill}>
+          <Overlay onDismiss={() => setRuleSeen(true)}>
+            <Panel>
+              <Heading>{RULES[dayRule].name}</Heading>
+              <Body muted style={{ marginTop: space.sm }}>{RULES[dayRule].about} Медали сегодня свои.</Body>
+              <View style={{ flexDirection: 'row', gap: space.xl, marginTop: space.lg }}>
+                {MEDALS.map((m) => (
+                  <View key={m.rank} style={{ gap: space.xs, alignItems: 'flex-start' }}>
+                    <View style={{ width: 28, height: 28, padding: 3, backgroundColor: c.line }}>
+                      <View style={{ flex: 1, backgroundColor: m.tile ? c.tile[m.tile] : c.faint }} />
+                    </View>
+                    <Text style={[type.secondary, { color: c.muted }]}>{m.at}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={{ marginTop: space.xl }}>
+                <Button kind="primary" size="lg" label="Начать" onPress={() => setRuleSeen(true)} />
+              </View>
+            </Panel>
+          </Overlay>
+        </View>
+      ) : null}
+
+      {/* What the move just earned: a task of the day done, or a poster for the wall. */}
+      {store.news && newsShown !== store.news.id ? <NewsCard key={store.news.id} news={store.news} onDone={() => setNewsShown(store.news!.id)} /> : null}
 
       {lesson && coach === 'task' && !hold && !held && !sliding && geo ? (
         demoSlot >= 0 && geo.slot && lesson.hint ? (
@@ -1559,5 +1612,45 @@ function Finger({ board }: { board: { x: number; y: number; w: number } }) {
       pointerEvents="none"
       style={[{ position: 'absolute', left: 0, top: 0, width: size, height: size, borderWidth: 4, borderColor: c.line, backgroundColor: c.canvas }, st]}
     />
+  );
+}
+
+/** How far the board is toward the next milestone `next`: the tiles from a
+    quarter of it up to just under it, summed, over `next`. Two 96s and a 48
+    are most of a 192; the small change on the board does not count. Never
+    full until the milestone itself is made. */
+function progressTo(board: number[], next: number): number {
+  let sum = 0;
+  for (const v of board) if (v >= next / 4 && v < next) sum += v;
+  return Math.min(0.95, sum / next);
+}
+
+/** A card that drops in at the top of the screen for a moment: the task of
+    the day just done (its square lit) or the poster just earned. */
+function NewsCard({ news, onDone }: { news: News; onDone: () => void }) {
+  const { c } = useTheme();
+  const ins = useSafeAreaInsets();
+  const p = POSTERS.find((x) => x.id === news.ref);
+  useEffect(() => {
+    fx.bonus();
+    const t = setTimeout(onDone, 2600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <Animated.View
+      entering={SlideInUp.duration(260)}
+      exiting={FadeOut.duration(200)}
+      pointerEvents="none"
+      accessibilityLiveRegion="polite"
+      style={{ position: 'absolute', top: ins.top + space.sm, left: space.lg, right: space.lg, alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, backgroundColor: c.surface, borderWidth: 1, borderColor: c.hair, maxWidth: 400 }}>
+        {news.kind === 'poster' && p ? <WallPoster p={p} width={40} /> : <TaskSquares done={[true]} size={28} />}
+        <View style={{ flexShrink: 1 }}>
+          <Text style={[type.meta, { color: c.muted }]}>{news.kind === 'poster' ? 'Новый плакат' : 'Задание дня'}</Text>
+          <Text numberOfLines={2} style={[type.secondaryStrong, { color: c.text }]}>{news.title}</Text>
+        </View>
+      </View>
+    </Animated.View>
   );
 }

@@ -70,6 +70,32 @@ export const dark: Palette = {
   ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#111215', '#FFFFFF'],
 };
 
+/* Palettes of the masters: other tile colours for rungs 1 to 9 and 11.
+   The goal (rung 10) stays the theme's ink, so 384 reads the same in every
+   palette. Only the look changes; each opens at a workshop rank. */
+const TILES: Record<string, string[]> = {
+  // Itten's wheel: the in-between hues, so 1, 2 and 3 are violet, red-orange and yellow-green.
+  itten: ['', '#5B3FA6', '#E8562A', '#C9D63B', '#F4A11D', '#2E8BC0', '#D63A6B', '#2FA37C', '#8E44AD', '#8F5E2E', '', '#1F3A93'],
+  // Albers' squares: warm, close values, ochres and earths.
+  albers: ['', '#5A7EA8', '#C25A3A', '#E9B949', '#D98236', '#8A9A5B', '#9C5B4E', '#B5687C', '#4F7F7A', '#7A5A3A', '', '#3B4470'],
+  // Kandinsky's circles: bright and loud.
+  kandinsky: ['', '#0050C8', '#E8102E', '#FFD400', '#FF7A00', '#00A65A', '#8A2BB0', '#FF4FA0', '#00B8D4', '#A0652B', '', '#3D2BA0'],
+};
+const luma = (hex: string) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+/** The theme with a master's tiles; ink on each tile is black or white, whichever reads. */
+export function withPalette(base: Palette, id: string, dark: boolean): Palette {
+  const t = TILES[id];
+  if (!t) return base;
+  const tile = t.map((v, k) => (k === 10 || !v ? base.tile[k] : dark ? mix('#FFFFFF', v, 0.08) : v));
+  const ink = tile.map((v, k) => (k === 10 ? base.ink[10] : !v ? '' : luma(v) > 0.55 ? '#111215' : '#FFFFFF'));
+  return { ...base, tile, ink };
+}
+/** Three swatches of a palette, for the picker. */
+export const swatches = (id: string, base: Palette) => [1, 2, 3].map((k) => (TILES[id] ? TILES[id][k] : base.tile[k]));
+
 export const LADDER = [1, 2, 3, 6, 12, 24, 48, 96, 192, 384, 768] as const;
 export const NAMES = ['', 'blue', 'red', 'yellow', 'orange', 'green', 'violet', 'magenta', 'teal', 'umber', 'ink', 'indigo'];
 

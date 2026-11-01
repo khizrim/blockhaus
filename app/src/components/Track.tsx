@@ -23,7 +23,7 @@ export function milestonesFor(goal: number): number[] {
 /** The way to the goal under the board: one small tile per milestone, empty
     until reached, then in its own colour. The last one is the goal. A
     milestone reached pops its square when the flying tile lands in it. */
-export function Track({ steps, best, next, width, gap, top, intro = 0 }: { steps: number[]; best: number; next: number | null; width: number; gap: number; top: number; intro?: number }) {
+export function Track({ steps, best, next, width, gap, top, intro = 0, progress = 0 }: { steps: number[]; best: number; next: number | null; width: number; gap: number; top: number; intro?: number; /** How far the board is toward `next`, 0..1: a bar along its square's floor. */ progress?: number }) {
   const between = gap;
   const size = Math.floor((width - between * (steps.length - 1)) / steps.length);
   const h = Math.max(28, Math.min(44, Math.round(size * 0.5)));
@@ -35,13 +35,13 @@ export function Track({ steps, best, next, width, gap, top, intro = 0 }: { steps
       accessibilityLabel={`Вехи: ${reached} из ${steps.length}.${next ? ` Следующая ${next}.` : ''} Цель ${steps[steps.length - 1]}`}
       style={{ width, flexDirection: 'row', gap: between, marginTop: top }}>
       {steps.map((v, k) => (
-        <TrackStep key={v} v={v} on={best >= v} next={v === next} goal={k === steps.length - 1} w={size} h={h} frame={Math.max(3, Math.round(gap * 0.6))} intro={intro} delay={120 + k * INTRO_STEP} />
+        <TrackStep key={v} v={v} on={best >= v} next={v === next} progress={v === next ? progress : 0} goal={k === steps.length - 1} w={size} h={h} frame={Math.max(3, Math.round(gap * 0.6))} intro={intro} delay={120 + k * INTRO_STEP} />
       ))}
     </View>
   );
 }
 
-function TrackStep({ v, on, next, goal, w, h, frame, intro, delay }: { v: number; on: boolean; next: boolean; goal: boolean; w: number; h: number; frame: number; intro: number; delay: number }) {
+function TrackStep({ v, on, next, goal, w, h, frame, intro, delay, progress }: { v: number; on: boolean; next: boolean; goal: boolean; w: number; h: number; frame: number; intro: number; delay: number; progress: number }) {
   const { c, isDark } = useTheme();
   const rk = rank(v);
   const k = useSharedValue(1);
@@ -60,10 +60,18 @@ function TrackStep({ v, on, next, goal, w, h, frame, intro, delay }: { v: number
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on]);
   const st = useAnimatedStyle(() => ({ transform: [{ scale: k.value }] }));
+  // The next milestone fills along its floor as the board gathers toward it.
+  const p = useSharedValue(progress);
+  useEffect(() => {
+    p.value = withTiming(progress, { duration: 300, easing: Easing.out(Easing.cubic) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progress]);
+  const bar = useAnimatedStyle(() => ({ width: `${p.value * 100}%` }));
   return (
     <Animated.View style={[{ width: w, height: h, padding: frame, backgroundColor: on || next ? c.line : c.hair }, st]}>
-      <View style={{ flex: 1, backgroundColor: on ? c.tile[rk] : c.canvas, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: on ? c.tile[rk] : c.canvas, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         <Enamel fill={on ? c.tile[rk] : c.canvas} size={h} empty={!on} dark={isDark} />
+        {!on && next && progress > 0 ? <Animated.View style={[{ position: 'absolute', left: 0, bottom: 0, height: Math.max(4, Math.round(h * 0.22)), backgroundColor: c.tile[rk] }, bar]} /> : null}
         <TileNum v={v} color={on ? c.ink[rk] : next ? c.text : goal ? c.muted : c.faint} size={Math.max(11, Math.round(h * 0.36))} />
       </View>
     </Animated.View>
@@ -123,14 +131,65 @@ function MedalStep({ at, on, fill, ink, tint, progress, framed, w, h, frame, dar
 }
 
 /** Days of the streak as squares: the last seven, lit yellow while the streak holds. */
-export function StreakDays({ count, size = 14, gap = 3 }: { count: number; size?: number; gap?: number }) {
+export function StreakDays({ count, size = 14, gap = 3, shield = 0 }: { count: number; size?: number; gap?: number; shield?: number }) {
   const { c, isDark } = useTheme();
   return (
-    <View accessible accessibilityLabel={`Серия: ${count}`} style={{ flexDirection: 'row', gap, alignItems: 'center' }}>
+    <View accessible accessibilityLabel={`Серия: ${count}${shield ? ', один пропуск в запасе' : ''}`} style={{ flexDirection: 'row', gap, alignItems: 'center' }}>
       {Array.from({ length: 7 }, (_, k) => k < Math.min(count, 7)).map((on, k) => (
         <View key={k} style={{ width: size, height: size, padding: 2, backgroundColor: on ? c.line : c.hair }}>
           <View style={{ flex: 1, backgroundColor: on ? c.tile[3] : c.canvas }}>
             <Enamel fill={on ? c.tile[3] : c.canvas} size={size} empty={!on} dark={isDark} />
+          </View>
+        </View>
+      ))}
+      {/* A gold medal's shield: one missed day the streak survives. Blue, set apart. */}
+      {shield ? (
+        <View style={{ width: size, height: size, marginLeft: gap, padding: 2, backgroundColor: c.line }}>
+          <View style={{ flex: 1, backgroundColor: c.tile[1] }}>
+            <Enamel fill={c.tile[1]} size={size} dark={isDark} />
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** The workshop rank: its name and a strip of ten squares that fill toward
+    the next rank, lit in the rank's own colour. */
+export function RankStrip({ name, into, need, level, width, top = 0 }: { name: string; into: number; need: number; level: number; width: number; top?: number }) {
+  const { c, isDark } = useTheme();
+  const lit = Math.floor((into / need) * 10);
+  const tint = c.tile[[3, 2, 1, 5, 4, 6, 7, 8][level % 8]];
+  const sq = 10;
+  return (
+    <View
+      accessible
+      accessibilityLabel={`Ранг мастерской: ${name}. До следующего ${need - into} очков`}
+      style={{ width, flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: top }}>
+      <Text numberOfLines={1} style={[type.secondaryStrong, { color: c.text, flexShrink: 1 }]}>
+        {name}
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 2, padding: 2, backgroundColor: c.line, marginLeft: 'auto' }}>
+        {Array.from({ length: 10 }, (_, k) => k < lit).map((on, k) => (
+          <View key={k} style={{ width: sq, height: sq, backgroundColor: on ? tint : c.canvas, overflow: 'hidden' }}>
+            {on ? <Enamel fill={tint} size={sq} dark={isDark} /> : null}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** The three tasks of the day as squares, lit when done. */
+export function TaskSquares({ done, size = 14, gap = 3, start = 0 }: { done: boolean[]; size?: number; gap?: number; start?: number }) {
+  const { c, isDark } = useTheme();
+  const fills = [c.tile[2], c.tile[3], c.tile[1]];
+  return (
+    <View accessible accessibilityLabel={`Задания дня: ${done.filter(Boolean).length} из 3`} style={{ flexDirection: 'row', gap, alignItems: 'center' }}>
+      {done.map((on, k) => (
+        <View key={k} style={{ width: size, height: size, padding: 2, backgroundColor: on ? c.line : c.hair }}>
+          <View style={{ flex: 1, backgroundColor: on ? fills[(k + start) % 3] : c.canvas }}>
+            <Enamel fill={on ? fills[(k + start) % 3] : c.canvas} size={size} empty={!on} dark={isDark} />
           </View>
         </View>
       ))}

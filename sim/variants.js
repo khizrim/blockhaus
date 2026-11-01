@@ -35,4 +35,6 @@ module.exports = {
   spawn192: { ...E.DEFAULTS, sweepCost: 'spawn', goal: 192 },
   spawn384: { ...E.DEFAULTS, sweepCost: 'spawn', goal: 384 },
   spawn768: { ...E.DEFAULTS, sweepCost: 'spawn', goal: 768 },
+  // Sweeps earned by cascades: one per tray, one more for a cascade of 4+.
+  cascade: { ...E.CASCADE },
 };

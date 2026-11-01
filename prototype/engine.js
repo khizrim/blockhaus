@@ -62,6 +62,11 @@
     // Tiles (3 to 24) set on the board before the first tray: the prepared
     // position of the game of the day (0 = an empty board).
     startTiles: 0,
+    // The values those start tiles are drawn from.
+    startPool: [3, 3, 3, 6, 6, 12, 12, 24],
+    // Cells that hold a stone (STONE) from the start: nothing is placed on
+    // a stone, nothing merges with it, and a sweep stops at it as at a wall.
+    stones: [],
     // A tile merged by a sweep may merge again with the next tile in its
     // line (3 3 6 -> 12), instead of once per sweep as in 2048.
     sweepChain: false,
@@ -85,6 +90,8 @@
   /* ---- pairing ------------------------------------------------------------
      Threes' economy: 1 + 2 makes 3, and from 3 upward equals double.       */
   const pairs = (a, b) => (a === 1 && b === 2) || (a === 2 && b === 1) || (a >= 3 && a === b);
+  /** A stone: a cell that is taken but holds no tile. */
+  const STONE = -1;
   const merged = (a, b) => (a >= 3 ? a * 2 : 3);
   const rank = v => (v === 1 ? 1 : v === 2 ? 2 : Math.min(11, 3 + Math.round(Math.log2(v / 3))));
 
@@ -126,7 +133,7 @@
     while (frontier.length) {
       const i = frontier.shift();
       if (board[i] === 0) continue;
-      const partner = neighbours(i).find(n => !taken.has(n) && board[n] !== 0 && pairs(board[i], board[n]));
+      const partner = neighbours(i).find(n => !taken.has(n) && board[n] > 0 && pairs(board[i], board[n]));
       if (partner === undefined) continue;
       taken.add(partner);
       const lvl = merged(board[i], board[partner]);
@@ -180,12 +187,26 @@
     return out;
   }
 
+  /** The lanes of a sweep, cut at stones: each run of free-or-tiled cells
+      between the walls and the stones, nearest the wall first. */
+  function laneRuns(board, dir) {
+    const out = [];
+    for (const lane of lanes(dir)) {
+      let run = [];
+      for (const i of lane) {
+        if (board[i] === STONE) { if (run.length) out.push(run); run = []; } else run.push(i);
+      }
+      if (run.length) out.push(run);
+    }
+    return out;
+  }
+
   /** Slides `board` (mutating it). Returns the merges and whether anything
       moved. `chain` lets a merged tile merge again (see collapse). */
   function applySweep(board, dir, chain, slideOnly) {
     const before = board.join();
     const made = [];
-    for (const lane of lanes(dir)) {
+    for (const lane of laneRuns(board, dir)) {
       const vals = lane.map(i => board[i]).filter(v => v !== 0);
       // slideOnly: the board tilts, tiles slide to the wall, nothing merges.
       const out = slideOnly ? vals.map((v, k) => ({ v, from: [k], levels: [] })) : collapse(vals, chain);
@@ -283,7 +304,8 @@
       score: 0, merges: 0, bestTile: 0, moves: 0,
       won: false, over: false,
     };
-    if (cfg.startTiles) setStart(g.board, cfg.startTiles, rng);
+    for (const i of cfg.stones || []) g.board[i] = STONE;
+    if (cfg.startTiles) setStart(g.board, cfg.startTiles, rng, cfg.startPool);
     g.tray = dealTray(cfg, g.board, rng);
     g.bestTile = Math.max(0, ...g.board);
     return g;
@@ -291,8 +313,7 @@
 
   /** Scatters `count` tiles from 3 to 24, never two equal side by side, so
       the position starts calm and every pair is the player's to make. */
-  function setStart(board, count, rng) {
-    const pool = [3, 3, 3, 6, 6, 12, 12, 24];
+  function setStart(board, count, rng, pool = [3, 3, 3, 6, 6, 12, 12, 24]) {
     for (let k = 0, guard = 0; k < count && guard < 500; guard++) {
       const i = Math.floor(rng() * N * N);
       const v = pool[Math.floor(rng() * pool.length)];
@@ -469,11 +490,32 @@
   // The balance before free sweeps (2026-11-01): two per tray, a chain earns
   // one more, up to three; goal 192.
   const LIMITED = { ...DEFAULTS, freeSweeps: false, sweepCost: 'none', goal: 192 };
+  // Sweeps earned by cascades (2026-11-01, a mode beside the free one): each
+  // tray brings one sweep, a placed piece whose cascade makes four merges or
+  // more earns another, two at most in hand. A sweep is a plain slide, no
+  // piece rides in. Placing well is what buys a sweep, so the swiping player
+  // no longer outplays the placing one by far (sim/RESULTS.md).
+  const CASCADE = { ...DEFAULTS, freeSweeps: false, sweepCost: 'none', sweepsPerTray: 1, chainBonus: 4, sweepsMax: 2 };
+
+  // The game of the day: thirty pieces on a board that starts with six
+  // tiles. Some weekdays bend one rule, the same for everyone that day
+  // (keys are Date.getDay(): 0 Sunday … 6 Saturday).
+  const DAILY = { pieceLimit: 30, startTiles: 6 };
+  const WEEKDAY = {
+    // Monday: dominoes only.
+    1: { rule: 'domino', shapes: [[S.domH, 1], [S.domV, 1]] },
+    // Wednesday: two stones in the middle of the board.
+    3: { rule: 'stone', stones: [14, 21] },
+    // Friday: no sweeps, placing only.
+    5: { rule: 'still', freeSweeps: false, sweepCost: 'none', sweepsPerTray: 0, chainBonus: 0, sweepsMax: 0 },
+    // Sunday: the board starts with big tiles.
+    0: { rule: 'big', startTiles: 8, startPool: [12, 12, 24, 24, 48] },
+  };
 
   return {
-    N, SHAPES: S, ORIGINAL, DEFAULTS, LIMITED, ORIGINAL_SHAPES,
+    N, SHAPES: S, ORIGINAL, DEFAULTS, LIMITED, CASCADE, DAILY, WEEKDAY, ORIGINAL_SHAPES, STONE,
     pairs, merged, rank, idx, neighbours, size, fits, pieceValue,
-    applyPlacement, applySweep, collapse, lanes, chanceOfOnes, deal, dealTray,
+    applyPlacement, applySweep, collapse, lanes, laneRuns, chanceOfOnes, deal, dealTray,
     newGame, place, sweep, anyMove, canSweep, canPlaceAnywhere, seeded,
   };
 });
