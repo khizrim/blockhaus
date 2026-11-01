@@ -706,6 +706,7 @@ export default function Game() {
     return PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) + Math.abs(gs.dy) > 8,
+      onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_, gs) => {
         if (axis(gs.dx, gs.dy) === 'x') {
           sx.value = lean(gs.dx);

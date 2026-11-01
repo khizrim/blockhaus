@@ -49,7 +49,8 @@ function Navigator() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'fade' }}>
         <Stack.Screen name="index" />
-        <Stack.Screen name="game" />
+        {/* The board takes swipes from every edge, so the iOS back swipe would steal them. */}
+        <Stack.Screen name="game" options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
         <Stack.Screen name="settings" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="howto" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="kit" options={{ animation: 'slide_from_right' }} />
