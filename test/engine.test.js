@@ -102,8 +102,8 @@ test('the shipped game folds lines when it sweeps', () => {
   assert.equal(res.made.length, 2);
 });
 
-test('free sweeps never run out, and each slides a new low tile in from the far edge', () => {
-  const g = E.newGame({}, E.seeded(1));
+test('with spawn, free sweeps never run out, and each slides a new low tile in from the far edge', () => {
+  const g = E.newGame({ sweepCost: 'spawn' }, E.seeded(1));
   assert.ok(g.cfg.freeSweeps);
   g.board = empty();
   g.board[idx(2, 2)] = 6;
@@ -119,8 +119,23 @@ test('free sweeps never run out, and each slides a new low tile in from the far 
   assert.equal(g.sweeps, before);
 });
 
-test('with free sweeps the game ends only when no sweep can change anything', () => {
-  const g = E.newGame({}, E.seeded(4));
+test('shipped free sweeps go only when they merge, and never run out', () => {
+  const g = E.newGame({}, E.seeded(1));
+  assert.equal(g.cfg.sweepCost, 'merge');
+  g.board = empty();
+  g.board[idx(2, 2)] = 6;
+  assert.equal(E.sweep(g, 'left'), null, 'a sweep that only moves is refused');
+  g.board[idx(4, 2)] = 6;
+  const before = g.sweeps;
+  const res = E.sweep(g, 'left');
+  assert.ok(res && res.made.length === 1);
+  assert.equal(g.board[idx(0, 2)], 12);
+  assert.ok(!res.spawned);
+  assert.equal(g.sweeps, before);
+});
+
+test('with spawn sweeps the game ends only when no sweep can change anything', () => {
+  const g = E.newGame({ sweepCost: 'spawn' }, E.seeded(4));
   // A full board of 6s and 12s that never pair: no piece fits, nothing slides.
   for (let i = 0; i < g.board.length; i++) g.board[i] = ((i % 6) + ((i / 6) | 0)) % 2 ? 6 : 12;
   assert.ok(!E.anyMove(g));

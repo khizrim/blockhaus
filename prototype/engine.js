@@ -409,14 +409,13 @@
     [S.triH, 0.5], [S.triV, 0.5], [S.l1, 0.5], [S.l2, 0.5], [S.l3, 0.5], [S.l4, 0.5],
   ];
   // A sweep folds each line all the way, the way a placement cascades.
-  // Sweeps are free and never run out, and each one slides a new 1 or 2 in
-  // from the far edge, so swiping fills the board and has a price. The goal
-  // goes one rung up, to 384: in the simulator that is about as far for a
-  // player who swipes as 192 was with counted sweeps (sim/RESULTS.md).
+  // Sweeps never run out, but a sweep goes only if it merges something:
+  // no new tiles come in, and a swipe can no longer just shuffle the board
+  // to make room. The goal goes one rung up, to 384 (sim/RESULTS.md).
   // The chain bonus stays in the config but means nothing with free sweeps.
   const DEFAULTS = {
     ...ORIGINAL, dealer: 'need', shapes: SHIPPED_SHAPES, chainBonus: 2, sweepsMax: 3, sweepChain: true,
-    freeSweeps: true, sweepCost: 'spawn', goal: 384,
+    freeSweeps: true, sweepCost: 'merge', goal: 384,
   };
   // The balance before free sweeps (2026-11-01): two per tray, a chain earns
   // one more, up to three; goal 192.

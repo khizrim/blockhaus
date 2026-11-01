@@ -9,14 +9,14 @@ import { Platform, Share } from 'react-native';
 /** Thirty pieces on a board that starts with six tiles. */
 export const DAILY = { pieceLimit: 30, startTiles: 6 };
 
-/* Medal lines from the simulator (400 seeded runs of this format, recounted
-   for free sweeps on 2026-11-01, when scores rose 10 to 40%): bronze is
+/* Medal lines from the simulator (400 seeded runs of this format; rechecked
+   for free sweeps that must merge on 2026-11-01, scores barely moved): bronze is
    about a casual player's best quarter, silver a regular player's median,
    gold the top tenth of a strong one. */
 export const MEDALS = [
-  { at: 300, name: 'бронза', of: 'бронзы', emoji: '🥉', rank: 1 },
-  { at: 400, name: 'серебро', of: 'серебра', emoji: '🥈', rank: 2 },
-  { at: 550, name: 'золото', of: 'золота', emoji: '🥇', rank: 3 },
+  { at: 250, name: 'бронза', of: 'бронзы', emoji: '🥉', rank: 1 },
+  { at: 350, name: 'серебро', of: 'серебра', emoji: '🥈', rank: 2 },
+  { at: 450, name: 'золото', of: 'золота', emoji: '🥇', rank: 3 },
 ] as const;
 export type Medal = (typeof MEDALS)[number];
 export const medalOf = (score: number): Medal | null => [...MEDALS].reverse().find((m) => score >= m.at) ?? null;

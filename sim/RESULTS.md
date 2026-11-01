@@ -63,7 +63,9 @@ A small, even lift: about three points of win rate and a few moves longer for ev
 
 - **Sweeps with no price break the game**: a swiping player reaches 1536 and runs past 1600 pieces. The game never really ends.
 - **"Only if it merges"** is the opposite: a swipe can no longer make room, and the swiping bots fall below the naive ones.
-- **Shipped: every sweep slides a new 1 or 2 in from the edge the tiles left** (`sweepCost: 'spawn'`, as in Threes). Swiping is free but fills the board, so games end; a swiping player's runs are less than half as long as with counted sweeps (which, with two per tray plus chain bonuses, already let the bot swipe almost every piece).
+- **First shipped, then replaced: every sweep slides a new 1 or 2 in from the edge the tiles left** (`sweepCost: 'spawn'`, as in Threes). Swiping is free but fills the board, so games end; a swiping player's runs are less than half as long as with counted sweeps (which, with two per tray plus chain bonuses, already let the bot swipe almost every piece).
 - **Goal 384**: for a player who swipes it is a little harder than 192 was with counted sweeps (swCasual 96% → 56%), and the naive players rarely get there. 768 would be out of reach for most.
 
-Game of the day (30 pieces, 6 start tiles), 400 runs: scores rise 10% (casual) to 45% (swiping bots) with free sweeps, so the medals moved from 250 / 350 / 450 to 300 / 400 / 550.
+Game of the day (30 pieces, 6 start tiles), 400 runs: with spawn, scores rise 10% (casual) to 45% (swiping bots).
+
+**Shipped after Khizri's pick (2026-11-01): a sweep goes only if it merges** (`sweepCost: 'merge'`), no new tiles. Goal stays 384, which makes it a long climb: at 384 swCasual 6%, swRegular 23%, swExpert 40%, regular 8% (100-game run in the thread; at 192 they would be 46 / 65 / 82 / 31%). The milestones on the way carry the motivation. Game-of-the-day scores barely move under this rule (regular median 357 vs 354), so the medals stay at 250 / 350 / 450.
