@@ -1,0 +1,91 @@
+# Builds the web version of the Expo app in app/ and deploys it to Netlify.
+#   push to main  -> production, https://blockhaus-game.netlify.app
+#   pull request  -> preview at https://pr-<number>--blockhaus-game.netlify.app
+# Needs the NETLIFY_AUTH_TOKEN repository secret (a Netlify personal access token).
+# Without it the build still runs and the deploy step is skipped.
+name: Web (Netlify)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/web-netlify.yml'
+  pull_request:
+    paths:
+      - 'app/**'
+      - '.github/workflows/web-netlify.yml'
+
+concurrency:
+  group: web-netlify-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  NETLIFY_SITE_ID: 26fc149b-9065-4f71-ad8b-93927ef014e9
+  SITE_URL: https://blockhaus-game.netlify.app
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Export web build
+        run: npx expo export -p web
+        env:
+          CI: 1
+
+      - name: Add SPA fallback
+        run: printf '/*  /index.html  200\n' > dist/_redirects
+
+      - name: Deploy to Netlify
+        id: deploy
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ -z "$NETLIFY_AUTH_TOKEN" ]; then
+            echo "::warning::NETLIFY_AUTH_TOKEN secret is not set, skipping the deploy."
+            exit 0
+          fi
+          short=${SHA::7}
+          if [ "$EVENT" = "pull_request" ]; then
+            args=(--alias "pr-$PR" --message "PR #$PR ($short)")
+            url="https://pr-$PR--${SITE_URL#https://}"
+          else
+            args=(--prod --message "main ($short)")
+            url="$SITE_URL"
+          fi
+          npx --yes netlify-cli@27 deploy --dir dist --no-build --site "$NETLIFY_SITE_ID" "${args[@]}"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment preview link on the PR
+        if: github.event_name == 'pull_request' && steps.deploy.outputs.url != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --edit-last --create-if-none \
+            --body "Веб-версия этого PR: $URL"

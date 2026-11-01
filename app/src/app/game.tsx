@@ -471,7 +471,7 @@ export default function Game() {
     }
     settle();
     const before = g.board.slice();
-    const moves = slideMoves(before, dir);
+    const moves = slideMoves(before, dir, !!g.cfg.sweepChain);
     lastDir.current = dir;
     const res = store.sweep(dir);
     if (!res) {
@@ -482,9 +482,16 @@ export default function Game() {
     fx.sweep();
     setShown(new Array(N * N).fill(0));
     setSliding({ moves, id: Date.now() });
+    /* A tile that merges more than once in a line (3 3 6 -> 12) lands showing
+       its first merge, and each later merge steps it up on its own pop, so
+       the number, the note and the points rise together. */
+    const after = g.board.slice();
+    const landed = after.slice();
+    const seen = new Set<number>();
+    for (const m of res.made) if (!seen.has(m.at)) { seen.add(m.at); landed[m.at] = m.level; }
     later(SLIDE, () => {
       setSliding(null);
-      setShown(g.board.slice());
+      setShown(landed);
       // The board meets the wall it was pushed against.
       const [ux, uy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
       sx.value = withSequence(withTiming(ux * 5, { duration: 50 }), withTiming(0, back(240, 2.5)));
@@ -492,12 +499,14 @@ export default function Game() {
     });
     res.made.forEach((m, k) =>
       later(SLIDE + k * STEP, () => {
+        setShown((sh) => (sh[m.at] === m.level ? sh : Object.assign(sh.slice(), { [m.at]: m.level })));
         setPops((pp) => ({ ...pp, [m.at]: Date.now() }));
         fx.merge(m.level);
         float(m.at, m.level);
         thump(m.level);
       }),
     );
+    later(SLIDE + res.made.length * STEP, () => setShown(after));
     afterMove(SLIDE + res.made.length * STEP);
   };
 

@@ -64,6 +64,44 @@ test('a sweep slides and merges each pair once', () => {
   assert.equal(made.length, 3);
 });
 
+test('with sweepChain a merged tile merges again along its line', () => {
+  const row = (vals, dir = 'left') => {
+    const b = empty();
+    vals.forEach((v, x) => { b[idx(x, 0)] = v; });
+    const { made } = E.applySweep(b, dir, true);
+    return { row: b.slice(0, 6), levels: made.map(m => m.level) };
+  };
+  // 1 2 3: the new 3 meets the old one and makes a 6.
+  assert.deepEqual(row([1, 2, 3]), { row: [6, 0, 0, 0, 0, 0], levels: [3, 6] });
+  // 3 3 6 12: the fold runs the whole line.
+  assert.deepEqual(row([3, 3, 6, 12]), { row: [24, 0, 0, 0, 0, 0], levels: [6, 12, 24] });
+  // 6 3 3: a pair further out folds back into the tile at the wall.
+  assert.deepEqual(row([6, 3, 3]), { row: [12, 0, 0, 0, 0, 0], levels: [6, 12] });
+  // 3 3 3 3 still makes two 6s side by side, then they meet: 12.
+  assert.deepEqual(row([3, 3, 3, 3]).row, [12, 0, 0, 0, 0, 0]);
+  // Pushed right, the fold starts from the right wall: the 3s make a 6,
+  // which stops beside the 12 it can't pair with.
+  assert.deepEqual(row([3, 3, 12, 0, 0, 0], 'right').row, [0, 0, 0, 0, 6, 12]);
+  // Tiles that never pair just slide.
+  assert.deepEqual(row([1, 1, 2]).row, [1, 3, 0, 0, 0, 0]);
+});
+
+test('without sweepChain a sweep still merges each tile once (2048 rule)', () => {
+  const b = empty();
+  [1, 2, 3].forEach((v, x) => { b[idx(x, 0)] = v; });
+  E.applySweep(b, 'left', false);
+  assert.deepEqual(b.slice(0, 6), [3, 3, 0, 0, 0, 0]);
+});
+
+test('the shipped game folds lines when it sweeps', () => {
+  const g = E.newGame({}, E.seeded(3));
+  g.board = empty();
+  [3, 3, 6].forEach((v, x) => { g.board[idx(x, 0)] = v; });
+  const res = E.sweep(g, 'left');
+  assert.deepEqual(g.board.slice(0, 6), [12, 0, 0, 0, 0, 0]);
+  assert.equal(res.made.length, 2);
+});
+
 test('a sweep that moves nothing is refused and costs nothing', () => {
   const g = E.newGame({}, E.seeded(1));
   g.board[idx(0, 0)] = 1;
