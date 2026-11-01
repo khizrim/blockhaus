@@ -13,7 +13,7 @@ import { Enamel } from '@/design/depth';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Game as EngineGame, type Piece, type Step } from '@/game/engine';
-import { DAILY, MEDALS, medalOf, nextMedal } from '@/game/daily';
+import { DAILY, MEDALS, medalOf } from '@/game/daily';
 import { LESSONS } from '@/game/lessons';
 import { slideMoves, type Move } from '@/game/slide';
 import { useGame } from '@/game/store';
@@ -98,8 +98,6 @@ export default function Game() {
   const isDaily = store.mode === 'daily';
   /* The daily's rules stay in sight: pieces left and the next medal. */
   const piecesLeft = Math.max(0, DAILY.pieceLimit - g.moves);
-  const coming = nextMedal(g.score);
-  const dailyLine = `Осталось ${piecesLeft} · ${coming ? `до ${coming.of} ${coming.at - g.score}` : "золото взято"}`;
   // A medal reached mid-game rings once, on the move that reached it.
   const medalRank = isDaily ? (medalOf(g.score)?.rank ?? 0) : 0;
   const lastMedal = useRef({ rank: medalRank, daily: isDaily });
@@ -110,9 +108,6 @@ export default function Game() {
   }, [medalRank, isDaily]);
   const lesson = store.lesson === null ? null : LESSONS[store.lesson];
   const [coach, setCoach] = useState<'task' | 'done'>('task');
-  /** Right after the lessons: the goal stands in the lesson line for the whole first game,
-      so the board never jumps when it goes. */
-  const [goalLine, setGoalLine] = useState(false);
   /** The lesson whose explanation card is up, if any. */
   const [explain, setExplain] = useState<number | null>(null);
   // The lesson on the board now, for timers that outlive a render (skip from pause).
@@ -226,7 +221,7 @@ export default function Game() {
   /* The board takes what is left of the height after the fixed parts:
      header ~64, the lesson card when there is one, the tray, and the 8pt
      paddings around them. Never wider than the screen, never under 240. */
-  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || goalLine || isDaily ? LESSON_H + space.lg : 0) + (g.cfg.freeSweeps ? 44 : 18) + trayMax * 3 + 32 + 48;
+  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || isDaily ? LESSON_H + space.lg : 0) + (g.cfg.freeSweeps ? 44 : 18) + trayMax * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
   /* One column for the whole screen: the header, the lesson, the board and
@@ -326,9 +321,7 @@ export default function Game() {
     fx.sweep();
     later(SCATTER_MS, () => {
       setScatter(null);
-      setGoalLine(true);
       skipLessons();
-      kickLine();
       setTrackIntro(Date.now());
       later(120, () => fx.cascade(milestonesFor(engine.DEFAULTS.goal), INTRO_STEP));
     });
@@ -338,9 +331,6 @@ export default function Game() {
     settle();
     store.finishLessons();
   };
-  useEffect(() => {
-    if (goalLine && g.over) setGoalLine(false);
-  }, [goalLine, g.over, store.version]);
 
   /** Of a move's merge levels, in order, which ones make a new milestone:
       the first merge of each milestone value above the best before the move. */
@@ -849,14 +839,6 @@ export default function Game() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.lesson, store.version, coach, width, height]);
 
-  // The named goal moves on: the line kicks with the new number.
-  const lastNext = useRef(nextStep);
-  useEffect(() => {
-    if (goalLine && !lesson && lastNext.current !== nextStep) kickLine();
-    lastNext.current = nextStep;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nextStep]);
-
   const lineStyle = useAnimatedStyle(() => ({ transform: [{ scale: lineKick.value }], transformOrigin: 'left center' }));
 
   return (
@@ -884,7 +866,7 @@ export default function Game() {
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: step }}>
           {/* Above the board: the move in plain words (then the formula it
               proved) and, under it, the mechanic. The way out of the lessons is in pause. */}
-          {lesson || goalLine || isDaily ? (
+          {lesson ? (
             <View style={{ width: col, marginBottom: step }}>
               <Animated.View style={[{ height: LESSON_H, justifyContent: 'center' }, lineStyle]}>
                 <Text
@@ -892,9 +874,15 @@ export default function Game() {
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   style={[type.title, { color: c.text }]}>
-                  {lesson ? (coach === 'task' ? lesson.title : lesson.done) : isDaily ? dailyLine : nextStep ? `Соберите ${nextStep}` : 'Дальше на очки'}
+                  {coach === 'task' ? lesson.title : lesson.done}
                 </Text>
               </Animated.View>
+            </View>
+          ) : isDaily ? (
+            /* The game of the day counts its pieces on a strip, not in words:
+               one cell per piece, the spent ones go out from the right. */
+            <View style={{ width: col, height: LESSON_H, marginBottom: step, justifyContent: 'center' }}>
+              <PieceStrip total={DAILY.pieceLimit} left={piecesLeft} width={col} />
             </View>
           ) : null}
           <Animated.View style={boardStyle} {...swipe.panHandlers}>
@@ -1325,6 +1313,45 @@ function ScatterTile({ v, d, side, at, cell, gap }: { v: number; d: number; side
         <Enamel fill={c.tile[rk]} size={cell} dark={isDark} />
         <TileNum v={v} color={c.ink[rk]} size={Math.max(12, Math.round(cell * (v >= 100 ? 0.28 : v >= 10 ? 0.34 : 0.4)))} />
       </View>
+    </Animated.View>
+  );
+}
+
+/** The game of the day's pieces as a strip of cells, framed like the board.
+    A cell per piece; spent ones go back to paper, the last few turn red. */
+function PieceStrip({ total, left, width }: { total: number; left: number; width: number }) {
+  const { c, isDark } = useTheme();
+  const frame = 3;
+  const inner = width - frame * 2;
+  const cw = (inner - frame * (total - 1)) / total;
+  const h = 18;
+  const low = left <= 5;
+  return (
+    <View
+      accessible
+      accessibilityLabel={`Осталось фигур: ${left} из ${total}`}
+      style={{ width, height: h + frame * 2, padding: frame, backgroundColor: c.line, flexDirection: 'row', gap: frame }}>
+      {Array.from({ length: total }, (_, k) => k < left).map((on, k) => (
+        <StripCell key={k} on={on} fill={low ? c.tile[2] : c.tile[1]} w={cw} dark={isDark} />
+      ))}
+    </View>
+  );
+}
+
+function StripCell({ on, fill, w, dark }: { on: boolean; fill: string; w: number; dark: boolean }) {
+  const { c } = useTheme();
+  const k = useSharedValue(1);
+  const was = useRef(on);
+  useEffect(() => {
+    // A spent piece: its cell drops out with a small press.
+    if (was.current && !on) k.value = withSequence(withTiming(0.6, { duration: 90 }), withTiming(1, back(260, 2.2)));
+    was.current = on;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on]);
+  const st = useAnimatedStyle(() => ({ transform: [{ scaleY: k.value }] }));
+  return (
+    <Animated.View style={[{ width: w, height: '100%', backgroundColor: on ? fill : c.canvas, overflow: 'hidden' }, st]}>
+      {on ? <Enamel fill={fill} size={18} dark={dark} /> : null}
     </Animated.View>
   );
 }

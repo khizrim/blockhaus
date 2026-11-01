@@ -79,17 +79,21 @@ export function MedalTrack({ medals, score, width, gap, top }: { medals: readonl
   const frame = Math.max(3, Math.round(gap * 0.6));
   return (
     <View pointerEvents="none" accessible accessibilityLabel={next ? `До медали «${next.name}» ${next.at - score}` : 'Все медали взяты'} style={{ width, flexDirection: 'row', gap, marginTop: top }}>
-      {medals.map((m) => {
+      {medals.map((m, i) => {
         const on = score >= m.at;
+        // The medal being played for fills from the left as the score climbs.
+        const from = i ? medals[i - 1].at : 0;
+        const progress = m === next ? Math.max(0, Math.min(1, (score - from) / (m.at - from))) : 0;
+        const tint = m.tile ? c.tile[m.tile] : c.faint;
         const fill = on ? (m.tile ? c.tile[m.tile] : c.faint) : c.canvas;
         const ink = on ? (m.tile ? c.ink[m.tile] : c.text) : m === next ? c.text : c.faint;
-        return <MedalStep key={m.at} at={m.at} on={on} fill={fill} ink={ink} framed={on || m === next} w={size} h={h} frame={frame} dark={isDark} />;
+        return <MedalStep key={m.at} at={m.at} on={on} fill={fill} ink={ink} tint={tint} progress={progress} framed={on || m === next} w={size} h={h} frame={frame} dark={isDark} />;
       })}
     </View>
   );
 }
 
-function MedalStep({ at, on, fill, ink, framed, w, h, frame, dark }: { at: number; on: boolean; fill: string; ink: string; framed: boolean; w: number; h: number; frame: number; dark: boolean }) {
+function MedalStep({ at, on, fill, ink, tint, progress, framed, w, h, frame, dark }: { at: number; on: boolean; fill: string; ink: string; tint: string; progress: number; framed: boolean; w: number; h: number; frame: number; dark: boolean }) {
   const { c } = useTheme();
   const k = useSharedValue(1);
   const was = useRef(on);
@@ -99,10 +103,17 @@ function MedalStep({ at, on, fill, ink, framed, w, h, frame, dark }: { at: numbe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on]);
   const st = useAnimatedStyle(() => ({ transform: [{ scale: k.value }] }));
+  const p = useSharedValue(progress);
+  useEffect(() => {
+    p.value = withTiming(progress, { duration: 300, easing: Easing.out(Easing.cubic) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progress]);
+  const bar = useAnimatedStyle(() => ({ width: `${p.value * 100}%` }));
   return (
     <Animated.View style={[{ width: w, height: h, padding: frame, backgroundColor: framed ? c.line : c.hair }, st]}>
-      <View style={{ flex: 1, backgroundColor: fill, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: fill, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         <Enamel fill={fill} size={h} empty={!on} dark={dark} />
+        {!on && progress > 0 ? <Animated.View style={[{ position: 'absolute', left: 0, bottom: 0, height: Math.max(4, Math.round(h * 0.22)), backgroundColor: tint }, bar]} /> : null}
         <TileNum v={at} color={ink} size={Math.max(11, Math.round(h * 0.36))} />
       </View>
     </Animated.View>
