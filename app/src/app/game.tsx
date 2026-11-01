@@ -1645,7 +1645,7 @@ function NewsCard({ news, onDone }: { news: News; onDone: () => void }) {
       accessibilityLiveRegion="polite"
       style={{ position: 'absolute', top: ins.top + space.sm, left: space.lg, right: space.lg, alignItems: 'center' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, backgroundColor: c.surface, borderWidth: 1, borderColor: c.hair, maxWidth: 400 }}>
-        {news.kind === 'poster' && p ? <WallPoster p={p} on width={40} /> : <TaskSquares done={[true]} size={28} />}
+        {news.kind === 'poster' && p ? <WallPoster p={p} width={40} /> : <TaskSquares done={[true]} size={28} />}
         <View style={{ flexShrink: 1 }}>
           <Text style={[type.meta, { color: c.muted }]}>{news.kind === 'poster' ? 'Новый плакат' : 'Задание дня'}</Text>
           <Text numberOfLines={2} style={[type.secondaryStrong, { color: c.text }]}>{news.title}</Text>

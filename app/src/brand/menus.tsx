@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,9 @@ import engine from '@/game/engine';
 import { DayClock, MedalMark, RankStrip, StreakDays, TaskSquares, Track, milestonesFor } from '@/components/Track';
 import { dayLabel, medalOf, shareOrCopy, shareText } from '@/game/daily';
 import { useGame } from '@/game/store';
+import { type Task } from '@/game/meta';
+import { Field } from '@/components/Field';
+import { TileNum } from '@/components/TileNum';
 
 import { Grow } from './marks';
 
@@ -160,24 +163,19 @@ export function PosterMenu() {
       {taskList ? (
         <View style={[StyleSheet.absoluteFill, { zIndex: 2 }]}>
           <Overlay onDismiss={() => setTaskList(false)}>
-            <Panel>
-              <Heading>Задания дня</Heading>
-              <View style={{ gap: space.md, marginTop: space.lg }}>
-                {tasks.list.map((t, k) => (
-                  <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-                    <TaskSquares done={[tasks.done[k]]} size={24} start={k} />
-                    <Body style={{ flex: 1, color: tasks.done[k] ? c.muted : c.text }}>{t.text}</Body>
-                    {t.goal > 1 ? <Text style={[type.secondaryStrong, { color: c.muted, fontVariant: ['tabular-nums'] }]}>{`${tasks.progress[k]}/${t.goal}`}</Text> : null}
-                  </View>
-                ))}
-              </View>
-              <Body muted small style={{ marginTop: space.lg }}>
-                В обычной партии. Каждое задание приносит мастерской 300 очков. Новые задания в полночь.
+            {/* The three tasks as one poster: a band each, the task drawn
+                on the board's own tiles at the left, grey until done. */}
+            <View style={[{ width: '100%', maxWidth: 360, padding: 6, gap: 6, backgroundColor: c.line }, panelEnamel(c.bg, isDark)]}>
+              {tasks.list.map((t, k) => (
+                <TaskBand key={t.id} task={t} done={tasks.done[k]} progress={tasks.progress[k]} rung={[2, 3, 1][k]} />
+              ))}
+            </View>
+            <View style={{ width: '100%', maxWidth: 360, gap: space.md, marginTop: space.lg }}>
+              <Body muted small style={{ textAlign: 'center' }}>
+                Каждое задание приносит 300 очков к рангу. Новые задания в полночь.
               </Body>
-              <View style={{ marginTop: space.xl }}>
-                <Button kind="primary" label="Понятно" onPress={() => setTaskList(false)} />
-              </View>
-            </Panel>
+              <Button kind="primary" label="Понятно" onPress={() => setTaskList(false)} />
+            </View>
           </Overlay>
         </View>
       ) : null}
@@ -206,6 +204,55 @@ export function PosterMenu() {
           </Overlay>
         </View>
       ) : null}
+    </View>
+  );
+}
+
+/** A task drawn with tiles: a cascade is the chain it climbs, a tile task
+    the tile, a sweep task a pair waiting to slide, a score task the number
+    on yellow, a count task its progress filling a strip. */
+function TaskBand({ task, done, progress, rung }: { task: Task; done: boolean; progress: number; rung: number }) {
+  const { c, isDark } = useTheme();
+  const tint = c.tile[rung];
+  const H = 72;
+  const n = Number(task.id.replace(/[^0-9]/g, '')) || 0;
+  const art = (): ReactNode => {
+    const row = (vals: number[]) => {
+      const cell = Math.min(26, Math.floor((104 - 6) / vals.length));
+      return <Field w={vals.length} h={1} values={vals} cell={cell} gap={4} look={() => (done ? undefined : { dim: true })} />;
+    };
+    if (task.id.startsWith('cascades')) return row([1, 2, 3]);
+    if (task.id.startsWith('cascade')) return row([1, 2, 3, 6, 12, 24].slice(0, n + 1));
+    if (task.id.startsWith('sweep')) return row([3, 3, 6, 12].slice(0, n + 1));
+    if (task.id.startsWith('tile') || task.id.startsWith('still')) return <Field w={1} h={1} values={[n]} cell={44} gap={4} look={() => (done ? undefined : { dim: true })} />;
+    return null;
+  };
+  const drawn = art();
+  const share = task.goal > 1 ? Math.min(1, progress / task.goal) : 0;
+  return (
+    <View
+      accessible
+      accessibilityLabel={`${task.text}${done ? ', выполнено' : task.goal > 1 ? `, ${progress} из ${task.goal}` : ''}`}
+      style={{ flexDirection: 'row', height: H, gap: 6 }}>
+      <View style={{ width: 112, backgroundColor: drawn ? c.canvas : done ? c.tile[3] : c.canvas, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        {drawn ?? (
+          <>
+            {done ? <Enamel fill={c.tile[3]} size={H} dark={isDark} /> : null}
+            <TileNum v={task.goal > 1 ? `${progress}/${task.goal}` : String(n)} color={done ? c.ink[3] : c.muted} size={task.goal > 1 ? 18 : 20} />
+          </>
+        )}
+      </View>
+      <View style={{ flex: 1, backgroundColor: done ? tint : c.canvas, paddingHorizontal: space.md, justifyContent: 'center', overflow: 'hidden' }}>
+        {done ? <Enamel fill={tint} size={H} dark={isDark} /> : null}
+        <Text numberOfLines={2} style={[type.secondaryStrong, { color: done ? c.ink[rung] : c.text }]}>
+          {task.text}
+        </Text>
+        {task.goal > 1 && !done ? (
+          <View style={{ height: 6, marginTop: 6, backgroundColor: c.hair }}>
+            <View style={{ width: `${share * 100}%`, height: 6, backgroundColor: tint }} />
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }

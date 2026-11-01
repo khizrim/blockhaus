@@ -98,22 +98,48 @@ export const POSTERS: PosterDef[] = [
   { id: 'earned', title: 'Заработанный сдвиг', hint: 'Победа в режиме «сдвиги за каскады»', secret: true, v: 384, seed: 43, check: (e) => !!e && e.cascadeMode && e.won },
 ];
 
-/** A poster's composition: a 6×6 board of colour fields, the same every time. */
-export function posterBoard(seed: number): number[] {
+/** A poster's composition: a `w`×`h` board of colour fields, the same every
+    time for a seed. A few rectangles of one colour each, laid over paper;
+    the first three in the primaries so every poster reads as Bauhaus. */
+export function posterBoard(seed: number, w = 6, h = 6): number[] {
   const r = engine.seeded(seed * 7919);
   const ladder = [1, 2, 3, 6, 12, 24, 48, 96, 192];
-  const b = new Array(36).fill(0);
-  // A few rectangles of one colour each, laid over paper.
-  for (let k = 0; k < 6; k++) {
-    const w = 1 + Math.floor(r() * 3);
-    const h = 1 + Math.floor(r() * 3);
-    const x = Math.floor(r() * (7 - w));
-    const y = Math.floor(r() * (7 - h));
+  const b = new Array(w * h).fill(0);
+  const n = Math.max(3, Math.round((w * h) / 6));
+  for (let k = 0; k < n; k++) {
+    const rw = 1 + Math.floor(r() * Math.min(3, w));
+    const rh = 1 + Math.floor(r() * Math.min(3, h));
+    const x = Math.floor(r() * (w - rw + 1));
+    const y = Math.floor(r() * (h - rh + 1));
     const v = ladder[Math.floor(r() * (k < 3 ? 3 : ladder.length))];
-    for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) b[yy * 6 + xx] = v;
+    for (let yy = y; yy < y + rh; yy++) for (let xx = x; xx < x + rw; xx++) b[yy * w + xx] = v;
   }
   return b;
 }
+
+/* Where each poster hangs on the wall, on a grid six squares wide: the wall
+   is one composition, frames of different sizes meeting at the board's
+   black lines. `count` is the block that says how many are up. In the
+   order of POSTERS. */
+export const WALL = {
+  cols: 6,
+  rows: 9,
+  count: { x: 0, y: 0, w: 2, h: 2 },
+  frames: [
+    { x: 2, y: 0, w: 2, h: 2 },
+    { x: 4, y: 0, w: 2, h: 3 },
+    { x: 0, y: 2, w: 1, h: 2 },
+    { x: 1, y: 2, w: 3, h: 2 },
+    { x: 4, y: 3, w: 2, h: 2 },
+    { x: 0, y: 4, w: 2, h: 2 },
+    { x: 2, y: 4, w: 2, h: 3 },
+    { x: 4, y: 5, w: 2, h: 2 },
+    { x: 0, y: 6, w: 2, h: 1 },
+    { x: 0, y: 7, w: 3, h: 2 },
+    { x: 3, y: 7, w: 1, h: 2 },
+    { x: 4, y: 7, w: 2, h: 2 },
+  ],
+};
 
 /* ---------- palettes of the masters ----------
    Only the look of the tiles. Each opens at a rank. */
