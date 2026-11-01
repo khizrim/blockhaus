@@ -132,7 +132,9 @@ export default function Game() {
   /** The best tile before the move now playing: a merge above it is a new milestone. */
   const peak = useRef(g.bestTile);
   /** A milestone's wave across the board, from the cell that made it. */
-  const [ripple, setRipple] = useState<{ at: number; v: number; id: number } | null>(null);
+  const [ripple, setRipple] = useState<{ at: number; v: number; id: number; board: number[] } | null>(null);
+  /** A milestone whose copy is still flying to the track: its square waits. */
+  const [trackHold, setTrackHold] = useState(0);
   const lastDir = useRef<Dir>('down');
   // A new tray gets new keys so its pieces spring in; a spent piece keeps its key.
   const trayId = useRef(0);
@@ -258,13 +260,19 @@ export default function Game() {
   };
   /** One merge lands: the note, the points, the press. A milestone rings its
       bell instead of the note and sends a wave of its colour across the board. */
-  const land = (at: number, level: number, milestone: boolean) => {
+  const land = (at: number, level: number, milestone: boolean, board: number[]) => {
     setPops((pp) => ({ ...pp, [at]: Date.now() }));
     if (milestone) {
       // The goal itself rings with the win card that follows, not a bell.
       if (level === g.cfg.goal) fx.merge(level);
       else fx.milestone(level);
-      setRipple({ at, v: level, id: Date.now() });
+      setRipple({ at, v: level, id: Date.now(), board: board.slice() });
+      // Its square on the track fills when the flying copy lands there.
+      setTrackHold(level);
+      later(FLIP + 120 + FLY_HOME, () => {
+        setTrackHold(0);
+        fx.bonus();
+      });
       later(RIPPLE_MS, () => setRipple(null));
     } else fx.merge(level);
     float(at, level);
@@ -403,7 +411,7 @@ export default function Game() {
       later(t0 + FLY, () => {
         setShown(snap);
         setFlights((f) => f.filter((x) => !st.absorbed.some((a) => x.m.from === a)));
-        land(st.anchor, st.level, marks[k]);
+        land(st.anchor, st.level, marks[k], snap);
       });
     });
     const done = 90 + Math.max(0, res.steps.length - 1) * STEP + (res.steps.length ? FLY : 0);
@@ -543,7 +551,7 @@ export default function Game() {
     res.made.forEach((m, k) =>
       later(SLIDE + k * STEP, () => {
         setShown((sh) => (sh[m.at] === m.level ? sh : Object.assign(sh.slice(), { [m.at]: m.level })));
-        land(m.at, m.level, marks[k]);
+        land(m.at, m.level, marks[k], after);
       }),
     );
     later(SLIDE + res.made.length * STEP, () => setShown(after));
@@ -598,6 +606,18 @@ export default function Game() {
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.version, hold, store.lesson, hints]);
+
+  /* Where each milestone's square sits, in the board's own coordinates, so
+     the milestone tile can fly into it. Mirrors Track's layout. */
+  const milestones = milestonesFor(g.cfg.goal);
+  const trackTop = isDaily ? gap * 2 + step / 2 : step / 2;
+  const trackHome = (v: number) => {
+    const k = milestones.indexOf(v);
+    if (k < 0 || !g.cfg.freeSweeps || store.lesson !== null) return null;
+    const size = Math.floor((col - gap * (milestones.length - 1)) / milestones.length);
+    const h = Math.max(28, Math.min(44, Math.round(size * 0.5)));
+    return { x: k * (size + gap), y: cell * N + gap + trackTop, w: size, h };
+  };
 
   // While tiles are in flight the board under them is empty; keep the last best.
   const bestRef = useRef(0);
@@ -691,7 +711,7 @@ export default function Game() {
                 {flights.map((f) => (
                   <SlidingTile key={f.id} m={f.m} cell={cell} gap={gap} ms={f.ms} />
                 ))}
-                {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} cell={cell} gap={gap} /> : null}
+                {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={trackHome(ripple.v)} /> : null}
                 {floats.map((f) => (
                   <Float key={f.id} at={f.at} v={f.v} cell={cell} gap={gap} />
                 ))}
@@ -705,7 +725,7 @@ export default function Game() {
             /* With free sweeps there is nothing to count under the board:
                the milestones on the way to the goal sit there instead. */
             store.lesson === null ? (
-              <Track steps={milestonesFor(g.cfg.goal)} best={best} width={col} gap={gap} top={isDaily ? gap * 2 + step / 2 : step / 2} />
+              <Track steps={milestones} best={trackHold ? Math.min(best, trackHold / 2) : best} width={col} gap={gap} top={trackTop} />
             ) : null
           ) : (
             <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: col, alignItems: 'center', marginTop: isDaily ? gap * 2 : 0 }}>
@@ -861,43 +881,143 @@ function BestTile({ v, size, frame }: { v: number; size: number; frame: number }
   );
 }
 
-const RIPPLE_MS = 900;
+const RIPPLE_MS = 1400;
+const WAVE = 55; // ms per cell of distance from the milestone
+const FLIP = 460; // ms the milestone tile turns over in the air
+const FLY_HOME = 380; // ms its copy flies into the track
 
-/** A milestone's wave: every cell of the board lights in the new tile's
-    colour and fades, in rings from the cell that made it, so the colour
-    washes over the whole board once. */
-function Ripple({ at, v, cell, gap }: { at: number; v: number; cell: number; gap: number }) {
+/** A milestone, played on the enamel. The tile that made it rises off the
+    board and turns over once, light running across its face; a wave goes
+    out from it and every tile on the board lifts out of its socket in turn,
+    with a glint on its enamel, while the empty floor flashes the new colour.
+    Then a copy of the tile drops into its square on the track under the
+    board, which pops as it lands. */
+function Ripple({ at, v, board, cell, gap, home }: { at: number; v: number; board: number[]; cell: number; gap: number; home: { x: number; y: number; w: number; h: number } | null }) {
   const { c } = useTheme();
   const pad = gap / 2;
   const ax = at % N;
   const ay = (at / N) | 0;
+  const pos = (i: number) => ({ x: pad + (i % N) * cell, y: pad + ((i / N) | 0) * cell });
+  const dist = (i: number) => Math.abs((i % N) - ax) + Math.abs(((i / N) | 0) - ay);
+  const cells = Array.from({ length: N * N }, (_, i) => i);
   return (
     <>
-      {Array.from({ length: N * N }, (_, i) => (
-        <RippleCell
-          key={i}
-          d={Math.abs((i % N) - ax) + Math.abs(((i / N) | 0) - ay)}
-          color={c.tile[rank(v)]}
-          style={{ left: pad + (i % N) * cell + pad, top: pad + ((i / N) | 0) * cell + pad, width: cell - gap, height: cell - gap }}
-        />
-      ))}
+      {cells.map((i) =>
+        board[i] > 0 ? null : (
+          <FloorFlash key={`f${i}`} d={dist(i)} color={c.tile[rank(v)]} style={{ left: pos(i).x + pad, top: pos(i).y + pad, width: cell - gap, height: cell - gap }} />
+        ),
+      )}
+      {cells.map((i) => (board[i] > 0 && i !== at ? <LiftTile key={`t${i}`} v={board[i]} d={dist(i)} at={pos(i)} cell={cell} gap={gap} /> : null))}
+      <LiftTile key="hero" v={v} d={0} at={pos(at)} cell={cell} gap={gap} hero home={home} />
     </>
   );
 }
 
-function RippleCell({ d, color, style }: { d: number; color: string; style: object }) {
+function FloorFlash({ d, color, style }: { d: number; color: string; style: object }) {
   const o = useSharedValue(0);
   useEffect(() => {
-    o.value = withDelay(d * 45, withSequence(withTiming(0.7, { duration: 90 }), withTiming(0, { duration: 420, easing: Easing.out(Easing.quad) })));
+    o.value = withDelay(d * WAVE, withSequence(withTiming(0.75, { duration: 90 }), withTiming(0, { duration: 460, easing: Easing.out(Easing.quad) })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const st = useAnimatedStyle(() => ({ opacity: o.value }));
   return <Animated.View style={[{ position: 'absolute', backgroundColor: color }, style, st]} />;
 }
 
+/** One tile lifting out of its socket: an empty socket shows under it, a
+    shadow falls on the board, and a glint crosses its face. The hero tile
+    rises higher, turns over, and then flies home to the track. */
+function LiftTile({ v, d, at, cell, gap, hero, home }: { v: number; d: number; at: { x: number; y: number }; cell: number; gap: number; hero?: boolean; home?: { x: number; y: number; w: number; h: number } | null }) {
+  const { c, depth, isDark } = useTheme();
+  const pad = gap / 2;
+  const rk = rank(v);
+  const lift = useSharedValue(0); // 0 on the board, 1 at the top of the lift
+  const turn = useSharedValue(0); // one full turn for the hero
+  const shine = useSharedValue(0); // glint position across the face
+  const fly = useSharedValue(0); // hero copy on its way to the track
+  useEffect(() => {
+    const delay = d * WAVE;
+    if (hero) {
+      lift.value = withSequence(withTiming(1, { duration: 140, easing: Easing.out(Easing.cubic) }), withDelay(FLIP - 140, withTiming(0, { duration: 160, easing: Easing.in(Easing.quad) })));
+      turn.value = withTiming(1, { duration: FLIP, easing: Easing.inOut(Easing.cubic) });
+      shine.value = withDelay(FLIP * 0.45, withTiming(1, { duration: 320 }));
+      if (home) fly.value = withDelay(FLIP + 120, withTiming(1, { duration: FLY_HOME, easing: Easing.in(Easing.cubic) }));
+    } else {
+      lift.value = withDelay(delay, withSequence(withTiming(1, { duration: 150, easing: Easing.out(Easing.cubic) }), withTiming(0, back(380, 2.2))));
+      shine.value = withDelay(delay + 40, withTiming(1, { duration: 300 }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const rise = hero ? 0.32 : 0.12;
+  const tileSt = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: -lift.value * cell * (hero ? 0.22 : 0.1) },
+      { scale: 1 + lift.value * rise },
+      // A spin seen from the front: the tile narrows to its edge and opens
+      // again, twice, so its number never shows mirrored.
+      { scaleX: Math.max(0.04, Math.abs(Math.cos(turn.value * Math.PI * 2))) },
+    ],
+    // While its copy flies to the track, the tile is back in its place.
+    opacity: 1,
+  }));
+  // Edge-on, the enamel catches less light.
+  const dimSt = useAnimatedStyle(() => ({ opacity: hero ? (1 - Math.abs(Math.cos(turn.value * Math.PI * 2))) * 0.35 : 0 }));
+  const shadowSt = useAnimatedStyle(() => ({
+    opacity: lift.value * (isDark ? 0.6 : 0.28),
+    transform: [{ translateY: lift.value * cell * 0.08 }, { scale: 1 + lift.value * rise * 0.6 }],
+  }));
+  // The socket is shown only while the tile is off the board.
+  const socketSt = useAnimatedStyle(() => ({ opacity: lift.value > 0.02 || (turn.value > 0.02 && turn.value < 0.98) ? 1 : 0 }));
+  const glintSt = useAnimatedStyle(() => ({
+    opacity: shine.value > 0 && shine.value < 1 ? 0.55 : 0,
+    transform: [{ translateX: -cell + shine.value * cell * 2 }, { rotate: '20deg' }],
+  }));
+  const flySt = useAnimatedStyle(() => {
+    if (!home) return { opacity: 0 };
+    const k = fly.value;
+    const sx = home.w / cell;
+    const sy = home.h / cell;
+    return {
+      opacity: k > 0 && k < 1 ? 1 : 0,
+      transform: [
+        { translateX: at.x + (home.x - at.x) * k + (cell * (1 + (sx - 1) * k) - cell) / 2 },
+        { translateY: at.y + (home.y - at.y) * k - Math.sin(Math.PI * k) * cell * 0.6 + (cell * (1 + (sy - 1) * k) - cell) / 2 },
+        { scaleX: 1 + (sx - 1) * k },
+        { scaleY: 1 + (sy - 1) * k },
+      ],
+    };
+  });
+  const face = (
+    <View style={{ flex: 1, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      <Depth kind={depth} fill={c.tile[rk]} open={{ t: true, r: true, b: true, l: true }} size={cell} dark={isDark} />
+      <TileNum v={v} color={c.ink[rk]} size={Math.max(12, Math.round(cell * (v >= 100 ? 0.28 : v >= 10 ? 0.34 : 0.4)))} />
+      <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: -cell * 0.3, bottom: -cell * 0.3, width: cell * 0.28, backgroundColor: '#FFFFFF' }, glintSt]} />
+    </View>
+  );
+  const box = { position: 'absolute' as const, left: at.x, top: at.y, width: cell, height: cell };
+  return (
+    <>
+      <Animated.View pointerEvents="none" style={[box, { padding: pad, backgroundColor: c.line }, socketSt]}>
+        <View style={{ flex: 1, backgroundColor: c.canvas }}>
+          <Depth kind={depth} fill={c.canvas} open={{ t: true, r: true, b: true, l: true }} size={cell} empty dark={isDark} />
+        </View>
+      </Animated.View>
+      <Animated.View pointerEvents="none" style={[box, { left: at.x + pad, top: at.y + pad, width: cell - gap, height: cell - gap, backgroundColor: '#000000' }, shadowSt]} />
+      <Animated.View pointerEvents="none" style={[box, { padding: pad, backgroundColor: c.line }, tileSt]}>
+        {face}
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000000' }, dimSt]} />
+      </Animated.View>
+      {hero && home ? (
+        <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: cell, height: cell, padding: pad, backgroundColor: c.line }, flySt]}>
+          {face}
+        </Animated.View>
+      ) : null}
+    </>
+  );
+}
+
 /** The way to the goal under the board: one small tile per milestone, empty
     until reached, then in its own colour. The last one is the goal. A
-    milestone reached pops its square on the same frame as the wave. */
+    milestone reached pops its square when the flying tile lands in it. */
 function Track({ steps, best, width, gap, top }: { steps: number[]; best: number; width: number; gap: number; top: number }) {
   const between = gap;
   const size = Math.floor((width - between * (steps.length - 1)) / steps.length);
@@ -917,7 +1037,7 @@ function Track({ steps, best, width, gap, top }: { steps: number[]; best: number
 }
 
 function TrackStep({ v, on, goal, w, h, frame }: { v: number; on: boolean; goal: boolean; w: number; h: number; frame: number }) {
-  const { c } = useTheme();
+  const { c, depth, isDark } = useTheme();
   const rk = rank(v);
   const k = useSharedValue(1);
   const was = useRef(on);
@@ -930,6 +1050,7 @@ function TrackStep({ v, on, goal, w, h, frame }: { v: number; on: boolean; goal:
   return (
     <Animated.View style={[{ width: w, height: h, padding: frame, backgroundColor: on || goal ? c.line : c.hair }, st]}>
       <View style={{ flex: 1, backgroundColor: on ? c.tile[rk] : c.canvas, alignItems: 'center', justifyContent: 'center' }}>
+        <Depth kind={depth} fill={on ? c.tile[rk] : c.canvas} open={{ t: true, r: true, b: true, l: true }} size={h} empty={!on} dark={isDark} />
         <TileNum v={v} color={on ? c.ink[rk] : goal ? c.text : c.faint} size={Math.max(11, Math.round(h * 0.36))} />
       </View>
     </Animated.View>
