@@ -1,62 +1,54 @@
-"""App icon, adaptive icon, splash and favicon, drawn from the Glyph in
-src/components/ui.tsx: the menu poster in miniature. Run from app/:
+"""App icon, Android adaptive icon, splash and favicon: the menu poster
+reduced to four fields and thick lines. Run from app/:
 
     python3 scripts/make-icons.py
+
+The composition is laid out in "window" units: the part of the canvas a
+launcher actually shows. On iOS that is the whole square; on Android it is
+the central 72dp of the 108dp adaptive layer, and the lines simply run on
+to the edge so any mask shape (circle, squircle, square) looks complete.
 """
 from PIL import Image, ImageDraw
 
 PAPER = (243, 239, 228, 255)
 LINE = (17, 18, 21, 255)
+WHITE = (255, 255, 255, 255)
+CLEAR = (0, 0, 0, 0)
 RED, YELLOW, BLUE = (217, 52, 43, 255), (244, 194, 28, 255), (31, 79, 178, 255)
 OUT = 'assets/images'
+ADAPTIVE = (18 / 108, 18 / 108, 72 / 108)  # window inside the 108dp layer
 
 
-def glyph(S, frame=True, mono=False, bg=PAPER):
-    """The Glyph at S px, same proportions as the component. With a frame,
-    the drawing sits inside it, as children sit inside a border in RN."""
-    if frame:
-        L = max(2, round(S * 0.08))
-        ink = (255, 255, 255, 255) if mono else LINE
-        im = Image.new('RGBA', (S, S), ink)
-        inner = glyph(S - 2 * L, frame=False, mono=mono, bg=bg)
-        if mono:
-            hole = Image.new('RGBA', (S - 2 * L, S - 2 * L), (0, 0, 0, 0))
-            im.paste(hole, (L, L))
-        im.alpha_composite(inner, (L, L))
-        return im
-    im = Image.new('RGBA', (S, S), (0, 0, 0, 0) if mono else bg)
+def poster(S, win=(0, 0, 1), mono=False, frame=False):
+    """Three colour fields and one paper field split by thick lines.
+
+    win = (left, top, size) of the visible window as fractions of S.
+    mono: white fields on transparent, lines cut out (Android themed icon).
+    frame: an outer line round the whole square (splash, favicon)."""
+    x0, y0, w = (v * S for v in win)
+    X = lambda u: x0 + u * w
+    Y = lambda v: y0 + v * w
+    L = round(w * 0.09)
+    im = Image.new('RGBA', (S, S), CLEAR if mono else LINE)
     d = ImageDraw.Draw(im)
-    L = max(2, round(S * 0.08))
-    v1, hl, hr, vs, hb = (round(S * k) for k in (0.62, 0.6, 0.38, 0.22, 0.78))
-    box = lambda l, t, w, h, c: d.rectangle([l, t, l + w - 1, t + h - 1], fill=c)
-    if not mono:
-        box(v1 + L, 0, S, hr, RED)
-        box(0, hl + L, vs, S, YELLOW)
-        box(v1 + L, hb + L, S, S, BLUE)
-    ink = (255, 255, 255, 255) if mono else LINE
-    for r in [(v1, 0, L, S), (0, hl, v1, L), (v1, hr, S, L), (vs, hl, L, S), (v1, hb, S, L)]:
-        box(*r, ink)
+    fill = lambda c: WHITE if mono else c
+    o = L if frame else 0
+    vx, hy, hr = X(0.6), Y(0.58), Y(0.36)
+    d.rectangle([o, o, vx - L / 2, hy - L / 2], fill=fill(RED))
+    d.rectangle([vx + L / 2, o, S - 1 - o, hr - L / 2], fill=fill(PAPER))
+    d.rectangle([vx + L / 2, hr + L / 2, S - 1 - o, S - 1 - o], fill=fill(BLUE))
+    d.rectangle([o, hy + L / 2, vx - L / 2, S - 1 - o], fill=fill(YELLOW))
     return im
 
 
-def on(canvas, inner, size, bg):
-    """`inner` drawn at `size`, centred on a square canvas."""
-    im = Image.new('RGBA', (canvas, canvas), bg)
-    g = inner(size)
-    o = (canvas - size) // 2
-    im.alpha_composite(g, (o, o))
-    return im
-
-
-# iOS / store icon: the poster fills the square; the system rounds the corners.
-# No outer frame, since the mask would cut it unevenly.
-glyph(1024, frame=False).convert('RGB').save(f'{OUT}/icon.png')
-# Android adaptive: the background is paper, the foreground keeps the glyph
-# inside the 66% safe circle area.
-Image.new('RGBA', (512, 512), PAPER).save(f'{OUT}/android-icon-background.png')
-on(512, lambda s: glyph(s, frame=True), 300, (0, 0, 0, 0)).save(f'{OUT}/android-icon-foreground.png')
-on(432, lambda s: glyph(s, frame=True, mono=True), 252, (0, 0, 0, 0)).save(f'{OUT}/android-icon-monochrome.png')
-# Splash: the framed glyph on its own; the screen colour comes from app.json.
-glyph(456, frame=True).save(f'{OUT}/splash-icon.png')
-glyph(48, frame=True).save(f'{OUT}/favicon.png')
+# iOS / store icon: full bleed; the system rounds the corners.
+poster(1024).convert('RGB').save(f'{OUT}/icon.png')
+# Android adaptive: the whole drawing lives in the foreground (full bleed, so
+# the mask never shows a gap); the background is plain ink behind it.
+Image.new('RGBA', (432, 432), LINE).save(f'{OUT}/android-icon-background.png')
+poster(432, ADAPTIVE).save(f'{OUT}/android-icon-foreground.png')
+poster(432, ADAPTIVE, mono=True).save(f'{OUT}/android-icon-monochrome.png')
+# Splash and favicon: the same poster inside an outer line.
+poster(456, frame=True).save(f'{OUT}/splash-icon.png')
+poster(192, frame=True).resize((48, 48), Image.LANCZOS).save(f'{OUT}/favicon.png')
 print('icons written')
