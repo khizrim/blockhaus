@@ -36,3 +36,14 @@ Win means making a 96, the top of the ladder.
 - **Things that didn't help:** a third sweep per tray, dealing 3s as singles, and pieces that mix 1s and 2s, each alone.
 - **If it is still too hard:** `shippedMixed` or `shippedMixedCellTray` push casual wins to 8–13% and regular to about 75%. Mixed pieces carry two colours, so that one changes how the tray looks.
 - **Leftover 1s vs 2s** at game end are close to even in every variant, so the board doesn't drown in 2s on average; the 2-fields seen in play were bad streaks, which the `need` dealer now corrects as they happen.
+
+## Sweeps that fold the whole line (2026-11-01)
+
+`node sim/simulate.js 500 shipped shippedChain`, with the goal at 192. `shippedChain` lets a tile merged by a sweep merge again with the next tile in its line (3 3 6 → 12, 1 2 3 → 6), instead of once per sweep as in 2048. It is now the shipped rule (`sweepChain: true`).
+
+| | casual moves | regular moves | regular win% | expert moves | expert win% | expert win@ |
+|---|---|---|---|---|---|---|
+| once per sweep | 47 | 119 | 25 | 185 | 55 | 122 |
+| fold the line | 52 | 125 | 28 | 197 | 58 | 118 |
+
+A small, even lift: about three points of win rate and a few moves longer for every profile. The bot sweeps only when a sweep beats its best placement and never sets a fold up, so a player who builds lines for it will gain more than this.
