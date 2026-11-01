@@ -98,12 +98,59 @@ test('the shipped game folds lines when it sweeps', () => {
   g.board = empty();
   [3, 3, 6].forEach((v, x) => { g.board[idx(x, 0)] = v; });
   const res = E.sweep(g, 'left');
-  assert.deepEqual(g.board.slice(0, 6), [12, 0, 0, 0, 0, 0]);
+  assert.deepEqual(g.board.slice(0, 5), [12, 0, 0, 0, 0]);
   assert.equal(res.made.length, 2);
 });
 
-test('a sweep that moves nothing is refused and costs nothing', () => {
+test('free sweeps never run out, and each slides a new low tile in from the far edge', () => {
   const g = E.newGame({}, E.seeded(1));
+  assert.ok(g.cfg.freeSweeps);
+  g.board = empty();
+  g.board[idx(2, 2)] = 6;
+  const before = g.sweeps;
+  for (const dir of ['left', 'right', 'left', 'right']) {
+    const res = E.sweep(g, dir);
+    assert.ok(res);
+    // The new tile lands on the edge the tiles moved away from.
+    const x = res.spawned.at % N;
+    assert.equal(x, dir === 'left' ? N - 1 : 0);
+    assert.ok([1, 2].includes(res.spawned.value));
+  }
+  assert.equal(g.sweeps, before);
+});
+
+test('with free sweeps the game ends only when no sweep can change anything', () => {
+  const g = E.newGame({}, E.seeded(4));
+  // A full board of 6s and 12s that never pair: no piece fits, nothing slides.
+  for (let i = 0; i < g.board.length; i++) g.board[i] = ((i % 6) + ((i / 6) | 0)) % 2 ? 6 : 12;
+  assert.ok(!E.anyMove(g));
+  // One hole: a sweep slides tiles into it, so the game goes on.
+  g.board[idx(0, 0)] = 0;
+  g.tray = [piece(1, [[0, 0], [1, 0]]), piece(2, [[0, 0], [0, 1]]), piece(1, [[0, 0], [1, 0]])];
+  assert.ok(E.anyMove(g));
+});
+
+test('the shipped goal is 384', () => {
+  const g = E.newGame({}, E.seeded(3));
+  g.board[idx(1, 0)] = 192; g.board[idx(0, 1)] = 192;
+  g.tray[0] = piece(192);
+  E.place(g, 0, 0, 0);
+  assert.equal(g.bestTile, 384);
+  assert.ok(g.won);
+  assert.equal(E.rank(768), 11);
+});
+test('a 768 is the last rung', () => {
+  const g = E.newGame({}, E.seeded(3));
+  g.board[idx(1, 0)] = 384; g.board[idx(0, 1)] = 384;
+  g.tray[0] = piece(384);
+  E.place(g, 0, 0, 0);
+  assert.equal(g.bestTile, 768);
+  assert.ok(g.won);
+  assert.equal(E.rank(768), 11);
+});
+
+test('a limited sweep that moves nothing is refused and costs nothing', () => {
+  const g = E.newGame(E.LIMITED, E.seeded(1));
   g.board[idx(0, 0)] = 1;
   assert.equal(E.sweep(g, 'left'), null);
   assert.equal(g.sweeps, g.cfg.sweepsPerTray);
@@ -112,7 +159,7 @@ test('a sweep that moves nothing is refused and costs nothing', () => {
 });
 
 test('the tray refills and sweeps reset once all three pieces are used', () => {
-  const g = E.newGame({}, E.seeded(2));
+  const g = E.newGame(E.LIMITED, E.seeded(2));
   g.sweeps = 0;
   const first = g.tray;
   let slot = 0;
@@ -125,8 +172,8 @@ test('the tray refills and sweeps reset once all three pieces are used', () => {
   assert.equal(g.moves, 3);
 });
 
-test('reaching the goal tile wins', () => {
-  const g = E.newGame({}, E.seeded(3));
+test('with limited sweeps, reaching 192 wins', () => {
+  const g = E.newGame(E.LIMITED, E.seeded(3));
   g.board[idx(1, 0)] = 96; g.board[idx(0, 1)] = 96;
   g.tray[0] = piece(96);
   E.place(g, 0, 0, 0);
@@ -135,7 +182,7 @@ test('reaching the goal tile wins', () => {
 });
 
 test('the game ends when nothing in hand fits and no sweep helps', () => {
-  const g = E.newGame({}, E.seeded(4));
+  const g = E.newGame(E.LIMITED, E.seeded(4));
   g.board.fill(3);
   g.board[idx(0, 0)] = 0;
   g.tray = [piece(1, [[0, 0], [1, 0]]), piece(2, [[0, 0], [0, 1]]), piece(1, [[0, 0], [1, 0]])];
@@ -146,7 +193,7 @@ test('the game ends when nothing in hand fits and no sweep helps', () => {
 });
 
 test('a sweep in hand that would move tiles keeps the game going', () => {
-  const g = E.newGame({}, E.seeded(4));
+  const g = E.newGame(E.LIMITED, E.seeded(4));
   g.board.fill(3);
   g.board[idx(0, 0)] = 0;
   g.tray = [piece(1, [[0, 0], [1, 0]]), piece(2, [[0, 0], [0, 1]]), piece(1, [[0, 0], [1, 0]])];
@@ -191,7 +238,7 @@ test('seeded games replay identically', () => {
 });
 
 test('a chain of two merges earns a sweep, up to the cap', () => {
-  const g = E.newGame({}, E.seeded(9));
+  const g = E.newGame(E.LIMITED, E.seeded(9));
   g.board = new Array(N * N).fill(0);
   // 1 next to 2 makes 3, which meets the 3 beside it: two merges.
   g.board[idx(1, 0)] = 2; g.board[idx(0, 1)] = 3;

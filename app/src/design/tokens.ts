@@ -25,7 +25,7 @@ export type Palette = {
   hair: string;
   /** Soft shadow colour for L2 (cards over a scrim). */
   shadow: string;
-  /** Tile fill and number colour per rung, index 1..8. */
+  /** Tile fill and number colour per rung, index 1..11. */
   tile: string[];
   ink: string[];
 };
@@ -43,9 +43,10 @@ export const light: Palette = {
   surface: '#FFFDF7',
   hair: 'rgba(17,18,21,0.14)',
   shadow: 'rgba(17,18,21,0.06)',
-  // 192, the goal, is the theme's own ink: a black tile with a yellow number here.
-  tile: ['', '#1F4FB2', '#D9342B', '#F4C21C', '#EC7A1F', '#1D8657', '#6B3DA3', '#D9468C', '#0E8C97', '#111215'],
-  ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#F4C21C'],
+  // 192 is umber. 384, the goal, is the theme's own ink: a black tile with a
+  // yellow number here. 768, past the goal, is indigo.
+  tile: ['', '#1F4FB2', '#D9342B', '#F4C21C', '#EC7A1F', '#1D8657', '#6B3DA3', '#D9468C', '#0E8C97', '#8A5A2B', '#111215', '#2E3192'],
+  ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#F4C21C', '#FFFFFF'],
 };
 
 export const dark: Palette = {
@@ -63,21 +64,22 @@ export const dark: Palette = {
   surface: '#26272C',
   hair: 'rgba(238,237,234,0.14)',
   shadow: 'rgba(0,0,0,0.3)',
-  // 192, the goal, is the theme's own ink: a paper tile with a black number here.
-  tile: ['', '#3466D6', '#E5463C', '#F2C230', '#F08A33', '#26A06A', '#8455C4', '#E25C9C', '#18A3AE', '#F3EFE4'],
-  ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#111215'],
+  // 192 is umber. 384, the goal, is the theme's own ink: a paper tile with a
+  // black number here. 768, past the goal, is indigo.
+  tile: ['', '#3466D6', '#E5463C', '#F2C230', '#F08A33', '#26A06A', '#8455C4', '#E25C9C', '#18A3AE', '#A8713F', '#F3EFE4', '#4F55C9'],
+  ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#111215', '#FFFFFF'],
 };
 
-export const LADDER = [1, 2, 3, 6, 12, 24, 48, 96, 192] as const;
-export const NAMES = ['', 'blue', 'red', 'yellow', 'orange', 'green', 'violet', 'magenta', 'teal', 'ink'];
+export const LADDER = [1, 2, 3, 6, 12, 24, 48, 96, 192, 384, 768] as const;
+export const NAMES = ['', 'blue', 'red', 'yellow', 'orange', 'green', 'violet', 'magenta', 'teal', 'umber', 'ink', 'indigo'];
 
-/** Rung of a value: 1→1, 2→2, 3→3, 6→4 … 96 → 8, 192 and above → 9. Same as engine.rank. */
+/** Rung of a value: 1→1, 2→2, 3→3, 6→4 … 96 → 8, 192 → 9, 384 → 10, 768 and above → 11. Same as engine.rank. */
 export function rank(v: number): number {
   if (v <= 0) return 0;
   if (v < 3) return v;
   let r = 3;
   let x = v;
-  while (x > 3 && r < 9) {
+  while (x > 3 && r < 11) {
     x /= 2;
     r++;
   }

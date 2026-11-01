@@ -265,7 +265,7 @@ export function CloseIcon({ color, s = 16 }: { color: string; s?: number }) {
 export function Ladder({ best, size = 24, animate }: { best: number; size?: number; animate?: boolean }) {
   const { c } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }} accessibilityLabel="Лесенка плиток">
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: space.xs }} accessibilityLabel="Лесенка плиток">
       {LADDER.map((v, k) => {
         const on = v <= 2 || v <= best;
         const rk = rank(v);

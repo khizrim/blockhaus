@@ -6,6 +6,9 @@ import { Field } from '@/components/Field';
 import { Arrow, Body, Button, Heading, Ladder, Screen, TopBar } from '@/components/ui';
 import { useTheme } from '@/design/theme';
 import { space } from '@/design/system';
+import engine from '@/game/engine';
+
+const GOAL = engine.DEFAULTS.goal;
 
 /* How to play: five cards, each a tiny board drawn with the real renderer.
    The result of each card pops on a loop so the cause and effect read. */
@@ -53,15 +56,15 @@ const PAGES: { title: string; text: string; art: () => ReactNode }[] = [
   },
   {
     title: 'Сдвиг',
-    text: 'Смахните доску, и всё съедет в одну сторону, а пары по пути сольются. Каждый лоток даёт два сдвига, а цепочка из двух слияний и больше даёт ещё один. В запасе до трёх, они видны слоями под доской.',
+    text: 'Смахните доску, и всё съедет в одну сторону, а пары по пути сольются. Сдвигать можно сколько угодно, но после каждого сдвига с дальнего края въезжает новая единица или двойка.',
     art: () => <Eq w={3} h={3} a={[1, 0, 2, 0, 12, 0, 6, 0, 0]} b={[3, 0, 0, 12, 0, 0, 6, 0, 0]} cell={34} />,
   },
   {
-    title: 'Соберите 192',
-    text: 'Дойдите по лесенке до 192, чтобы победить. Игра кончается, когда ни одна фигура из лотка не встаёт на доску и сдвиг уже не помогает. После 192 можно играть дальше на очки.',
+    title: `Соберите ${GOAL}`,
+    text: `Дойдите по лесенке до ${GOAL}, чтобы победить. Вехи на пути видны под доской: 24, 48, 96 и дальше. Игра кончается, когда ни одна фигура не встаёт на доску и сдвиг уже ничего не меняет. После ${GOAL} можно играть дальше на очки.`,
     art: () => (
       <View style={{ alignItems: 'center' }}>
-        <Ladder best={192} size={28} animate />
+        <Ladder best={GOAL} size={28} animate />
       </View>
     ),
   },

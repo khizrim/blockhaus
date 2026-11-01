@@ -21,4 +21,15 @@ module.exports = {
   shippedMixedCellTray: { ...E.DEFAULTS, mixedPieces: 0.3, balancedTray: 1 },
   // A sweep folds each line all the way: a merged tile merges again (3 3 6 -> 12).
   shippedChain: { ...E.DEFAULTS, sweepChain: true },
+  // Free sweeps (2026-11-01). `limited` is the balance before: two per tray,
+  // a chain earns one more, goal 192.
+  limited: { ...E.LIMITED },
+  // Truly free: a sweep costs nothing. Kept to show why it needs a price.
+  freeNone: { ...E.DEFAULTS, sweepCost: 'none' },
+  // A sweep is allowed only if it merges something.
+  freeMerge: { ...E.DEFAULTS, sweepCost: 'merge' },
+  // Shipped rule (every sweep slides a new 1 or 2 in) at other goals.
+  spawn192: { ...E.DEFAULTS, goal: 192 },
+  spawn384: { ...E.DEFAULTS, goal: 384 },
+  spawn768: { ...E.DEFAULTS, goal: 768 },
 };

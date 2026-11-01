@@ -65,6 +65,14 @@
     // A tile merged by a sweep may merge again with the next tile in its
     // line (3 3 6 -> 12), instead of once per sweep as in 2048.
     sweepChain: false,
+    // Sweeps cost nothing and never run out. The game then ends when no
+    // piece fits and no sweep would merge or open room for one.
+    freeSweeps: false,
+    // What keeps free sweeps honest. 'spawn': every sweep slides a new 1 or
+    // 2 in from the far edge, as in Threes and 2048, so swiping fills the
+    // board. 'merge': a sweep is allowed only if it merges something.
+    // 'none': sweeps are truly free (too easy, kept to measure).
+    sweepCost: 'none',
     goal: 192,
   };
 
@@ -72,7 +80,7 @@
      Threes' economy: 1 + 2 makes 3, and from 3 upward equals double.       */
   const pairs = (a, b) => (a === 1 && b === 2) || (a === 2 && b === 1) || (a >= 3 && a === b);
   const merged = (a, b) => (a >= 3 ? a * 2 : 3);
-  const rank = v => (v === 1 ? 1 : v === 2 ? 2 : Math.min(9, 3 + Math.round(Math.log2(v / 3))));
+  const rank = v => (v === 1 ? 1 : v === 2 ? 2 : Math.min(11, 3 + Math.round(Math.log2(v / 3))));
 
   const idx = (x, y) => y * N + x;
   function neighbours(i) {
@@ -295,7 +303,22 @@
   /** The game ends when no unused piece fits and no sweep is left that would
       move anything. A sweep can rearrange the board so a piece fits again, so
       while one is in hand and it would move tiles, the game goes on. */
-  const canSweep = g => g.sweeps > 0 && ['left', 'right', 'up', 'down'].some(d => applySweep(g.board.slice(), d, g.cfg.sweepChain).moved);
+  const DIRS = ['left', 'right', 'up', 'down'];
+  const canSweep = g => {
+    if (g.cfg.freeSweeps) {
+      // Free sweeps would keep any board with a gap alive forever, so only a
+      // sweep that merges, or that makes room for a piece in hand, counts.
+      return DIRS.some(d => {
+        const b = g.board.slice();
+        const r = applySweep(b, d, g.cfg.sweepChain);
+        if (!r.moved) return false;
+        if (g.cfg.sweepCost === 'spawn') return true;
+        if (g.cfg.sweepCost === 'merge') return r.made.length > 0;
+        return r.made.length > 0 || g.tray.some(p => p && !p.used && canPlaceAnywhere(b, p));
+      });
+    }
+    return g.sweeps > 0 && DIRS.some(d => applySweep(g.board.slice(), d, g.cfg.sweepChain).moved);
+  };
   const anyMove = g =>
     !(g.cfg.pieceLimit && g.moves >= g.cfg.pieceLimit) &&
     (g.tray.some(p => p && !p.used && canPlaceAnywhere(g.board, p)) || canSweep(g));
@@ -317,7 +340,7 @@
     p.used = true;
     g.moves++;
     score(g, res.steps.map(s => s.level));
-    res.bonus = !!g.cfg.chainBonus && res.steps.length >= g.cfg.chainBonus && g.sweeps < g.cfg.sweepsMax;
+    res.bonus = !g.cfg.freeSweeps && !!g.cfg.chainBonus && res.steps.length >= g.cfg.chainBonus && g.sweeps < g.cfg.sweepsMax;
     if (res.bonus) g.sweeps++;
     res.refilled = false;
     if (g.tray.every(t => t.used)) {
@@ -329,14 +352,28 @@
     return res;
   }
 
+  /** After a sweep, a new 1 or 2 slides in at the edge the tiles moved
+      away from, on a random free cell of that edge. The value follows the
+      dealer, so it is usually the low value the board is short of. */
+  function spawnAfter(g, dir) {
+    const far = lanes(dir).map(l => l[N - 1]).filter(i => g.board[i] === 0);
+    if (!far.length) return null;
+    const at = far[Math.floor(g.rng() * far.length)];
+    const v = g.rng() < chanceOfOnes(g.cfg, g.board) ? 1 : 2;
+    g.board[at] = v;
+    return { at, value: v };
+  }
+
   /** Sweeps the board. Returns null if no sweeps are left or nothing would move. */
   function sweep(g, dir) {
-    if (g.sweeps <= 0 || g.over) return null;
+    if ((!g.cfg.freeSweeps && g.sweeps <= 0) || g.over) return null;
     const trial = g.board.slice();
     const res = applySweep(trial, dir, g.cfg.sweepChain);
     if (!res.moved) return null;
+    if (g.cfg.freeSweeps && g.cfg.sweepCost === 'merge' && !res.made.length) return null;
     g.board = trial;
-    g.sweeps--;
+    if (!g.cfg.freeSweeps) g.sweeps--;
+    res.spawned = g.cfg.freeSweeps && g.cfg.sweepCost === 'spawn' ? spawnAfter(g, dir) : null;
     score(g, res.made.map(m => m.level));
     g.over = !anyMove(g);
     return res;
@@ -371,12 +408,22 @@
     [S.single, 3], [S.domH, 3], [S.domV, 3],
     [S.triH, 0.5], [S.triV, 0.5], [S.l1, 0.5], [S.l2, 0.5], [S.l3, 0.5], [S.l4, 0.5],
   ];
-  // A chain of two or more merges earns a sweep, up to three in hand. A
-  // sweep folds each line all the way, the way a placement cascades.
-  const DEFAULTS = { ...ORIGINAL, dealer: 'need', shapes: SHIPPED_SHAPES, chainBonus: 2, sweepsMax: 3, sweepChain: true };
+  // A sweep folds each line all the way, the way a placement cascades.
+  // Sweeps are free and never run out, and each one slides a new 1 or 2 in
+  // from the far edge, so swiping fills the board and has a price. The goal
+  // goes one rung up, to 384: in the simulator that is about as far for a
+  // player who swipes as 192 was with counted sweeps (sim/RESULTS.md).
+  // The chain bonus stays in the config but means nothing with free sweeps.
+  const DEFAULTS = {
+    ...ORIGINAL, dealer: 'need', shapes: SHIPPED_SHAPES, chainBonus: 2, sweepsMax: 3, sweepChain: true,
+    freeSweeps: true, sweepCost: 'spawn', goal: 384,
+  };
+  // The balance before free sweeps (2026-11-01): two per tray, a chain earns
+  // one more, up to three; goal 192.
+  const LIMITED = { ...DEFAULTS, freeSweeps: false, sweepCost: 'none', goal: 192 };
 
   return {
-    N, SHAPES: S, ORIGINAL, DEFAULTS, ORIGINAL_SHAPES,
+    N, SHAPES: S, ORIGINAL, DEFAULTS, LIMITED, ORIGINAL_SHAPES,
     pairs, merged, rank, idx, neighbours, size, fits, pieceValue,
     applyPlacement, applySweep, collapse, lanes, chanceOfOnes, deal, dealTray,
     newGame, place, sweep, anyMove, canSweep, canPlaceAnywhere, seeded,

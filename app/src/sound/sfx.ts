@@ -24,6 +24,14 @@ const SRC = {
   'merge-7': require('../../assets/sounds/merge-7.wav'),
   'merge-8': require('../../assets/sounds/merge-8.wav'),
   'merge-9': require('../../assets/sounds/merge-9.wav'),
+  'merge-10': require('../../assets/sounds/merge-10.wav'),
+  'merge-11': require('../../assets/sounds/merge-11.wav'),
+  'milestone-6': require('../../assets/sounds/milestone-6.wav'),
+  'milestone-7': require('../../assets/sounds/milestone-7.wav'),
+  'milestone-8': require('../../assets/sounds/milestone-8.wav'),
+  'milestone-9': require('../../assets/sounds/milestone-9.wav'),
+  'milestone-10': require('../../assets/sounds/milestone-10.wav'),
+  'milestone-11': require('../../assets/sounds/milestone-11.wav'),
   sweep: require('../../assets/sounds/sweep.wav'),
   tray: require('../../assets/sounds/tray.wav'),
   tap: require('../../assets/sounds/tap.wav'),
@@ -127,8 +135,8 @@ const buzz = (f: () => Promise<void>) => {
   if (hapticsOn && canBuzz) f().catch(() => {});
 };
 
-/** Merge result value to the rung whose note it plays: 3 → 3 … 96 → 8, 192 and up → 9. */
-const rungOf = (v: number) => Math.max(3, Math.min(9, v < 3 ? 3 : 3 + Math.round(Math.log2(v / 3))));
+/** Merge result value to the rung whose note it plays: 3 → 3 … 96 → 8, 192 → 9, 384 → 10, 768 and up → 11. */
+const rungOf = (v: number) => Math.max(3, Math.min(11, v < 3 ? 3 : 3 + Math.round(Math.log2(v / 3))));
 
 /* ---------- game events ---------- */
 
@@ -162,6 +170,12 @@ export const fx = {
     buzz(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft));
   },
   tray: () => play('tray'),
+  /** A new best of 24 and up: the rung's bell, and a firm tap. */
+  milestone: (value: number) => {
+    const r = Math.max(6, rungOf(value));
+    play(`milestone-${r}` as SoundName);
+    buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+  },
   /** A chain earned a sweep. */
   bonus: () => {
     play('toggle-on');

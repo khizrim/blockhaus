@@ -79,7 +79,43 @@ function choose(g, noise = 0, naive = false) {
   return best;
 }
 
-function play(config, seed, { noise = 0, naive = false, maxMoves = 2000 } = {}) {
+/* A player for free sweeps, closer to how people play 2048: before each
+   piece it may swipe once to line things up. It tries every sweep that
+   moves (and none), then the best naive placement on the board that
+   leaves, and takes the pair worth most. A sweep that merges counts its
+   own merges too. With nothing placeable it swipes if that opens room. */
+function chooseSweeper(g, noise = 0) {
+  const jitter = () => (noise ? (g.rng() - 0.5) * 2 * noise : 0);
+  let best = null;
+  const options = [{ dir: null, board: g.board, gained: 0 }];
+  for (const dir of g.cfg.freeSweeps || g.sweeps > 0 ? ['left', 'right', 'up', 'down'] : []) {
+    const b = g.board.slice();
+    const { made, moved } = E.applySweep(b, dir, g.cfg.sweepChain);
+    // Only sweeps the engine would take: under 'merge' a sweep must merge.
+    if (moved && !(g.cfg.sweepCost === 'merge' && !made.length)) options.push({ dir, board: b, gained: made.reduce((s, m) => s + m.level, 0) });
+  }
+  for (const o of options) {
+    let placed = false;
+    g.tray.forEach((p, slot) => {
+      if (!p || p.used) return;
+      const { w, h } = E.size(p);
+      for (let oy = 0; oy <= N - h; oy++) for (let ox = 0; ox <= N - w; ox++) {
+        if (!E.fits(o.board, p, ox, oy)) continue;
+        placed = true;
+        const b = o.board.slice();
+        const { steps, laid } = E.applyPlacement(b, p, ox, oy);
+        const gained = steps.reduce((s, st) => s + st.level, 0);
+        // A sweep costs a little, so the player doesn't swipe for nothing.
+        const val = naiveValue(b, laid, gained + o.gained) + (o.dir ? -0.5 : 0) + jitter();
+        if (!best || val > best.val) best = { val, kind: o.dir ? 'sweep' : 'place', dir: o.dir, slot, ox, oy };
+      }
+    });
+    if (!placed && o.dir && o.gained && (!best || o.gained * 10 > best.val)) best = { val: o.gained * 10, kind: 'sweep', dir: o.dir };
+  }
+  return best;
+}
+
+function play(config, seed, { noise = 0, naive = false, sweeper = false, maxMoves = 2000 } = {}) {
   const g = E.newGame(config, E.seeded(seed));
   // The bot's own dice are separate from the deal, so a noisy and a sharp
   // player see the same pieces for the same seed.
@@ -87,10 +123,16 @@ function play(config, seed, { noise = 0, naive = false, maxMoves = 2000 } = {}) 
   let wonAt = null;
   let guard = 0;
   while (!g.over && g.moves < maxMoves && guard++ < maxMoves * 4) {
-    const m = choose({ ...g, rng: botRng, tray: g.tray, board: g.board }, noise, naive);
+    const view = { ...g, rng: botRng, tray: g.tray, board: g.board };
+    const m = sweeper ? chooseSweeper(view, noise) : choose(view, noise, naive);
     if (!m) break;
     if (m.kind === 'place') E.place(g, m.slot, m.ox, m.oy);
-    else E.sweep(g, m.dir);
+    else {
+      // The sweeper sweeps, then lays the piece it planned on that board.
+      const ok = E.sweep(g, m.dir);
+      if (!ok) break;
+      if (sweeper && m.slot !== undefined && !g.over) E.place(g, m.slot, m.ox, m.oy);
+    }
     if (g.won && wonAt === null) wonAt = g.moves;
   }
   let ones = 0, twos = 0, filled = 0;
