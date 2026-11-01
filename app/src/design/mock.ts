@@ -108,6 +108,23 @@ export const scenes: Scene[] = [
     merges: 40,
     sweeps: 2,
   },
+  {
+    key: 'bauhaus',
+    title: '1919 за ход',
+    // 1910 points: a swipe left folds 3 3 into 6 and the score passes 1919.
+    board: rows(
+      '3 0 0 3 0 0',
+      '96 0 12 0 0 0',
+      '48 0 0 0 2 0',
+      '24 0 1 0 0 0',
+      '0 0 0 6 0 0',
+      '2 0 0 0 0 1',
+    ),
+    tray: [S1, D3, S2],
+    score: 1910,
+    merges: 180,
+    sweeps: 2,
+  },
 ];
 
 export const sceneByKey = (k?: string) => scenes.find((s) => s.key === k) ?? scenes[0];

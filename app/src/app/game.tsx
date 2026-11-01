@@ -72,7 +72,7 @@ function bestMove(g: { board: number[]; tray: (Piece | null)[] }): [number, numb
 }
 
 export default function Game() {
-  const { c, hints } = useTheme();
+  const { c, hints, isDark } = useTheme();
   const store = useGame();
   const g = store.game;
   const { width, height } = useWindowDimensions();
@@ -135,7 +135,7 @@ export default function Game() {
   /** The best tile before the move now playing: a merge above it is a new milestone. */
   const peak = useRef(g.bestTile);
   /** A milestone's wave across the board, from the cell that made it. */
-  const [ripple, setRipple] = useState<{ at: number; v: number; id: number; board: number[] } | null>(null);
+  const [ripple, setRipple] = useState<{ at: number; v: number; id: number; board: number[]; primaries?: boolean } | null>(null);
   /** The best milestone earned during the lessons: the track keeps it from step to step. */
   const lessonPeak = useRef(0);
   /** The move now playing made a milestone (it gets the full show already). */
@@ -339,6 +339,28 @@ export default function Game() {
     thump(milestone ? Math.max(level, 192) : level);
   };
 
+  /* 1919 points, the year the Bauhaus opened: a milestone of the score,
+     once a game. Its wave runs in the school's three primaries, blue, red
+     and yellow, ring by ring; the score in the header is stamped on a
+     yellow block; three notes climb, then the bell. If the same move made a
+     tile milestone, this one waits for that show to finish. */
+  const bauhausCheck = (s0: number, ms: number, at: number) => {
+    if (store.lesson !== null || s0 >= BAUHAUS || g.score < BAUHAUS) return;
+    const wait = moveHadMilestone.current ? ms + RIPPLE_MS : ms + 60;
+    later(wait, () => {
+      setRipple({ at, v: 3, id: Date.now(), board: g.board.slice(), primaries: true });
+      later(RIPPLE_MS, () => setRipple(null));
+      fx.cascade([3, 6, 12], 90);
+      later(280, () => fx.milestone(96));
+      stamp.value = withSequence(withTiming(1, { duration: 120 }), withDelay(1100, withTiming(0, { duration: 400 })));
+      scoreKick.value = withSequence(withTiming(1.3, { duration: 0 }), withTiming(1, back(420, 2.6)));
+    });
+  };
+  const stamp = useSharedValue(0);
+  const scoreKick = useSharedValue(1);
+  const stampStyle = useAnimatedStyle(() => ({ opacity: stamp.value, transform: [{ scaleX: 0.6 + stamp.value * 0.4 }] }));
+  const scoreStyle = useAnimatedStyle(() => ({ transform: [{ scale: scoreKick.value }], transformOrigin: 'left center' }));
+
   /** Points rise from where a merge happened. */
   const float = (at: number, v: number) => {
     const id = `${at}-${Date.now()}-${Math.random()}`;
@@ -441,6 +463,7 @@ export default function Game() {
     lift.value = 0;
     settle();
     const before = g.board.slice();
+    const s0 = g.score;
     const res = store.place(h.slot, t.gx, t.gy);
     if (!res) return;
     if (res.refilled) trayId.current++;
@@ -486,6 +509,7 @@ export default function Game() {
         fx.bonus();
       });
     }
+    if (res.steps.length) bauhausCheck(s0, done, res.steps[res.steps.length - 1].anchor);
     afterMove(done);
   };
 
@@ -581,6 +605,7 @@ export default function Game() {
     const before = g.board.slice();
     const moves = slideMoves(before, dir, !!g.cfg.sweepChain);
     lastDir.current = dir;
+    const s0 = g.score;
     const res = store.sweep(dir);
     if (!res) {
       fx.invalid();
@@ -615,6 +640,7 @@ export default function Game() {
       }),
     );
     later(SLIDE + res.made.length * STEP, () => setShown(after));
+    if (res.made.length) bauhausCheck(s0, SLIDE + (res.made.length - 1) * STEP, res.made[res.made.length - 1].at);
     afterMove(SLIDE + res.made.length * STEP);
   };
 
@@ -715,9 +741,13 @@ export default function Game() {
         {/* header without labels: the score leads; the best tile and pause are
             two squares of one size on the right */}
         <View style={{ height: unit, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View accessible accessibilityLabel={`Очки: ${g.score}`}>
+          <Animated.View accessible accessibilityLabel={`Очки: ${g.score}`} style={scoreStyle}>
+            {/* The 1919 stamp: a yellow enamel block flashes in behind the score. */}
+            <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: -space.sm, right: -space.sm, top: unit * 0.12, bottom: unit * 0.12, backgroundColor: c.tile[3], borderWidth: gap, borderColor: c.line, transformOrigin: 'left center' }, stampStyle]}>
+              <Enamel fill={c.tile[3]} size={unit} dark={isDark} />
+            </Animated.View>
             <TileNum v={g.score.toLocaleString('ru-RU')} size={Math.round(unit * 0.72)} color={c.text} style={{ lineHeight: unit, letterSpacing: -0.5 }} />
-          </View>
+          </Animated.View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
             <BestTile v={best} size={unit} frame={gap} />
             <IconButton label="Пауза" size={unit} onPress={() => router.push('/pause')}>
@@ -774,7 +804,7 @@ export default function Game() {
                   <SlidingTile key={f.id} m={f.m} cell={cell} gap={gap} ms={f.ms} />
                 ))}
                 {scatter ? <Scatter key={scatter.id} board={scatter.board} cell={cell} gap={gap} /> : null}
-                {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={trackHome(ripple.v)} /> : null}
+                {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
                 {floats.map((f) => (
                   <Float key={f.id} at={f.at} v={f.v} cell={cell} gap={gap} />
                 ))}
@@ -953,6 +983,8 @@ function BestTile({ v, size, frame }: { v: number; size: number; frame: number }
 }
 
 const RIPPLE_MS = 1400;
+/** The score milestone: the year the Bauhaus opened. */
+const BAUHAUS = 1919;
 const WAVE = 55; // ms per cell of distance from the milestone
 const FLIP = 460; // ms the milestone tile turns over in the air
 const FLY_HOME = 380; // ms its copy flies into the track
@@ -963,7 +995,7 @@ const FLY_HOME = 380; // ms its copy flies into the track
     with a glint on its enamel, while the empty floor flashes the new colour.
     Then a copy of the tile drops into its square on the track under the
     board, which pops as it lands. */
-function Ripple({ at, v, board, cell, gap, home }: { at: number; v: number; board: number[]; cell: number; gap: number; home: { x: number; y: number; w: number; h: number } | null }) {
+function Ripple({ at, v, board, cell, gap, home, primaries }: { at: number; v: number; board: number[]; cell: number; gap: number; home: { x: number; y: number; w: number; h: number } | null; primaries?: boolean }) {
   const { c } = useTheme();
   const pad = gap / 2;
   const ax = at % N;
@@ -975,11 +1007,15 @@ function Ripple({ at, v, board, cell, gap, home }: { at: number; v: number; boar
     <>
       {cells.map((i) =>
         board[i] > 0 ? null : (
-          <FloorFlash key={`f${i}`} d={dist(i)} color={c.tile[rank(v)]} style={{ left: pos(i).x + pad, top: pos(i).y + pad, width: cell - gap, height: cell - gap }} />
+          <FloorFlash key={`f${i}`} d={dist(i)} color={primaries ? c.tile[1 + (dist(i) % 3)] : c.tile[rank(v)]} style={{ left: pos(i).x + pad, top: pos(i).y + pad, width: cell - gap, height: cell - gap }} />
         ),
       )}
       {cells.map((i) => (board[i] > 0 && i !== at ? <LiftTile key={`t${i}`} v={board[i]} d={dist(i)} at={pos(i)} cell={cell} gap={gap} /> : null))}
-      <LiftTile key="hero" v={v} d={0} at={pos(at)} cell={cell} gap={gap} hero home={home} />
+      {primaries ? (
+        board[at] > 0 ? <LiftTile key="hero" v={board[at]} d={0} at={pos(at)} cell={cell} gap={gap} hero home={null} /> : null
+      ) : (
+        <LiftTile key="hero" v={v} d={0} at={pos(at)} cell={cell} gap={gap} hero home={home} />
+      )}
     </>
   );
 }
