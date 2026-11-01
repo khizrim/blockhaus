@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg';
 
+import { Enamel, panelEnamel } from '@/design/depth';
 import { dur, enter } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, mix, rank } from '@/design/tokens';
@@ -67,7 +68,7 @@ export const Field = memo(function Field({
   sameKey,
   style,
 }: Props) {
-  const { c } = useTheme();
+  const { c, isDark } = useTheme();
   const board = variant === 'board';
   const hg = board ? gap / 2 : gap;
   const pad = board ? hg : 0;
@@ -108,6 +109,7 @@ export const Field = memo(function Field({
         look={look?.(i)}
         gap={gap}
         palette={c}
+        dark={isDark}
       />,
     );
   }
@@ -120,6 +122,7 @@ export const Field = memo(function Field({
           height: h * cell + pad * 2,
           backgroundColor: board ? c.line : 'transparent',
         },
+        board ? panelEnamel(c.bg, isDark) : null,
         style,
       ]}>
       {cells}
@@ -147,6 +150,7 @@ type CellProps = {
   br: boolean;
   look?: CellLook;
   palette: ReturnType<typeof useTheme>['c'];
+  dark: boolean;
 };
 
 const Cell = memo(function Cell(p: CellProps) {
@@ -244,6 +248,9 @@ const Cell = memo(function Cell(p: CellProps) {
             },
           ]}
         />
+        {!look?.shadow && !look?.ghost ? (
+          <Enamel fill={fill} open={{ t: !p.t, r: !p.r, b: !p.b, l: !p.l }} size={cell} empty={v <= 0} dark={p.dark} />
+        ) : null}
         {look?.absorb ? (
           <View
             pointerEvents="none"

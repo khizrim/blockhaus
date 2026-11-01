@@ -19,6 +19,21 @@ OUT = 'assets/images'
 ADAPTIVE = (18 / 108, 18 / 108, 72 / 108)  # window inside the 108dp layer
 
 
+def mix(a, b, t):
+    return tuple(round(x * t + y * (1 - t)) for x, y in zip(a[:3], b[:3])) + (255,)
+
+
+def enamel(d, box, c, sides, e):
+    """Enamel edges inside a colour field, as in src/design/depth.tsx: light
+    on top and left, dark on bottom and right, only on sides facing a line."""
+    l, t, r, b = box
+    hi, lo = mix((255, 255, 255), c, 0.34), mix((0, 0, 0), c, 0.24)
+    if 'b' in sides: d.rectangle([l, b - e, r, b], fill=lo)
+    if 'r' in sides: d.rectangle([r - e, t, r, b], fill=lo)
+    if 't' in sides: d.rectangle([l, t, r, t + e], fill=hi)
+    if 'l' in sides: d.rectangle([l, t, l + e, b], fill=hi)
+
+
 def poster(S, win=(0, 0, 1), mono=False, frame=False):
     """Three colour fields and one paper field split by thick lines.
 
@@ -34,10 +49,19 @@ def poster(S, win=(0, 0, 1), mono=False, frame=False):
     fill = lambda c: WHITE if mono else c
     o = L if frame else 0
     vx, hy, hr = X(0.6), Y(0.58), Y(0.36)
-    d.rectangle([o, o, vx - L / 2, hy - L / 2], fill=fill(RED))
-    d.rectangle([vx + L / 2, o, S - 1 - o, hr - L / 2], fill=fill(PAPER))
-    d.rectangle([vx + L / 2, hr + L / 2, S - 1 - o, S - 1 - o], fill=fill(BLUE))
-    d.rectangle([o, hy + L / 2, vx - L / 2, S - 1 - o], fill=fill(YELLOW))
+    e = max(1, round(w * 0.022))
+    edge = 'tlrb' if frame else ''  # sides closed by the outer line
+    fields = [
+        ([o, o, vx - L / 2, hy - L / 2], RED, 'rb'),
+        ([vx + L / 2, o, S - 1 - o, hr - L / 2], PAPER, None),
+        ([vx + L / 2, hr + L / 2, S - 1 - o, S - 1 - o], BLUE, 'lt'),
+        ([o, hy + L / 2, vx - L / 2, S - 1 - o], YELLOW, 'tr'),
+    ]
+    for box, c, sides in fields:
+        d.rectangle(box, fill=fill(c))
+        # Paper is an empty field: it sits level, no enamel.
+        if not mono and sides is not None:
+            enamel(d, box, c, sides + edge, e)
     return im
 
 

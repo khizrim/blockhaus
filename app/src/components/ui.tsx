@@ -4,6 +4,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { dur, enter, exit, HIT, space, type } from '@/design/system';
+import { Enamel } from '@/design/depth';
 import { useTheme } from '@/design/theme';
 import { font, LADDER, rank } from '@/design/tokens';
 import { fx } from '@/sound/sfx';
@@ -55,7 +56,7 @@ export function Heading({ children, level = 'title', style }: { children: ReactN
 
 /** The mark: the menu poster in miniature. */
 export function Glyph({ size = 16 }: { size?: number }) {
-  const { c } = useTheme();
+  const { c, isDark } = useTheme();
   const S = size;
   const L = Math.max(2, Math.round(S * 0.08));
   const v1 = Math.round(S * 0.62);
@@ -63,14 +64,16 @@ export function Glyph({ size = 16 }: { size?: number }) {
   const hr = Math.round(S * 0.38);
   const vs = Math.round(S * 0.22);
   const hb = Math.round(S * 0.78);
-  const box = (l: number, t: number, w: number, h: number, bg: string) => (
-    <View style={{ position: 'absolute', left: l, top: t, width: w, height: h, backgroundColor: bg }} />
+  const box = (l: number, t: number, w: number, h: number, bg: string, open?: { t?: boolean; r?: boolean; b?: boolean; l?: boolean }) => (
+    <View style={{ position: 'absolute', left: l, top: t, width: w, height: h, backgroundColor: bg, overflow: 'hidden' }}>
+      {open ? <Enamel fill={bg} open={open} size={S * 0.3} dark={isDark} /> : null}
+    </View>
   );
   return (
     <View style={{ width: S, height: S, backgroundColor: c.bg, borderWidth: L, borderColor: c.line, overflow: 'hidden' }}>
-      {box(v1 + L, 0, S, hr, c.tile[2])}
-      {box(0, hl + L, vs, S, c.tile[3])}
-      {box(v1 + L, hb + L, S, S, c.tile[1])}
+      {box(v1 + L, 0, S, hr, c.tile[2], { l: true, b: true })}
+      {box(0, hl + L, vs, S - hl - L * 3, c.tile[3], { t: true, r: true, b: true })}
+      {box(v1 + L, hb + L, S, S - hb - L * 3, c.tile[1], { t: true, l: true, b: true })}
       {box(v1, 0, L, S, c.line)}
       {box(0, hl, v1, L, c.line)}
       {box(v1, hr, S, L, c.line)}
@@ -143,6 +146,7 @@ export function Button({ label, onPress, kind = 'secondary', size = 'md', disabl
           },
           face,
         ]}>
+        {primary ? <Enamel fill={bg} size={44} dark={isDark} /> : null}
         <Text style={[type.bodyStrong, { color: fg }]}>{label}</Text>
         {trailing ? <Text style={[type.bodyStrong, { color: fg, opacity: 0.7, fontVariant: ['tabular-nums'] }]}>{trailing}</Text> : null}
       </Animated.View>
@@ -263,7 +267,7 @@ export function CloseIcon({ color, s = 16 }: { color: string; s?: number }) {
 /* ---------- ladder: the legend of rungs ---------- */
 
 export function Ladder({ best, size = 24, animate }: { best: number; size?: number; animate?: boolean }) {
-  const { c } = useTheme();
+  const { c, isDark } = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }} accessibilityLabel="Лесенка плиток">
       {LADDER.map((v, k) => {
@@ -282,6 +286,7 @@ export function Ladder({ best, size = 24, animate }: { best: number; size?: numb
                 borderWidth: on ? 0 : 1,
                 borderColor: c.hair,
               }}>
+              {on ? <Enamel fill={c.tile[rk]} size={size} dark={isDark} /> : null}
               <TileNum v={v} color={on ? c.ink[rk] : c.faint} size={Math.max(12, Math.round(size * 0.5))} />
             </View>
           </Rung>
@@ -303,11 +308,12 @@ function Rung({ children, delay }: { children: ReactNode; delay?: number }) {
 
 /** A tile-coloured badge with a value, e.g. best tile. */
 export function TileBadge({ v, size = 24 }: { v: number; size?: number }) {
-  const { c } = useTheme();
+  const { c, isDark } = useTheme();
   if (!v) return <Text style={[type.bodyStrong, { color: c.text }]}>—</Text>;
   const rk = rank(v);
   return (
     <View style={{ minWidth: size + space.sm, height: size, paddingHorizontal: space.xs, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center' }}>
+      <Enamel fill={c.tile[rk]} size={size} dark={isDark} />
       <TileNum v={v} color={c.ink[rk]} size={Math.max(12, Math.round(size * 0.55))} />
     </View>
   );

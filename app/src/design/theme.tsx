@@ -40,7 +40,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     AsyncStorage.getItem(KEY)
       .then((raw) => {
-        const p = raw ? (JSON.parse(raw) as Partial<Record<'mode' | 'sound' | 'haptics' | 'hints' | 'music', unknown>>) : {};
+        const p = raw ? (JSON.parse(raw) as Partial<Record<'mode' | 'sound' | 'haptics' | 'hints' | 'music' , unknown>>) : {};
         if (p.mode === 'system' || p.mode === 'light' || p.mode === 'dark') setMode(p.mode);
         if (typeof p.sound === 'boolean') setSound(p.sound);
         if (typeof p.haptics === 'boolean') setHaptics(p.haptics);
