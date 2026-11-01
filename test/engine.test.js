@@ -119,9 +119,8 @@ test('with spawn, free sweeps never run out, and each slides a new low tile in f
   assert.equal(g.sweeps, before);
 });
 
-test('shipped free sweeps go only when they merge, and never run out', () => {
-  const g = E.newGame({}, E.seeded(1));
-  assert.equal(g.cfg.sweepCost, 'merge');
+test('merge-only free sweeps go only when they merge, and never run out', () => {
+  const g = E.newGame({ sweepCost: 'merge' }, E.seeded(1));
   g.board = empty();
   g.board[idx(2, 2)] = 6;
   assert.equal(E.sweep(g, 'left'), null, 'a sweep that only moves is refused');
@@ -132,6 +131,44 @@ test('shipped free sweeps go only when they merge, and never run out', () => {
   assert.equal(g.board[idx(0, 2)], 12);
   assert.ok(!res.spawned);
   assert.equal(g.sweeps, before);
+});
+
+test('shipped sweeps never refuse a move: the next tray piece slides in from the far edge', () => {
+  const g = E.newGame({}, E.seeded(1));
+  assert.equal(g.cfg.sweepCost, 'push');
+  g.board = empty();
+  g.board[idx(2, 2)] = 6;
+  g.tray = [piece(12), piece(1), piece(2)];
+  const res = E.sweep(g, 'left');
+  assert.ok(res, 'a sweep that only moves goes');
+  assert.equal(g.board[idx(0, 2)], 6);
+  assert.equal(res.swept[idx(0, 2)], 6);
+  assert.equal(res.swept[idx(4, 2)], 0, 'the board after the slide, before the piece');
+  // The first unused piece lands on the right edge, as near the middle as fits.
+  assert.equal(res.pushed.slot, 0);
+  assert.equal(res.pushed.ox, N - 1);
+  assert.ok(g.tray[0].used);
+  assert.equal(g.board[idx(N - 1, res.pushed.oy)], 12);
+  assert.equal(g.moves, 1);
+  // The pushed piece merges as if placed by hand.
+  g.board = empty();
+  [6, 12, 48, 6, 12, 2].forEach((v, x) => (g.board[idx(x, 2)] = v)); // a full row stays put
+  g.board[idx(3, 3)] = 6;
+  const r2 = E.sweep(g, 'left');
+  assert.ok(r2.pushed && r2.pushed.slot === 1);
+  assert.deepEqual([r2.pushed.ox, r2.pushed.oy], [N - 1, 3]);
+  assert.ok(r2.pushed.steps.length === 1 && r2.pushed.steps[0].level === 3);
+});
+
+test('a push sweep with nowhere to land still goes, but does not keep a dead game alive', () => {
+  const g = E.newGame({}, E.seeded(2));
+  // A full board of three values in a cycle, so no two neighbours ever pair,
+  // even after a slide closes the one hole; the edge has no room for a domino.
+  for (let i = 0; i < g.board.length; i++) g.board[i] = [6, 12, 48][((i % 6) + ((i / 6) | 0)) % 3];
+  g.board[idx(2, 0)] = 0;
+  g.tray = [piece(24, [[0, 0], [0, 1]]), piece(24, [[0, 0], [0, 1]]), piece(24, [[0, 0], [0, 1]])];
+  assert.ok(E.sweep(g.cfg && { ...g, board: g.board.slice(), tray: g.tray.map(p => ({ ...p })) }, 'left'), 'the sweep itself goes');
+  assert.ok(!E.anyMove(g), 'no piece fits and no sweep can merge or land one');
 });
 
 test('with spawn sweeps the game ends only when no sweep can change anything', () => {

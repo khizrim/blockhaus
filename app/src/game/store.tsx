@@ -226,8 +226,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const L = LESSONS[k];
       if (!L) return;
       if (lesson === null) saved.current = gRef.current;
-      // The real rules: sweeps are free and go only when they merge, so
-      // nothing new ever lands on a lesson's position.
+      // The real rules: sweeps are free and each pushes the lesson's next
+      // tray piece in from the far edge; a lesson's tray holds only what it teaches.
       const g = engine.newGame();
       g.board = L.board.slice();
       g.tray = L.tray.map((p) => ({ cells: p.cells.map((c) => [...c] as [number, number, number]), used: p.used }));

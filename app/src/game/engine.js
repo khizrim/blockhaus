@@ -176,11 +176,13 @@
 
   /** Slides `board` (mutating it). Returns the merges and whether anything
       moved. `chain` lets a merged tile merge again (see collapse). */
-  function applySweep(board, dir, chain) {
+  function applySweep(board, dir, chain, slideOnly) {
     const before = board.join();
     const made = [];
     for (const lane of lanes(dir)) {
-      const out = collapse(lane.map(i => board[i]).filter(v => v !== 0), chain);
+      const vals = lane.map(i => board[i]).filter(v => v !== 0);
+      // slideOnly: the board tilts, tiles slide to the wall, nothing merges.
+      const out = slideOnly ? vals.map((v, k) => ({ v, from: [k], levels: [] })) : collapse(vals, chain);
       out.forEach((t, k) => t.levels.forEach(level => made.push({ at: lane[k], level })));
       lane.forEach((i, k) => { board[i] = out[k] ? out[k].v : 0; });
     }
@@ -310,9 +312,10 @@
       // sweep that merges, or that makes room for a piece in hand, counts.
       return DIRS.some(d => {
         const b = g.board.slice();
-        const r = applySweep(b, d, g.cfg.sweepChain);
+        const r = applySweep(b, d, g.cfg.sweepChain, g.cfg.sweepCost === 'tilt');
         if (!r.moved) return false;
         if (g.cfg.sweepCost === 'spawn') return true;
+        if (g.cfg.sweepCost === 'push') return r.made.length > 0 || pushSpot(b, g.tray.find(p => p && !p.used), d) !== null;
         if (g.cfg.sweepCost === 'merge') return r.made.length > 0;
         return r.made.length > 0 || g.tray.some(p => p && !p.used && canPlaceAnywhere(b, p));
       });
@@ -364,16 +367,45 @@
     return { at, value: v };
   }
 
+  /** After a sweep, the next piece in the tray slides onto the board from
+      the edge the tiles moved away from, as close to the middle of that edge
+      as it fits, and merges as if placed there. The player sees it coming. */
+  function pushSpot(board, p, dir) {
+    if (!p) return null;
+    const { w, h } = size(p);
+    const spots = [];
+    if (dir === 'left' || dir === 'right') {
+      const ox = dir === 'left' ? N - w : 0;
+      for (let oy = 0; oy <= N - h; oy++) spots.push([ox, oy, Math.abs(oy + h / 2 - N / 2)]);
+    } else {
+      const oy = dir === 'up' ? N - h : 0;
+      for (let ox = 0; ox <= N - w; ox++) spots.push([ox, oy, Math.abs(ox + w / 2 - N / 2)]);
+    }
+    spots.sort((a, b) => a[2] - b[2]);
+    return spots.find(([x, y]) => fits(board, p, x, y)) || null;
+  }
+  function pushAfter(g, dir) {
+    const slot = g.tray.findIndex(p => p && !p.used);
+    if (slot < 0) return null;
+    const p = g.tray[slot];
+    const at = pushSpot(g.board, p, dir);
+    if (!at) return null;
+    const res = place(g, slot, at[0], at[1]);
+    return res ? { slot, piece: p, ox: at[0], oy: at[1], ...res } : null;
+  }
+
   /** Sweeps the board. Returns null if no sweeps are left or nothing would move. */
   function sweep(g, dir) {
     if ((!g.cfg.freeSweeps && g.sweeps <= 0) || g.over) return null;
     const trial = g.board.slice();
-    const res = applySweep(trial, dir, g.cfg.sweepChain);
+    const res = applySweep(trial, dir, g.cfg.sweepChain, g.cfg.freeSweeps && g.cfg.sweepCost === 'tilt');
     if (!res.moved) return null;
     if (g.cfg.freeSweeps && g.cfg.sweepCost === 'merge' && !res.made.length) return null;
     g.board = trial;
     if (!g.cfg.freeSweeps) g.sweeps--;
     res.spawned = g.cfg.freeSweeps && g.cfg.sweepCost === 'spawn' ? spawnAfter(g, dir) : null;
+    res.swept = g.board.slice();
+    res.pushed = g.cfg.freeSweeps && g.cfg.sweepCost === 'push' ? pushAfter(g, dir) : null;
     score(g, res.made.map(m => m.level));
     g.over = !anyMove(g);
     return res;
@@ -415,7 +447,7 @@
   // The chain bonus stays in the config but means nothing with free sweeps.
   const DEFAULTS = {
     ...ORIGINAL, dealer: 'need', shapes: SHIPPED_SHAPES, chainBonus: 2, sweepsMax: 3, sweepChain: true,
-    freeSweeps: true, sweepCost: 'merge', goal: 384,
+    freeSweeps: true, sweepCost: 'push', goal: 384,
   };
   // The balance before free sweeps (2026-11-01): two per tray, a chain earns
   // one more, up to three; goal 192.

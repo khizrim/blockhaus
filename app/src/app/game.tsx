@@ -12,7 +12,7 @@ import { dur, enter, exit, HIT, space, type } from '@/design/system';
 import { Enamel } from '@/design/depth';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
-import engine, { type Dir, type Piece } from '@/game/engine';
+import engine, { type Dir, type Piece, type Step } from '@/game/engine';
 import { DAILY, MEDALS, medalOf, nextMedal } from '@/game/daily';
 import { LESSONS } from '@/game/lessons';
 import { slideMoves, type Move } from '@/game/slide';
@@ -36,6 +36,7 @@ const noSelect = { userSelect: 'none' } as object;
 
 const SWIPE = 24; // px of travel that counts as a swipe
 const SLIDE = dur.base; // ms for tiles to travel in a sweep
+const PUSH_MS = 260; // ms for the pushed piece to ride in from the far edge
 /** The lesson line: one line of title type. */
 const LESSON_H = 30;
 
@@ -127,6 +128,7 @@ export default function Game() {
   const [nudge, setNudge] = useState<[number, number][] | null>(null);
   const idleShown = useRef(0);
   const [flights, setFlights] = useState<{ id: string; m: Move; ms: number }[]>([]);
+  const [incoming, setIncoming] = useState<{ id: number; piece: Piece; ox: number; oy: number; dir: Dir; delay: number } | null>(null);
   const [floats, setFloats] = useState<{ id: string; at: number; v: number }[]>([]);
   const [returning, setReturning] = useState<number | null>(null);
   const [pops, setPops] = useState<Record<number, number>>({});
@@ -171,6 +173,7 @@ export default function Game() {
     clearTimers();
     setBonusHeld(false);
     setFlights([]);
+    setIncoming(null);
     setFloats([]);
     setSliding(null);
     setReturning(null);
@@ -344,8 +347,8 @@ export default function Game() {
      and yellow, ring by ring; the score in the header is stamped on a
      yellow block; three notes climb, then the bell. If the same move made a
      tile milestone, this one waits for that show to finish. */
-  const bauhausCheck = (s0: number, ms: number, at: number) => {
-    if (store.lesson !== null || s0 >= BAUHAUS || g.score < BAUHAUS) return;
+  const bauhausCheck = (s0: number, ms: number, at: number, s1 = g.score) => {
+    if (store.lesson !== null || s0 >= BAUHAUS || s1 < BAUHAUS) return;
     const wait = moveHadMilestone.current ? ms + RIPPLE_MS : ms + 60;
     later(wait, () => {
       setRipple({ at, v: 3, id: Date.now(), board: g.board.slice(), primaries: true });
@@ -479,9 +482,30 @@ export default function Game() {
     /* The chain, one merge per step: the absorbed tile flies into its
        partner, and on arrival the partner flashes, its number kicks, the note
        plays, the haptic taps and the points float up, all on the same frame. */
-    const marks = milestonesIn(res.steps.map((st) => st.level));
-    res.steps.forEach((st, k) => {
-      const t0 = 90 + k * STEP;
+    const done = playChain(frame, res.steps, milestonesIn(res.steps.map((st) => st.level)), 90);
+    later(done + 20, () => setShown(g.board.slice()));
+    if (res.refilled) later(done + 120, () => fx.tray());
+    // A chain of two or more earns a sweep: its layer slides in under the
+    // board as the last merge lands, with its own two rising ticks.
+    if (res.bonus) {
+      setBonusHeld(true);
+      later(done, () => {
+        setBonusHeld(false);
+        fx.bonus();
+      });
+    }
+    if (res.steps.length) bauhausCheck(s0, done, res.steps[res.steps.length - 1].anchor);
+    afterMove(done);
+  };
+
+  /** Plays a placed piece's chain from `base` ms: one merge per step, the
+      absorbed tile flies into its partner, and on arrival the partner flashes,
+      its number kicks, the note plays, the haptic taps and the points float up,
+      all on the same frame. `frame` is the board with the piece laid. Returns
+      when the last merge has landed. */
+  const playChain = (frame: number[], steps: Step[], marks: boolean[], base: number) => {
+    steps.forEach((st, k) => {
+      const t0 = base + k * STEP;
       const value = frame[st.absorbed[0]];
       for (const a of st.absorbed) frame[a] = 0;
       const mid = frame.slice();
@@ -497,20 +521,7 @@ export default function Game() {
         land(st.anchor, st.level, marks[k], snap);
       });
     });
-    const done = 90 + Math.max(0, res.steps.length - 1) * STEP + (res.steps.length ? FLY : 0);
-    later(done + 20, () => setShown(g.board.slice()));
-    if (res.refilled) later(done + 120, () => fx.tray());
-    // A chain of two or more earns a sweep: its layer slides in under the
-    // board as the last merge lands, with its own two rising ticks.
-    if (res.bonus) {
-      setBonusHeld(true);
-      later(done, () => {
-        setBonusHeld(false);
-        fx.bonus();
-      });
-    }
-    if (res.steps.length) bauhausCheck(s0, done, res.steps[res.steps.length - 1].anchor);
-    afterMove(done);
+    return base + Math.max(0, steps.length - 1) * STEP + (steps.length ? FLY : 0);
   };
 
   const holdRef = useRef<Hold | null>(null);
@@ -613,13 +624,16 @@ export default function Game() {
       return;
     }
     fx.sweep();
-    const marks = milestonesIn(res.made.map((m) => m.level));
+    const push = res.pushed ?? null;
+    const allMarks = milestonesIn([...res.made.map((m) => m.level), ...(push ? push.steps.map((st) => st.level) : [])]);
+    const marks = allMarks.slice(0, res.made.length);
+    if (push?.refilled) trayId.current++;
     setShown(new Array(N * N).fill(0));
     setSliding({ moves, id: Date.now() });
     /* A tile that merges more than once in a line (3 3 6 -> 12) lands showing
        its first merge, and each later merge steps it up on its own pop, so
        the number, the note and the points rise together. */
-    const after = g.board.slice();
+    const after = (res.swept ?? g.board).slice();
     const landed = after.slice();
     const seen = new Set<number>();
     for (const m of res.made) if (!seen.has(m.at)) { seen.add(m.at); landed[m.at] = m.level; }
@@ -639,9 +653,32 @@ export default function Game() {
         land(m.at, m.level, marks[k], after);
       }),
     );
-    later(SLIDE + res.made.length * STEP, () => setShown(after));
-    if (res.made.length) bauhausCheck(s0, SLIDE + (res.made.length - 1) * STEP, res.made[res.made.length - 1].at);
-    afterMove(SLIDE + res.made.length * STEP);
+    let done = SLIDE + res.made.length * STEP;
+    later(done, () => setShown(after));
+    const sMade = s0 + res.made.reduce((t, m) => t + m.level, 0);
+    if (res.made.length) bauhausCheck(s0, SLIDE + (res.made.length - 1) * STEP, res.made[res.made.length - 1].at, sMade);
+    /* The push: the next tray piece leaves its slot and rides in from beyond
+       the far edge into the room the slide made. It lands with the place
+       sound and haptic on the frame it stops, then its own chain plays. */
+    if (push) {
+      const enterAt = res.made.length ? done : SLIDE - 60;
+      const frame = after.slice();
+      push.piece.cells.forEach(([cx, cy, v]) => (frame[(push.oy + cy) * N + push.ox + cx] = v));
+      setIncoming({ id: Date.now(), piece: push.piece, ox: push.ox, oy: push.oy, dir, delay: enterAt });
+      later(enterAt + PUSH_MS, () => {
+        setIncoming(null);
+        setShown(frame.slice());
+        const now = Date.now();
+        setLands((l) => ({ ...l, ...Object.fromEntries(push.laid.map((i) => [i, now])) }));
+        fx.place(push.piece.cells.length);
+      });
+      const chainEnd = playChain(frame, push.steps, allMarks.slice(res.made.length), enterAt + PUSH_MS + 90);
+      if (push.steps.length) bauhausCheck(sMade, chainEnd, push.steps[push.steps.length - 1].anchor);
+      done = chainEnd;
+      later(done + 20, () => setShown(g.board.slice()));
+      if (push.refilled) later(done + 120, () => fx.tray());
+    }
+    afterMove(done);
   };
 
   const sweepRef = useRef(sweep);
@@ -717,7 +754,7 @@ export default function Game() {
   const slotRefs = useRef<(ComponentRef<typeof View> | null)[]>([]);
   type Geo = { board: { x: number; y: number; w: number }; slot?: { x: number; y: number } };
   const [geo, setGeo] = useState<Geo | null>(null);
-  const demoSlot = lesson ? g.tray.findIndex((p) => p && !p.used) : -1;
+  const demoSlot = lesson && lesson.hint ? g.tray.findIndex((p) => p && !p.used) : -1;
   useEffect(() => {
     setGeo(null);
     if (!lesson || coach !== 'task') return;
@@ -803,6 +840,7 @@ export default function Game() {
                 {flights.map((f) => (
                   <SlidingTile key={f.id} m={f.m} cell={cell} gap={gap} ms={f.ms} />
                 ))}
+                {incoming ? <Incoming key={incoming.id} {...incoming} cell={cell} gap={gap} /> : null}
                 {scatter ? <Scatter key={scatter.id} board={scatter.board} cell={cell} gap={gap} /> : null}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
                 {floats.map((f) => (
@@ -1287,6 +1325,30 @@ function Float({ at, v, cell, gap }: { at: number; v: number; cell: number; gap:
         style={{ fontFamily: font.tile, fontSize: Math.round(cell * (v >= 24 ? 0.34 : 0.28)), color: c.text, textShadowColor: c.canvas, textShadowRadius: 4 }}>
         {`+${v}`}
       </Text>
+    </Animated.View>
+  );
+}
+
+/** The pushed piece: it rides in from beyond the far edge of the board,
+    fading up as it crosses the frame, and stops on its cells with a small
+    overshoot, the way the board itself meets a wall. */
+function Incoming({ piece, ox, oy, dir, delay, cell, gap }: { piece: Piece; ox: number; oy: number; dir: Dir; delay: number; cell: number; gap: number }) {
+  const { w, h } = pieceGrid(piece);
+  // It comes from the side the tiles moved away from.
+  const [ux, uy] = { left: [1, 0], right: [-1, 0], up: [0, 1], down: [0, -1] }[dir];
+  const far = (ux ? w : h) * cell + gap * 2;
+  const k = useSharedValue(0);
+  useEffect(() => {
+    k.value = withDelay(delay, withTiming(1, { duration: PUSH_MS, easing: Easing.out(Easing.back(1.4)) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const st = useAnimatedStyle(() => ({
+    opacity: Math.min(1, k.value * 2.5),
+    transform: [{ translateX: ux * far * (1 - k.value) }, { translateY: uy * far * (1 - k.value) }],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: gap / 2 + ox * cell, top: gap / 2 + oy * cell }, st]}>
+      <Field variant="piece" {...pieceGrid(piece)} cell={cell} gap={gap} />
     </Animated.View>
   );
 }
