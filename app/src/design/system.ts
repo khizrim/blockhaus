@@ -7,7 +7,7 @@ import { font } from './tokens';
 
    Space: an 8pt grid for layout, 4pt steps only for small inner gaps.
    Type: one text family (Onest) in three weights, a 12/14/16 base and two
-   title steps. Dela Gothic One is the wordmark and nothing else.
+   title steps. Dela Gothic One is the wordmark and the final score, nothing else.
    Motion: three durations, ease-out to enter, ease-in to leave, no springs or
    loops. Every animation follows the system's reduced-motion setting. */
 

@@ -6,35 +6,39 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { Field } from '@/components/Field';
 import { fx } from '@/sound/sfx';
 import { Overlay } from '@/components/Overlay';
-import { Body, Button, Heading, Label, Panel, Stat, TileBadge } from '@/components/ui';
-import { dur, space, type, useCalm } from '@/design/system';
+import { Body, Button, Label, Panel } from '@/components/ui';
+import { dur, space, useCalm } from '@/design/system';
 import { useTheme } from '@/design/theme';
-import { MedalTrack, StreakDays, Track, milestonesFor } from '@/components/Track';
-import { DAILY, MEDALS, dayLabel, medalOf, nextMedal, plural, shareOrCopy, shareText, untilTomorrow } from '@/game/daily';
+import { Enamel } from '@/design/depth';
+import { font } from '@/design/tokens';
+import { pieceGrid } from '@/design/mock';
+import { DayClock, MedalTrack, StreakDays, Track, milestonesFor } from '@/components/Track';
+import { MEDALS, dayLabel, medalOf, nextMedal, shareOrCopy, shareText } from '@/game/daily';
 import { canRemind, useReminder } from '@/game/remind';
 import { useGame } from '@/game/store';
 
-/* Game over: the final board as a thumbnail, the score counting up once. */
+const GAP = 4;
+
+/* Game over, told by the board: the final board large, and beside it what
+   ended the run. In the free game that is the pieces left in the tray, the
+   ones with nowhere to go. In the game of the day it is the medal, a tile in
+   its colour. Under it the score, set big, and the track as the run left it. */
 export default function Over() {
-  const { c } = useTheme();
+  const { c, isDark } = useTheme();
   const calm = useCalm();
   const { game: final, stats, newGame, mode, daily, streak } = useGame();
-  const { width } = useWindowDimensions();
   const reminder = useReminder();
-  /* The track as the player left it: what was reached, and the next one,
-     framed, as the thing to beat next time. */
+  const { width } = useWindowDimensions();
+  // The panel's inner width, and the board at about three fifths of it.
+  const CARD = Math.min(width - space.lg * 2, 360) - space.xl * 2 - 2;
+  const CELL = Math.floor((CARD * 0.6 - GAP) / 6);
+  const BOARD = CELL * 6 + GAP;
   const steps = milestonesFor(final.cfg.goal);
   const next = steps.find((v) => v > final.bestTile) ?? null;
-  const trackW = Math.min(width, 440) - 32 - space.xl * 2;
   const isDaily = mode === 'daily';
   const medal = medalOf(final.score);
   const miss = nextMedal(final.score);
-  const ranOut = final.moves < DAILY.pieceLimit;
-  const dailyNote = [
-    medal ? `Медаль: ${medal.name}.${miss ? ` До ${miss.of} было ${miss.at - final.score}.` : ''}` : `До бронзы не хватило ${miss!.at - final.score}.`,
-    ranOut ? 'Место кончилось раньше фигур.' : `Все ${DAILY.pieceLimit} фигур на доске.`,
-    `Новая раскладка через ${untilTomorrow()}.`,
-  ].join(' ');
+  const stuck = final.tray.filter((p) => p && !p.used);
   const [shareNote, setShareNote] = useState<string | null>(null);
   const share = async () => {
     if (!daily.result) return;
@@ -43,10 +47,7 @@ export default function Over() {
   };
   const target = final.score;
   // The first game is always a record, so it is not called one.
-  const record = target >= stats.best && target > 0 && stats.played > 1;
-  const classicNote = next
-    ? `Вы дошли до ${final.bestTile || 0}. В следующий раз: ${next}.`
-    : `Вы дошли до ${final.bestTile}, дальше цели.`;
+  const record = !isDaily && target >= stats.best && target > 0 && stats.played > 1;
   const [shown, setShown] = useState(calm ? target : 0);
   useEffect(() => fx.over(), []);
 
@@ -61,47 +62,55 @@ export default function Over() {
     return () => clearInterval(id);
   }, [target, calm]);
 
+  const side = CARD - BOARD - space.lg;
+  const summary = isDaily
+    ? `Игра дня, ${dayLabel(daily.key)}. ${target} очков. ${medal ? `Медаль: ${medal.name}.` : `До бронзы не хватило ${miss!.at - target}.`}`
+    : `Места нет. ${target} очков, лучшая плитка ${final.bestTile}.${next ? ` Следующая веха ${next}.` : ''}`;
+
   return (
     <Overlay>
       <Panel>
-        <View style={{ flexDirection: 'row', gap: space.lg, alignItems: 'center' }}>
-          <View style={{ flex: 1 }}>
-            <Heading>{isDaily ? `Игра дня, ${dayLabel(daily.key)}` : 'Места нет'}</Heading>
-            <Body muted small style={{ marginTop: space.xs }}>
-              {isDaily ? dailyNote : `Ни одна фигура не встаёт. ${classicNote}`}
-            </Body>
-          </View>
-          <Field w={6} h={6} values={final.board} cell={12} gap={2} numbers={false} />
+        <View accessible accessibilityLabel={summary} style={{ flexDirection: 'row', gap: space.lg }}>
+          <Field w={6} h={6} values={final.board} cell={CELL} gap={GAP} numbers={false} />
+          <Animated.View entering={FadeIn.delay(dur.slow).duration(dur.base)} style={{ width: side, gap: space.md, justifyContent: isDaily ? 'space-between' : 'flex-start' }}>
+            {isDaily ? (
+              <>
+                {/* The medal won, as a tile; no medal leaves the square empty. */}
+                <View style={{ width: side, height: side, padding: 4, backgroundColor: medal ? c.line : c.hair }}>
+                  <View style={{ flex: 1, backgroundColor: medal ? (medal.tile ? c.tile[medal.tile] : c.faint) : c.canvas }}>
+                    <Enamel fill={medal ? (medal.tile ? c.tile[medal.tile] : c.faint) : c.canvas} size={side} empty={!medal} dark={isDark} />
+                  </View>
+                </View>
+                <StreakDays count={streak.count} size={Math.floor((side - 6 * 3) / 7)} />
+              </>
+            ) : (
+              /* What would not fit: the tray as it was left. */
+              stuck.map((p, k) => <Field key={k} variant="piece" {...pieceGrid(p!)} cell={Math.min(CELL, Math.floor(side / 3))} gap={GAP} numbers={false} />)
+            )}
+          </Animated.View>
         </View>
 
-        <View style={{ marginTop: space.xl }}>
-          <Label meta>Очки</Label>
-          <Text allowFontScaling={false} style={[type.number, { color: c.text }]}>
-            {shown.toLocaleString('ru-RU')}
-          </Text>
+        <View style={{ flexDirection: 'row', marginTop: space.xl }}>
+          {/* A new record: the score on a yellow block, as on the poster. */}
+          <View style={{ backgroundColor: record ? c.tile[3] : 'transparent', paddingHorizontal: record ? space.sm : 0, marginLeft: record ? -space.sm : 0 }}>
+            {record ? <Enamel fill={c.tile[3]} size={56} dark={isDark} /> : null}
+            <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: 48, lineHeight: 60, color: record ? c.ink[3] : c.text, fontVariant: ['tabular-nums'] }}>
+              {shown.toLocaleString('ru-RU')}
+            </Text>
+          </View>
         </View>
+        {!isDaily && stats.played > 1 && !record ? (
+          <Label meta style={{ marginTop: space.xs }}>{`рекорд ${stats.best.toLocaleString('ru-RU')}`}</Label>
+        ) : null}
+
         <Animated.View entering={FadeIn.delay(dur.base).duration(dur.base)}>
           {isDaily ? (
-            <MedalTrack medals={MEDALS} score={final.score} width={trackW} gap={4} top={space.md} />
+            <>
+              <MedalTrack medals={MEDALS} score={final.score} width={CARD} gap={4} top={space.md} />
+              <DayClock width={CARD} top={space.lg} />
+            </>
           ) : (
-            <Track steps={steps} best={final.bestTile} next={next} width={trackW} gap={4} top={space.md} />
-          )}
-        </Animated.View>
-        <Animated.View entering={FadeIn.delay(dur.slow).duration(dur.base)} style={{ flexDirection: 'row', gap: space.xxl, marginTop: space.lg }}>
-          <Stat label="Лучшая плитка">
-            <TileBadge v={final.bestTile} />
-          </Stat>
-          <Stat label="Слияния" value={String(final.merges)} />
-          {isDaily ? (
-            <Stat label={`Серия ${streak.count} ${plural(streak.count, 'день', 'дня', 'дней')}`}>
-              <View style={{ height: 30, justifyContent: 'center' }}>
-                <StreakDays count={streak.count} />
-              </View>
-            </Stat>
-          ) : stats.played > 1 ? (
-            <Stat label={record ? 'Новый рекорд' : 'Рекорд'} value={stats.best.toLocaleString('ru-RU')} />
-          ) : (
-            <Stat label="Ходы" value={String(final.moves)} />
+            <Track steps={steps} best={final.bestTile} next={next} width={CARD} gap={4} top={space.md} />
           )}
         </Animated.View>
 

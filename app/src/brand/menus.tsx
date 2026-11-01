@@ -11,7 +11,8 @@ import { useTheme } from '@/design/theme';
 import { Enamel, panelEnamel } from '@/design/depth';
 import { font } from '@/design/tokens';
 import engine from '@/game/engine';
-import { dayLabel, medalOf, shareOrCopy, shareText, untilTomorrow } from '@/game/daily';
+import { DayClock, MedalMark, StreakDays, Track, milestonesFor } from '@/components/Track';
+import { dayLabel, medalOf, shareOrCopy, shareText } from '@/game/daily';
 import { useGame } from '@/game/store';
 
 import { Grow } from './marks';
@@ -46,9 +47,11 @@ export function PosterMenu() {
     newGame();
     go.play();
   };
-  const recordLine = stats.played || stats.best
-    ? `Дошли до ${stats.bestTile} из ${engine.DEFAULTS.goal} · рекорд ${stats.best.toLocaleString('ru-RU')}`
-    : `Сложите 1 и 2, дойдите до ${engine.DEFAULTS.goal}`;
+  // Under the name, the way to the goal as the player left it: the same
+  // track the game keeps under the board, the next milestone framed.
+  const steps = milestonesFor(engine.DEFAULTS.goal);
+  const nextStep = steps.find((v) => v > stats.bestTile) ?? null;
+  const colW = Math.min(W, 440) - space.xl * 2;
 
   const L = 8; // poster line weight, on the 8pt grid
   const A = Math.round(Math.min(H * 0.44, W * 1.05)); // poster height
@@ -101,7 +104,7 @@ export function PosterMenu() {
           style={{ fontFamily: font.wide, fontSize: size, lineHeight: Math.round(size * 1.15), color: isDark ? c.tile[3] : c.text }}>
           blockhaus
         </Text>
-        <Text style={[type.secondary, { color: c.muted, marginTop: space.xs }]}>{recordLine}</Text>
+        <Track steps={steps} best={stats.bestTile} next={nextStep} width={colW} gap={4} top={space.md} />
 
         <View style={{ marginTop: 'auto', gap: space.md }}>
           {inProgress ? (
@@ -117,22 +120,21 @@ export function PosterMenu() {
             daily.done ? (
               <Button
                 label="Поделиться игрой дня"
-                trailing={`${medalOf(daily.result!.score)?.name ?? ''} ${daily.result!.score.toLocaleString('ru-RU')}`.trim()}
-                accessibilityLabel={`Поделиться игрой дня, ${daily.result!.score} очков`}
+                trailing={<MedalMark medal={medalOf(daily.result!.score)} score={daily.result!.score} size={28} />}
+                accessibilityLabel={`Поделиться игрой дня, ${daily.result!.score} очков${medalOf(daily.result!.score) ? `, ${medalOf(daily.result!.score)!.name}` : ''}`}
                 onPress={shareDaily}
               />
             ) : (
               <Button
                 label={daily.started ? 'Продолжить игру дня' : 'Игра дня'}
-                trailing={streak.count > 0 ? `серия ${streak.count}` : dayLabel(daily.key)}
+                trailing={streak.count > 0 ? <StreakDays count={streak.count} /> : dayLabel(daily.key)}
+                accessibilityLabel={`${daily.started ? 'Продолжить игру дня' : 'Игра дня'}${streak.count > 0 ? `, серия ${streak.count}` : ''}`}
                 onPress={openDaily}
               />
             )
           ) : null}
           {learned && daily.done && !dailyNote ? (
-            <Text style={[type.secondary, { color: c.muted, textAlign: 'center' }]}>
-              {`Новая игра дня через ${untilTomorrow()}${streak.count > 1 ? ` · серия ${streak.count}` : ''}`}
-            </Text>
+            <DayClock width={colW} />
           ) : null}
           {dailyNote ? <Text style={[type.secondary, { color: c.muted, textAlign: 'center' }]}>{dailyNote}</Text> : null}
           <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.xxl, marginTop: space.xs }}>
