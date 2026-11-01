@@ -114,7 +114,10 @@ export default function Game() {
     if (store.ready && learn && store.lesson === null) store.startLesson(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.ready, learn]);
-  useEffect(() => setCoach('task'), [store.lesson]);
+  useEffect(() => {
+    setCoach('task');
+    if (store.lesson === 0) lessonPeak.current = 0;
+  }, [store.lesson]);
 
   // What the board shows. Equal to the game's board at rest; during a chain it
   // steps through the intermediate positions.
@@ -133,6 +136,16 @@ export default function Game() {
   const peak = useRef(g.bestTile);
   /** A milestone's wave across the board, from the cell that made it. */
   const [ripple, setRipple] = useState<{ at: number; v: number; id: number; board: number[] } | null>(null);
+  /** The best milestone earned during the lessons: the track keeps it from step to step. */
+  const lessonPeak = useRef(0);
+  /** The move now playing made a milestone (it gets the full show already). */
+  const moveHadMilestone = useRef(false);
+  /** Bumps when the track should assemble itself square by square (the start of the first game). */
+  const [trackIntro, setTrackIntro] = useState(0);
+  /** The lesson board breaking up at the end of the lessons. */
+  const [scatter, setScatter] = useState<{ id: number; board: number[] } | null>(null);
+  /** Bumps when the lesson line changes, so it kicks in. */
+  const lineKick = useSharedValue(1);
   /** A milestone whose copy is still flying to the track: its square waits. */
   const [trackHold, setTrackHold] = useState(0);
   const lastDir = useRef<Dir>('down');
@@ -221,20 +234,64 @@ export default function Game() {
     const pieceStep = L.tray.some((p) => !p.used);
     // The engine refills a spent tray at random; a lesson keeps it empty.
     if (pieceStep) g.tray = g.tray.map((p) => ({ ...p, used: true }));
+    const milestoneFired = moveHadMilestone.current;
     later(ms + 150, () => {
       if (L.goal(g)) {
+        /* The step is proved: its result tile rises and turns over, a wave
+           of its colour runs out over the board, and a bell rings, a step
+           higher with every lesson. The line turns into the formula on the
+           same frame. A step that made a milestone already had its show. */
+        const at = resultCell(g.board, L);
+        if (!milestoneFired && at >= 0) {
+          setRipple({ at, v: g.board[at], id: Date.now(), board: g.board.slice() });
+          later(RIPPLE_MS, () => setRipple(null));
+        }
+        if (!milestoneFired) fx.milestone(24 * 2 ** Math.min(k, 4));
         setCoach('done');
-        later(1600, () => {
+        kickLine();
+        later(1700, () => {
           if (lessonNow.current !== k) return;
           if (k + 1 < LESSONS.length) return store.startLesson(k + 1);
-          // Straight into the game, no card: the goal takes the lesson line.
-          setGoalLine(true);
-          skipLessons();
+          finale();
         });
-      } else if (pieceStep || g.sweeps === 0) {
+      } else if (pieceStep) {
         // Cannot happen with moves locked, but never leave a lesson stuck.
         later(400, () => lessonNow.current === k && store.startLesson(k));
       }
+    });
+  };
+
+  /** The tile a lesson was about: the highest one on the board. */
+  const resultCell = (board: number[], _L: unknown) => {
+    let at = -1;
+    board.forEach((v, i) => {
+      if (v > 0 && (at < 0 || v > board[at])) at = i;
+    });
+    return at;
+  };
+
+  const kickLine = () => {
+    lineKick.value = withSequence(withTiming(1.12, { duration: 0 }), withTiming(1, back(320, 2.4)));
+  };
+
+  /* The end of the lessons. The lesson board breaks up: every tile lifts and
+     drops away in a wave from the centre, one soft knock each. Then the real
+     game: the board is empty, the goal kicks into the line, and the track to
+     384 assembles square by square while the marimba climbs the milestones. */
+  const finale = () => {
+    // The engine's board, not the shown one: this runs from a timer set
+    // before the last move finished drawing.
+    const board = g.board.slice();
+    setScatter({ id: Date.now(), board });
+    setShown(new Array(N * N).fill(0));
+    fx.sweep();
+    later(SCATTER_MS, () => {
+      setScatter(null);
+      setGoalLine(true);
+      skipLessons();
+      kickLine();
+      setTrackIntro(Date.now());
+      later(120, () => fx.cascade(milestonesFor(engine.DEFAULTS.goal), INTRO_STEP));
     });
   };
 
@@ -252,11 +309,13 @@ export default function Game() {
     const before = peak.current;
     peak.current = Math.max(before, ...levels);
     const seen = new Set<number>();
-    return levels.map((l) => {
+    const marks = levels.map((l) => {
       if (l <= before || !isMilestone(l) || seen.has(l)) return false;
       seen.add(l);
       return true;
     });
+    moveHadMilestone.current = marks.some(Boolean);
+    return marks;
   };
   /** One merge lands: the note, the points, the press. A milestone rings its
       bell instead of the note and sends a wave of its colour across the board. */
@@ -267,6 +326,7 @@ export default function Game() {
       if (level === g.cfg.goal) fx.merge(level);
       else fx.milestone(level);
       setRipple({ at, v: level, id: Date.now(), board: board.slice() });
+      if (store.lesson !== null) lessonPeak.current = Math.max(lessonPeak.current, level);
       // Its square on the track fills when the flying copy lands there.
       setTrackHold(level);
       later(FLIP + 120 + FLY_HOME, () => {
@@ -613,7 +673,7 @@ export default function Game() {
   const trackTop = isDaily ? gap * 2 + step / 2 : step / 2;
   const trackHome = (v: number) => {
     const k = milestones.indexOf(v);
-    if (k < 0 || !g.cfg.freeSweeps || store.lesson !== null) return null;
+    if (k < 0 || !g.cfg.freeSweeps) return null;
     const size = Math.floor((col - gap * (milestones.length - 1)) / milestones.length);
     const h = Math.max(28, Math.min(44, Math.round(size * 0.5)));
     return { x: k * (size + gap), y: cell * N + gap + trackTop, w: size, h };
@@ -647,6 +707,8 @@ export default function Game() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.lesson, store.version, coach, width, height]);
 
+  const lineStyle = useAnimatedStyle(() => ({ transform: [{ scale: lineKick.value }], transformOrigin: 'left center' }));
+
   return (
     <View style={[{ flex: 1 }, noSelect]}>
       <Screen style={{ width: col }}>
@@ -669,7 +731,7 @@ export default function Game() {
           {/* One line above the board, nothing else: the move in plain words,
               then the rule it proved as a formula. The way out of the lessons is in pause. */}
           {lesson || goalLine || isDaily ? (
-            <View style={{ width: col, marginBottom: step, height: LESSON_H, justifyContent: 'center' }}>
+            <Animated.View style={[{ width: col, marginBottom: step, height: LESSON_H, justifyContent: 'center' }, lineStyle]}>
               <Text
                 accessibilityRole="header"
                 numberOfLines={1}
@@ -677,7 +739,7 @@ export default function Game() {
                 style={[type.title, { color: c.text }]}>
                 {lesson ? (coach === 'task' ? lesson.title : lesson.done) : isDaily ? dailyLine : `Цель: ${g.cfg.goal}`}
               </Text>
-            </View>
+            </Animated.View>
           ) : null}
           <Animated.View style={boardStyle} {...swipe.panHandlers}>
             {/* The game of the day wears a yellow frame: another game at a glance. */}
@@ -711,6 +773,7 @@ export default function Game() {
                 {flights.map((f) => (
                   <SlidingTile key={f.id} m={f.m} cell={cell} gap={gap} ms={f.ms} />
                 ))}
+                {scatter ? <Scatter key={scatter.id} board={scatter.board} cell={cell} gap={gap} /> : null}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={trackHome(ripple.v)} /> : null}
                 {floats.map((f) => (
                   <Float key={f.id} at={f.at} v={f.v} cell={cell} gap={gap} />
@@ -724,9 +787,17 @@ export default function Game() {
           {g.cfg.freeSweeps ? (
             /* With free sweeps there is nothing to count under the board:
                the milestones on the way to the goal sit there instead. */
-            store.lesson === null ? (
-              <Track steps={milestones} best={trackHold ? Math.min(best, trackHold / 2) : best} width={col} gap={gap} top={trackTop} />
-            ) : null
+            <Track
+              steps={milestones}
+              best={(() => {
+                const b = store.lesson !== null ? Math.max(best, lessonPeak.current) : best;
+                return trackHold ? Math.min(b, trackHold / 2) : b;
+              })()}
+              width={col}
+              gap={gap}
+              top={trackTop}
+              intro={trackIntro}
+            />
           ) : (
             <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: col, alignItems: 'center', marginTop: isDaily ? gap * 2 : 0 }}>
               {Array.from({ length: g.cfg.sweepsMax }, (_, k) => k).map((k) => (
@@ -1015,10 +1086,75 @@ function LiftTile({ v, d, at, cell, gap, hero, home }: { v: number; d: number; a
   );
 }
 
+const SCATTER_MS = 900;
+const INTRO_STEP = 110; // ms between the track's squares as it assembles
+
+/** The lesson board breaking up: every tile lifts, tips and drops away in a
+    wave from the centre, leaving the empty board for the first game. */
+function Scatter({ board, cell, gap }: { board: number[]; cell: number; gap: number }) {
+  const { c } = useTheme();
+  const pad = gap / 2;
+  return (
+    <>
+      {/* The whole ladder runs over the board corner to corner, each
+          diagonal one rung higher, 3 up to the goal's ink. */}
+      {Array.from({ length: N * N }, (_, i) => {
+        const diag = (i % N) + ((i / N) | 0);
+        return (
+          <FloorFlash
+            key={`l${i}`}
+            d={diag * 0.9}
+            color={c.tile[Math.min(10, 3 + Math.floor((diag * 8) / (2 * N - 2)))]}
+            style={{ left: pad + (i % N) * cell + pad, top: pad + ((i / N) | 0) * cell + pad, width: cell - gap, height: cell - gap }}
+          />
+        );
+      })}
+      {board.map((v, i) => {
+        if (!v) return null;
+        const x = i % N;
+        const y = (i / N) | 0;
+        const d = Math.abs(x - 2.5) + Math.abs(y - 2.5);
+        return <ScatterTile key={i} v={v} d={d} side={x < 3 ? -1 : 1} at={{ x: pad + x * cell, y: pad + y * cell }} cell={cell} gap={gap} />;
+      })}
+    </>
+  );
+}
+
+function ScatterTile({ v, d, side, at, cell, gap }: { v: number; d: number; side: number; at: { x: number; y: number }; cell: number; gap: number }) {
+  const { c, isDark } = useTheme();
+  const pad = gap / 2;
+  const rk = rank(v);
+  const k = useSharedValue(0);
+  useEffect(() => {
+    k.value = withDelay(d * 60, withTiming(1, { duration: 420, easing: Easing.in(Easing.quad) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const st = useAnimatedStyle(() => {
+    const up = Math.sin(Math.min(1, k.value * 2.2) * Math.PI) * 0.25; // a hop before the drop
+    return {
+      opacity: k.value < 0.75 ? 1 : 1 - (k.value - 0.75) / 0.25,
+      transform: [
+        { translateX: side * k.value * cell * 0.5 },
+        { translateY: -up * cell + k.value * k.value * cell * 2.2 },
+        { rotate: `${side * k.value * 35}deg` },
+        { scale: 1 + up * 0.5 - k.value * 0.35 },
+      ],
+    };
+  });
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: at.x, top: at.y, width: cell, height: cell, padding: pad, backgroundColor: c.line }, st]}>
+      <View style={{ flex: 1, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center' }}>
+        <Enamel fill={c.tile[rk]} size={cell} dark={isDark} />
+        <TileNum v={v} color={c.ink[rk]} size={Math.max(12, Math.round(cell * (v >= 100 ? 0.28 : v >= 10 ? 0.34 : 0.4)))} />
+      </View>
+    </Animated.View>
+  );
+}
+
 /** The way to the goal under the board: one small tile per milestone, empty
     until reached, then in its own colour. The last one is the goal. A
     milestone reached pops its square when the flying tile lands in it. */
-function Track({ steps, best, width, gap, top }: { steps: number[]; best: number; width: number; gap: number; top: number }) {
+function Track({ steps, best, width, gap, top, intro = 0 }: { steps: number[]; best: number; width: number; gap: number; top: number; intro?: number }) {
   const between = gap;
   const size = Math.floor((width - between * (steps.length - 1)) / steps.length);
   const h = Math.max(28, Math.min(44, Math.round(size * 0.5)));
@@ -1030,17 +1166,25 @@ function Track({ steps, best, width, gap, top }: { steps: number[]; best: number
       accessibilityLabel={`Вехи: ${reached} из ${steps.length}. Цель ${steps[steps.length - 1]}`}
       style={{ width, flexDirection: 'row', gap: between, marginTop: top }}>
       {steps.map((v, k) => (
-        <TrackStep key={v} v={v} on={best >= v} goal={k === steps.length - 1} w={size} h={h} frame={Math.max(3, Math.round(gap * 0.6))} />
+        <TrackStep key={v} v={v} on={best >= v} goal={k === steps.length - 1} w={size} h={h} frame={Math.max(3, Math.round(gap * 0.6))} intro={intro} delay={120 + k * INTRO_STEP} />
       ))}
     </View>
   );
 }
 
-function TrackStep({ v, on, goal, w, h, frame }: { v: number; on: boolean; goal: boolean; w: number; h: number; frame: number }) {
+function TrackStep({ v, on, goal, w, h, frame, intro, delay }: { v: number; on: boolean; goal: boolean; w: number; h: number; frame: number; intro: number; delay: number }) {
   const { c, isDark } = useTheme();
   const rk = rank(v);
   const k = useSharedValue(1);
   const was = useRef(on);
+  // The track assembling at the start of the first game: each square drops
+  // in on its own note, the goal last and hardest.
+  useEffect(() => {
+    if (!intro) return;
+    k.value = 0;
+    k.value = withDelay(delay, withSequence(withTiming(goal ? 1.35 : 1.18, { duration: 110, easing: Easing.out(Easing.cubic) }), withTiming(1, back(320, 2.6))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intro]);
   useEffect(() => {
     if (on && !was.current) k.value = withSequence(withTiming(1.25, { duration: 0 }), withTiming(1, back(360, 2.6)));
     was.current = on;

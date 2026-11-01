@@ -226,8 +226,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const L = LESSONS[k];
       if (!L) return;
       if (lesson === null) saved.current = gRef.current;
-      // Lessons keep counted sweeps: no new tile slides in to spoil the position.
-      const g = engine.newGame(engine.LIMITED);
+      // The real rules: sweeps are free and go only when they merge, so
+      // nothing new ever lands on a lesson's position.
+      const g = engine.newGame();
       g.board = L.board.slice();
       g.tray = L.tray.map((p) => ({ cells: p.cells.map((c) => [...c] as [number, number, number]), used: p.used }));
       g.sweeps = L.sweeps;
