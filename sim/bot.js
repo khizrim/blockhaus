@@ -90,7 +90,7 @@ function chooseSweeper(g, noise = 0) {
   const options = [{ dir: null, board: g.board, gained: 0 }];
   for (const dir of g.cfg.freeSweeps || g.sweeps > 0 ? ['left', 'right', 'up', 'down'] : []) {
     const b = g.board.slice();
-    const { made, moved } = E.applySweep(b, dir, g.cfg.sweepChain);
+    const { made, moved } = E.applySweep(b, dir, g.cfg.sweepChain, g.cfg.freeSweeps && g.cfg.sweepCost === 'tilt');
     // Only sweeps the engine would take: under 'merge' a sweep must merge.
     if (moved && !(g.cfg.sweepCost === 'merge' && !made.length)) options.push({ dir, board: b, gained: made.reduce((s, m) => s + m.level, 0) });
   }

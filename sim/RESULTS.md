@@ -69,3 +69,16 @@ A small, even lift: about three points of win rate and a few moves longer for ev
 Game of the day (30 pieces, 6 start tiles), 400 runs: with spawn, scores rise 10% (casual) to 45% (swiping bots).
 
 **Shipped after Khizri's pick (2026-11-01): a sweep goes only if it merges** (`sweepCost: 'merge'`), no new tiles. Goal stays 384, which makes it a long climb: at 384 swCasual 6%, swRegular 23%, swExpert 40%, regular 8% (100-game run in the thread; at 192 they would be 46 / 65 / 82 / 31%). The milestones on the way carry the motivation. Game-of-the-day scores barely move under this rule (regular median 357 vs 354), so the medals stay at 250 / 350 / 450.
+
+## Sweeps that never refuse (2026-11-01)
+
+Merge-only sweeps refused any swipe that merged nothing, and players felt the game holding them back. Shipped now: every swipe goes, and after the slide the first unused tray piece rides in from the edge the tiles left, as near the middle as it fits, and merges as if placed (`sweepCost: 'push'`). A swipe is a move: it spends a piece. `SWEEPERS=1 node sim/simulate.js 200 freePush freeMerge`, win % at 384:
+
+| rule | casual | regular | expert | swCasual | swRegular | swExpert |
+|---|---|---|---|---|---|---|
+| push (shipped) | 0 | 2 | 6 | 15 | 36 | 53 |
+| merge-only (before) | 0 | 7 | 22 | 4 | 21 | 40 |
+
+A player who swipes does better than before; one who only places loses a little. Also tried: `tilt` (tiles slide, nothing merges on a sweep) no bot reached 96, so it was dropped. The game still ends: a swipe counts toward the end check only if it merges or the piece can land.
+
+The daily (30 pieces) scores come down because swipes spend pieces: medals 250 / 330 / 420 (were 250 / 350 / 450).

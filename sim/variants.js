@@ -28,8 +28,11 @@ module.exports = {
   freeNone: { ...E.DEFAULTS, sweepCost: 'none' },
   // A sweep is allowed only if it merges something.
   freeMerge: { ...E.DEFAULTS, sweepCost: 'merge' },
-  // Shipped rule (every sweep slides a new 1 or 2 in) at other goals.
-  spawn192: { ...E.DEFAULTS, goal: 192 },
-  spawn384: { ...E.DEFAULTS, goal: 384 },
-  spawn768: { ...E.DEFAULTS, goal: 768 },
+  // A sweep never refuses: the next tray piece slides in from the far edge.
+  freePush: { ...E.DEFAULTS, sweepCost: 'push' },
+  freeTilt: { ...E.DEFAULTS, sweepCost: 'tilt' },
+  // Every sweep slides a new 1 or 2 in, at other goals.
+  spawn192: { ...E.DEFAULTS, sweepCost: 'spawn', goal: 192 },
+  spawn384: { ...E.DEFAULTS, sweepCost: 'spawn', goal: 384 },
+  spawn768: { ...E.DEFAULTS, sweepCost: 'spawn', goal: 768 },
 };

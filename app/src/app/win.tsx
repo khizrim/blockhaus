@@ -34,6 +34,12 @@ export default function Win() {
           </Animated.View>
         </View>
         <Heading style={{ marginTop: space.xl }}>Вы собрали {Math.max(GOAL, game.bestTile)}</Heading>
+        {game.score >= 1919 ? (
+          // The score milestone, named once, where there is room to read it.
+          <Body muted style={{ marginTop: space.sm }}>
+            По пути вы прошли 1919 очков: в этом году открылся Баухаус.
+          </Body>
+        ) : null}
         <Body muted style={{ marginTop: space.sm }}>
           {mode === 'daily' ? 'Игра дня выиграна. Доиграйте её до конца, чтобы записать результат.' : 'Партия выиграна. Можно продолжить на очки или начать новую.'}
         </Body>
