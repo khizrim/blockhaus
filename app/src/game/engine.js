@@ -62,6 +62,9 @@
     // Tiles (3 to 24) set on the board before the first tray: the prepared
     // position of the game of the day (0 = an empty board).
     startTiles: 0,
+    // A tile merged by a sweep may merge again with the next tile in its
+    // line (3 3 6 -> 12), instead of once per sweep as in 2048.
+    sweepChain: false,
     goal: 192,
   };
 
@@ -138,22 +141,40 @@
     return out;
   }
 
-  /** Slides `board` (mutating it). Returns the merges and whether anything moved. */
-  function applySweep(board, dir) {
+  /** Collapses one lane's tiles (values in order, nearest the wall first).
+      Each result tile records which inputs went into it and the levels of
+      the merges that made it, in the order they happen.
+
+      Without `chain` it is the 2048 rule: a tile merges at most once per
+      sweep, so 3 3 6 gives 6 6. With `chain` a tile that has just merged
+      can merge again with the next one in line, so 3 3 6 gives 12, and
+      the lane keeps folding until no two neighbours pair. */
+  function collapse(vals, chain) {
+    const out = [];
+    vals.forEach((v, k) => {
+      out.push({ v, from: [k], levels: [] });
+      while (out.length > 1) {
+        const a = out[out.length - 2], b = out[out.length - 1];
+        if (!pairs(a.v, b.v) || (!chain && (a.levels.length || b.levels.length))) break;
+        const lvl = merged(a.v, b.v);
+        out.pop();
+        a.v = lvl;
+        a.from.push(...b.from);
+        a.levels.push(...b.levels, lvl);
+      }
+    });
+    return out;
+  }
+
+  /** Slides `board` (mutating it). Returns the merges and whether anything
+      moved. `chain` lets a merged tile merge again (see collapse). */
+  function applySweep(board, dir, chain) {
     const before = board.join();
     const made = [];
     for (const lane of lanes(dir)) {
-      const vals = lane.map(i => board[i]).filter(v => v !== 0);
-      const out = [];
-      for (let k = 0; k < vals.length; k++) {
-        if (k + 1 < vals.length && pairs(vals[k], vals[k + 1])) {
-          const lvl = merged(vals[k], vals[k + 1]);
-          made.push({ at: lane[out.length], level: lvl });
-          out.push(lvl);
-          k++;
-        } else out.push(vals[k]);
-      }
-      lane.forEach((i, k) => { board[i] = out[k] ?? 0; });
+      const out = collapse(lane.map(i => board[i]).filter(v => v !== 0), chain);
+      out.forEach((t, k) => t.levels.forEach(level => made.push({ at: lane[k], level })));
+      lane.forEach((i, k) => { board[i] = out[k] ? out[k].v : 0; });
     }
     return { made, moved: board.join() !== before };
   }
@@ -274,7 +295,7 @@
   /** The game ends when no unused piece fits and no sweep is left that would
       move anything. A sweep can rearrange the board so a piece fits again, so
       while one is in hand and it would move tiles, the game goes on. */
-  const canSweep = g => g.sweeps > 0 && ['left', 'right', 'up', 'down'].some(d => applySweep(g.board.slice(), d).moved);
+  const canSweep = g => g.sweeps > 0 && ['left', 'right', 'up', 'down'].some(d => applySweep(g.board.slice(), d, g.cfg.sweepChain).moved);
   const anyMove = g =>
     !(g.cfg.pieceLimit && g.moves >= g.cfg.pieceLimit) &&
     (g.tray.some(p => p && !p.used && canPlaceAnywhere(g.board, p)) || canSweep(g));
@@ -312,7 +333,7 @@
   function sweep(g, dir) {
     if (g.sweeps <= 0 || g.over) return null;
     const trial = g.board.slice();
-    const res = applySweep(trial, dir);
+    const res = applySweep(trial, dir, g.cfg.sweepChain);
     if (!res.moved) return null;
     g.board = trial;
     g.sweeps--;
@@ -350,13 +371,14 @@
     [S.single, 3], [S.domH, 3], [S.domV, 3],
     [S.triH, 0.5], [S.triV, 0.5], [S.l1, 0.5], [S.l2, 0.5], [S.l3, 0.5], [S.l4, 0.5],
   ];
-  // A chain of two or more merges earns a sweep, up to three in hand.
-  const DEFAULTS = { ...ORIGINAL, dealer: 'need', shapes: SHIPPED_SHAPES, chainBonus: 2, sweepsMax: 3 };
+  // A chain of two or more merges earns a sweep, up to three in hand. A
+  // sweep folds each line all the way, the way a placement cascades.
+  const DEFAULTS = { ...ORIGINAL, dealer: 'need', shapes: SHIPPED_SHAPES, chainBonus: 2, sweepsMax: 3, sweepChain: true };
 
   return {
     N, SHAPES: S, ORIGINAL, DEFAULTS, ORIGINAL_SHAPES,
     pairs, merged, rank, idx, neighbours, size, fits, pieceValue,
-    applyPlacement, applySweep, lanes, chanceOfOnes, deal, dealTray,
+    applyPlacement, applySweep, collapse, lanes, chanceOfOnes, deal, dealTray,
     newGame, place, sweep, anyMove, canSweep, canPlaceAnywhere, seeded,
   };
 });

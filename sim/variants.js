@@ -19,4 +19,6 @@ module.exports = {
   shippedCellTray: { ...E.DEFAULTS, balancedTray: 1 },
   shippedMixed: { ...E.DEFAULTS, mixedPieces: 0.3 },
   shippedMixedCellTray: { ...E.DEFAULTS, mixedPieces: 0.3, balancedTray: 1 },
+  // A sweep folds each line all the way: a merged tile merges again (3 3 6 -> 12).
+  shippedChain: { ...E.DEFAULTS, sweepChain: true },
 };

@@ -8,7 +8,7 @@ export type Step = { absorbed: number[]; anchor: number; level: number };
 export type Config = Record<string, unknown>;
 
 export type Game = {
-  cfg: Config & { goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
+  cfg: Config & { sweepChain?: boolean; goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
   rng: () => number;
   board: number[];
   tray: Piece[];
@@ -34,7 +34,10 @@ declare const engine: {
   fits(board: number[], piece: Piece, ox: number, oy: number): boolean;
   size(piece: Piece): { w: number; h: number };
   applyPlacement(board: number[], piece: Piece, ox: number, oy: number): { laid: number[]; steps: Step[] };
-  applySweep(board: number[], dir: Dir): SweepResult;
+  applySweep(board: number[], dir: Dir, chain?: boolean): SweepResult;
+  /** Folds one lane (values nearest the wall first): each result tile, the inputs that went into it and its merge levels in order. */
+  collapse(vals: number[], chain?: boolean): { v: number; from: number[]; levels: number[] }[];
+  lanes(dir: Dir): number[][];
   dealTray(cfg: Config, board: number[], rng: () => number): Piece[];
   newGame(config?: Config, rng?: () => number): Game;
   place(g: Game, slot: number, ox: number, oy: number): PlaceResult | null;

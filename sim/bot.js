@@ -66,7 +66,7 @@ function choose(g, noise = 0, naive = false) {
   if (g.sweeps > 0) {
     for (const dir of ['left', 'right', 'up', 'down']) {
       const b = g.board.slice();
-      const { made, moved } = E.applySweep(b, dir);
+      const { made, moved } = E.applySweep(b, dir, g.cfg.sweepChain);
       if (!moved) continue;
       const gained = made.reduce((s, m) => s + m.level, 0);
       // A sweep has to beat the best placement outright, since it doesn't
