@@ -73,6 +73,11 @@
     // board. 'merge': a sweep is allowed only if it merges something.
     // 'none': sweeps are truly free (too easy, kept to measure).
     sweepCost: 'none',
+    // A placement's cascade pays more the longer it runs: its k-th merge
+    // scores its level times k, up to this many times (0 = every merge
+    // scores its level). Merges made by the slide of a sweep score plain,
+    // so the bonus rewards setting a cascade up, not swiping.
+    chainScore: 0,
     goal: 192,
   };
 
@@ -326,12 +331,18 @@
     !(g.cfg.pieceLimit && g.moves >= g.cfg.pieceLimit) &&
     (g.tray.some(p => p && !p.used && canPlaceAnywhere(g.board, p)) || canSweep(g));
 
-  function score(g, levels) {
-    for (const lvl of levels) {
-      g.score += lvl;
+  /** Adds a move's merges to the score. `steps` are {level} objects; each
+      gets `pts`, the points it scored. With `cascade`, the k-th one is worth
+      its level times min(k, cfg.chainScore). */
+  function score(g, steps, cascade) {
+    const cap = cascade ? g.cfg.chainScore || 0 : 0;
+    steps.forEach((st, k) => {
+      const lvl = st.level;
+      st.pts = lvl * (cap ? Math.min(k + 1, cap) : 1);
+      g.score += st.pts;
       g.merges++;
       if (lvl > g.bestTile) g.bestTile = lvl;
-    }
+    });
     if (g.bestTile >= g.cfg.goal) g.won = true;
   }
 
@@ -342,7 +353,7 @@
     const res = applyPlacement(g.board, p, ox, oy);
     p.used = true;
     g.moves++;
-    score(g, res.steps.map(s => s.level));
+    score(g, res.steps, true);
     res.bonus = !g.cfg.freeSweeps && !!g.cfg.chainBonus && res.steps.length >= g.cfg.chainBonus && g.sweeps < g.cfg.sweepsMax;
     if (res.bonus) g.sweeps++;
     res.refilled = false;
@@ -406,7 +417,7 @@
     res.spawned = g.cfg.freeSweeps && g.cfg.sweepCost === 'spawn' ? spawnAfter(g, dir) : null;
     res.swept = g.board.slice();
     res.pushed = g.cfg.freeSweeps && g.cfg.sweepCost === 'push' ? pushAfter(g, dir) : null;
-    score(g, res.made.map(m => m.level));
+    score(g, res.made, false);
     g.over = !anyMove(g);
     return res;
   }
@@ -448,6 +459,9 @@
   const DEFAULTS = {
     ...ORIGINAL, dealer: 'need', shapes: SHIPPED_SHAPES, chainBonus: 2, sweepsMax: 3, sweepChain: true,
     freeSweeps: true, sweepCost: 'push', goal: 384,
+    // A cascade from a placed piece pays ×2 for its second merge and ×3
+    // from the third on (sim/daily.js): skill shows up in the score.
+    chainScore: 3,
   };
   // The balance before free sweeps (2026-11-01): two per tray, a chain earns
   // one more, up to three; goal 192.

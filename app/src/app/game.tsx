@@ -86,6 +86,13 @@ function bestPush(g: EngineGame): Dir | null {
   }
   return best;
 }
+/** Where a swipe that way would bring the next tray piece in: tried on a
+    copy of the game, so the board can show it while the finger is down. */
+function aimPush(g: EngineGame, d: Dir): { piece: Piece; ox: number; oy: number } | null {
+  const c = { ...g, board: g.board.slice(), tray: g.tray.map((p) => p && { ...p, cells: p.cells.map((x) => [...x] as [number, number, number]) }), rng: () => 0.5 } as EngineGame;
+  const r = engine.sweep(c, d);
+  return r?.pushed ? { piece: r.pushed.piece, ox: r.pushed.ox, oy: r.pushed.oy } : null;
+}
 const UNIT: Record<Dir, [number, number]> = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
 
 export default function Game() {
@@ -142,8 +149,10 @@ export default function Game() {
   const [nudge, setNudge] = useState<[number, number][] | null>(null);
   const idleShown = useRef(0);
   const [flights, setFlights] = useState<{ id: string; m: Move; ms: number }[]>([]);
+  // While a swipe is held past the threshold: where the next piece will ride in.
+  const [aim, setAim] = useState<{ id: string; piece: Piece; ox: number; oy: number; dir: Dir } | null>(null);
   const [incoming, setIncoming] = useState<{ id: number; piece: Piece; ox: number; oy: number; dir: Dir; delay: number } | null>(null);
-  const [floats, setFloats] = useState<{ id: string; at: number; v: number }[]>([]);
+  const [floats, setFloats] = useState<{ id: string; at: number; v: number; times: number }[]>([]);
   const [returning, setReturning] = useState<number | null>(null);
   const [pops, setPops] = useState<Record<number, number>>({});
   const [lands, setLands] = useState<Record<number, number>>({});
@@ -349,7 +358,7 @@ export default function Game() {
   };
   /** One merge lands: the note, the points, the press. A milestone rings its
       bell instead of the note and sends a wave of its colour across the board. */
-  const land = (at: number, level: number, milestone: boolean, board: number[]) => {
+  const land = (at: number, level: number, milestone: boolean, board: number[], pts = level) => {
     setPops((pp) => ({ ...pp, [at]: Date.now() }));
     if (milestone) {
       // The goal itself rings with the win card that follows, not a bell.
@@ -365,7 +374,7 @@ export default function Game() {
       });
       later(RIPPLE_MS, () => setRipple(null));
     } else fx.merge(level);
-    float(at, level);
+    float(at, pts, Math.round(pts / level));
     thump(milestone ? Math.max(level, 192) : level);
   };
 
@@ -392,9 +401,9 @@ export default function Game() {
   const scoreStyle = useAnimatedStyle(() => ({ transform: [{ scale: scoreKick.value }], transformOrigin: 'left center' }));
 
   /** Points rise from where a merge happened. */
-  const float = (at: number, v: number) => {
+  const float = (at: number, v: number, times = 1) => {
     const id = `${at}-${Date.now()}-${Math.random()}`;
-    setFloats((f) => [...f, { id, at, v }]);
+    setFloats((f) => [...f, { id, at, v, times }]);
     later(800, () => setFloats((f) => f.filter((x) => x.id !== id)));
   };
   /** Big merges move the board: a small press, bigger for higher rungs. */
@@ -547,7 +556,7 @@ export default function Game() {
       later(t0 + FLY, () => {
         setShown(snap);
         setFlights((f) => f.filter((x) => !st.absorbed.some((a) => x.m.from === a)));
-        land(st.anchor, st.level, marks[k], snap);
+        land(st.anchor, st.level, marks[k], snap, st.pts);
       });
     });
     return base + Math.max(0, steps.length - 1) * STEP + (steps.length ? FLY : 0);
@@ -584,6 +593,12 @@ export default function Game() {
         const h = nudge.find(([at]) => at === i);
         if (h && shown[i] === 0) l.ghost = h[1];
       }
+      // A held swipe: the cells the next tray piece will ride in to, hatched
+      // in its colour, the board's own "a piece goes here" (see aimAt).
+      if (!hold && aim) {
+        const m = aim.piece.cells.find(([cx, cy]) => (aim.oy + cy) * N + aim.ox + cx === i);
+        if (m) l.ghost = m[2];
+      }
       if (!hold && lesson?.hint && coach === 'task') {
         const h = lesson.hint.find(([at]) => at === i);
         if (h && shown[i] === 0) l.ghost = h[1];
@@ -608,15 +623,22 @@ export default function Game() {
       }
       return l;
     },
-    [shown, hold, target, pops, lands, lesson, coach, nudge],
+    [shown, hold, target, pops, lands, lesson, coach, nudge, aim],
   );
 
   const values = useMemo(() => {
+    /* A tile on an aimed cell is about to slide away from it; while the
+       swipe is held the cell shows the piece coming instead. */
+    if (!hold && aim) {
+      const v = shown.slice();
+      for (const [x, y] of aim.piece.cells) v[(aim.oy + y) * N + aim.ox + x] = 0;
+      return v;
+    }
     if (!hold || !target) return shown;
     const v = shown.slice();
     for (const [x, y, val] of hold.piece.cells) v[(target.gy + y) * N + target.gx + x] = val;
     return v;
-  }, [shown, hold, target]);
+  }, [shown, hold, target, aim]);
 
   /* ---------- sweep: swipe the board ----------
      While the finger moves the board leans a few points that way; on release
@@ -679,7 +701,7 @@ export default function Game() {
     res.made.forEach((m, k) =>
       later(SLIDE + k * STEP, () => {
         setShown((sh) => (sh[m.at] === m.level ? sh : Object.assign(sh.slice(), { [m.at]: m.level })));
-        land(m.at, m.level, marks[k], after);
+        land(m.at, m.level, marks[k], after, m.pts);
       }),
     );
     let done = SLIDE + res.made.length * STEP;
@@ -712,6 +734,19 @@ export default function Game() {
 
   const sweepRef = useRef(sweep);
   sweepRef.current = sweep;
+  /* The pushed piece's cells show up hatched in its colour as soon as the
+     finger has gone far enough to count as a swipe, and move when the swipe
+     changes direction. Letting go hands over to Incoming. */
+  const aimDir = useRef<Dir | null>(null);
+  const aimAt = (dir: Dir | null) => {
+    if (dir === aimDir.current) return;
+    aimDir.current = dir;
+    const ok = dir && g.cfg.freeSweeps && g.cfg.sweepCost === 'push' && !g.over && !(lesson?.dirs && !lesson.dirs.includes(dir));
+    const at = ok ? aimPush(g, dir) : null;
+    setAim(at && dir ? { ...at, dir, id: `${dir}-${store.version}` } : null);
+  };
+  const aimRef = useRef(aimAt);
+  aimRef.current = aimAt;
   const swipe = useMemo(() => {
     const axis = (dx: number, dy: number) => (Math.abs(dx) > Math.abs(dy) ? 'x' : 'y');
     const lean = (d: number) => Math.max(-8, Math.min(8, d * 0.1));
@@ -719,15 +754,19 @@ export default function Game() {
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) + Math.abs(gs.dy) > 8,
       onPanResponderMove: (_, gs) => {
-        if (axis(gs.dx, gs.dy) === 'x') {
+        const x = axis(gs.dx, gs.dy) === 'x';
+        if (x) {
           sx.value = lean(gs.dx);
           sy.value = 0;
         } else {
           sy.value = lean(gs.dy);
           sx.value = 0;
         }
+        const d = x ? gs.dx : gs.dy;
+        aimRef.current(Math.abs(d) < SWIPE ? null : x ? (d > 0 ? 'right' : 'left') : d > 0 ? 'down' : 'up');
       },
       onPanResponderRelease: (_, gs) => {
+        aimRef.current(null);
         const x = axis(gs.dx, gs.dy) === 'x';
         const d = x ? gs.dx : gs.dy;
         if (Math.abs(d) < SWIPE) {
@@ -738,6 +777,7 @@ export default function Game() {
         sweepRef.current(x ? (d > 0 ? 'right' : 'left') : d > 0 ? 'down' : 'up');
       },
       onPanResponderTerminate: () => {
+        aimRef.current(null);
         sx.value = withTiming(0, enter(dur.fast));
         sy.value = withTiming(0, enter(dur.fast));
       },
@@ -913,7 +953,7 @@ export default function Game() {
                 {scatter ? <Scatter key={scatter.id} board={scatter.board} cell={cell} gap={gap} /> : null}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
                 {floats.map((f) => (
-                  <Float key={f.id} at={f.at} v={f.v} cell={cell} gap={gap} />
+                  <Float key={f.id} at={f.at} v={f.v} times={f.times} cell={cell} gap={gap} />
                 ))}
               </View>
               {/* After a proved step: the board dims and a card says what
@@ -1384,8 +1424,9 @@ function Plate({ on, k, dir, width }: { on: boolean; k: number; dir: Dir; width:
   return <Animated.View style={[{ width, height: PLATE, marginTop: k ? 2 : 4, backgroundColor: c.line }, st]} />;
 }
 
-/** "+N" rising from the cell where a merge happened. */
-function Float({ at, v, cell, gap }: { at: number; v: number; cell: number; gap: number }) {
+/** "+N" rising from the cell where a merge happened. A later merge of a
+    placed piece's cascade pays double or triple, and says so: "+36 ×3". */
+function Float({ at, v, times = 1, cell, gap }: { at: number; v: number; times?: number; cell: number; gap: number }) {
   const { c } = useTheme();
   const k = useSharedValue(0);
   useEffect(() => {
@@ -1400,13 +1441,14 @@ function Float({ at, v, cell, gap }: { at: number; v: number; cell: number; gap:
   return (
     <Animated.View
       style={[
-        { position: 'absolute', left: pad + (at % N) * cell, top: pad + ((at / N) | 0) * cell - cell * 0.3, width: cell, alignItems: 'center' },
+        { position: 'absolute', left: pad + (at % N) * cell - cell / 2, top: pad + ((at / N) | 0) * cell - cell * 0.3, width: cell * 2, alignItems: 'center' },
         st,
       ]}>
       <Text
         allowFontScaling={false}
         style={{ fontFamily: font.tile, fontSize: Math.round(cell * (v >= 24 ? 0.34 : 0.28)), color: c.text, textShadowColor: c.canvas, textShadowRadius: 4 }}>
         {`+${v}`}
+        {times > 1 ? <Text style={{ fontSize: Math.round(cell * 0.22), color: c.muted }}>{` ×${times}`}</Text> : null}
       </Text>
     </Animated.View>
   );

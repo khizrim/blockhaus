@@ -4,11 +4,11 @@
 
 export type Cell = [number, number, number];
 export type Piece = { cells: Cell[]; used: boolean };
-export type Step = { absorbed: number[]; anchor: number; level: number };
+export type Step = { absorbed: number[]; anchor: number; level: number; /** Points it scored: the level, times its place in a placed piece's cascade (up to cfg.chainScore). */ pts: number };
 export type Config = Record<string, unknown>;
 
 export type Game = {
-  cfg: Config & { sweepChain?: boolean; freeSweeps?: boolean; sweepCost?: 'spawn' | 'merge' | 'push' | 'tilt' | 'none'; goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
+  cfg: Config & { sweepChain?: boolean; freeSweeps?: boolean; sweepCost?: 'spawn' | 'merge' | 'push' | 'tilt' | 'none'; chainScore?: number; goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
   rng: () => number;
   board: number[];
   tray: Piece[];
@@ -22,7 +22,7 @@ export type Game = {
 };
 
 export type PlaceResult = { laid: number[]; steps: Step[]; refilled: boolean; /** The chain earned a sweep. */ bonus: boolean };
-export type SweepResult = { made: { at: number; level: number }[]; moved: boolean; /** With free sweeps: the new low tile slid in at the far edge. */ spawned?: { at: number; value: number } | null;
+export type SweepResult = { made: { at: number; level: number; pts: number }[]; moved: boolean; /** With free sweeps: the new low tile slid in at the far edge. */ spawned?: { at: number; value: number } | null;
   /** The board right after the slide, before a pushed piece. */
   swept?: number[];
   /** With push sweeps: the first unused tray piece, laid at (ox, oy) on the far edge. */
