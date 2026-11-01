@@ -40,7 +40,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [haptics, setHaptics] = useState(true);
   const [hints, setHints] = useState(true);
   const [music, setMusic] = useState(true);
-  const [depth, setDepth] = useState<DepthKind>('flat');
+  const [depth, setDepth] = useState<DepthKind>('relief');
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     AsyncStorage.getItem(KEY)
