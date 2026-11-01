@@ -8,6 +8,7 @@ import { Overlay } from '@/components/Overlay';
 import { Body, Button, Heading, Panel, TextLink } from '@/components/ui';
 import { dur, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
+import { Depth, panelDepth } from '@/design/depth';
 import { font } from '@/design/tokens';
 import engine from '@/game/engine';
 import { dayLabel, medalOf, shareOrCopy, shareText } from '@/game/daily';
@@ -27,7 +28,7 @@ const go = {
 };
 
 export function PosterMenu() {
-  const { c, isDark } = useTheme();
+  const { c, isDark, depth } = useTheme();
   const ins = useSafeAreaInsets();
   const { width: W, height: H } = useWindowDimensions();
   const [confirm, setConfirm] = useState(false);
@@ -58,18 +59,21 @@ export function PosterMenu() {
   const hb = Math.round(A * 0.76);
   const size = Math.min(56, Math.floor((W - space.xl * 2) / 6.8));
 
-  const block = (st: object, delay: number, bg: string) => (
-    <Animated.View entering={FadeIn.delay(delay).duration(dur.slow)} style={[{ position: 'absolute', backgroundColor: bg }, st]} />
+  const unit = Math.round(W / 6);
+  const block = (st: object, delay: number, bg: string, open: { t?: boolean; r?: boolean; b?: boolean; l?: boolean }) => (
+    <Animated.View entering={FadeIn.delay(delay).duration(dur.slow)} style={[{ position: 'absolute', backgroundColor: bg, overflow: 'hidden' }, st]}>
+      <Depth kind={depth} fill={bg} open={open} size={unit} dark={isDark} />
+    </Animated.View>
   );
   const line = (st: object) => <View style={[{ position: 'absolute', backgroundColor: c.line }, st]} />;
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       {/* the poster */}
-      <View style={{ height: A + L, backgroundColor: isDark ? c.canvas : c.bg }} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        {block({ left: v1 + L, top: 0, right: 0, height: hr }, 150, c.tile[2])}
-        {block({ left: 0, top: hl + L, width: vs, height: A - hl - L }, 200, c.tile[3])}
-        {block({ left: v1 + L, top: hb + L, right: 0, height: A - hb - L }, 250, c.tile[1])}
+      <View style={[{ height: A + L, backgroundColor: isDark ? c.canvas : c.bg, zIndex: 1 }, panelDepth(depth, c.bg, isDark, L)]} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {block({ left: v1 + L, top: 0, right: 0, height: hr }, 150, c.tile[2], { l: true, b: true })}
+        {block({ left: 0, top: hl + L, width: vs, height: A - hl - L }, 200, c.tile[3], { t: true, r: true, b: true })}
+        {block({ left: v1 + L, top: hb + L, right: 0, height: A - hb - L }, 250, c.tile[1], { t: true, l: true, b: true })}
         <Grow from="top">{line({ left: v1, top: 0, width: L, height: A })}</Grow>
         <Grow from="left" delay={50}>{line({ left: 0, top: hl, width: v1, height: L })}</Grow>
         <Grow from="left" delay={50}>{line({ left: v1, top: hr, width: W - v1, height: L })}</Grow>

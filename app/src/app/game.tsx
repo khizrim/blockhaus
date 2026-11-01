@@ -9,6 +9,7 @@ import { Body, Button, Heading, IconButton, Label, Panel, PauseIcon, Screen, Tex
 import { pieceGrid } from '@/design/mock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dur, enter, exit, HIT, space, type } from '@/design/system';
+import { Depth } from '@/design/depth';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Piece } from '@/game/engine';
@@ -804,7 +805,7 @@ export default function Game() {
     board (its own fill inside the thick line), moving from its old cell to its
     new one. */
 function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap: number; ms?: number }) {
-  const { c } = useTheme();
+  const { c, depth, isDark } = useTheme();
   const pad = gap / 2;
   const at = (i: number) => ({ x: pad + (i % N) * cell, y: pad + ((i / N) | 0) * cell });
   const a = at(m.from);
@@ -825,6 +826,7 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
         st,
       ]}>
       <View style={{ flex: 1, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center' }}>
+        <Depth kind={depth} fill={c.tile[rk]} open={{ t: true, r: true, b: true, l: true }} size={cell} dark={isDark} />
         <TileNum v={m.value} color={c.ink[rk]} size={Math.max(12, Math.round(cell * (m.value >= 100 ? 0.28 : m.value >= 10 ? 0.34 : 0.4)))} />
       </View>
     </Animated.View>
@@ -835,7 +837,7 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
 /** The best tile, drawn as a tile of the board: its fill inside the line. */
 /** Drawn the way a lone tile sits on the board: one cell, framed by one gap. */
 function BestTile({ v, size, frame }: { v: number; size: number; frame: number }) {
-  const { c } = useTheme();
+  const { c, depth, isDark } = useTheme();
   const rk = rank(v);
   const k = useSharedValue(1);
   const first = useRef(true);
@@ -850,6 +852,7 @@ function BestTile({ v, size, frame }: { v: number; size: number; frame: number }
       accessibilityLabel={v ? `Лучшая плитка ${v}` : 'Лучшей плитки пока нет'}
       style={[{ width: size, height: size, padding: frame, backgroundColor: c.line }, st]}>
       <View style={{ flex: 1, backgroundColor: v ? c.tile[rk] : c.canvas, alignItems: 'center', justifyContent: 'center' }}>
+        <Depth kind={depth} fill={v ? c.tile[rk] : c.canvas} open={{ t: true, r: true, b: true, l: true }} size={size} empty={!v} dark={isDark} />
         {v ? (
           <TileNum v={v} color={c.ink[rk]} size={Math.max(12, Math.round(size * (v >= 100 ? 0.28 : v >= 10 ? 0.34 : 0.4)))} />
         ) : null}
