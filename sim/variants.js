@@ -37,4 +37,7 @@ module.exports = {
   spawn768: { ...E.DEFAULTS, sweepCost: 'spawn', goal: 768 },
   // Sweeps earned by cascades: one per tray, one more for a cascade of 4+.
   cascade: { ...E.CASCADE },
+  // Before 2026-11-02 every placed merge stayed in the laid cell.
+  absorbNew: { ...E.DEFAULTS, absorb: 'new' },
+  cascadeAbsorbNew: { ...E.CASCADE, absorb: 'new' },
 };

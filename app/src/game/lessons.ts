@@ -64,19 +64,22 @@ export const LESSONS: Lesson[] = [
     also: [[6, '+', 6, '=', 12]],
     card: true,
     result: 6,
-    board: board([[1, 2, 3], [3, 2, 2]]),
+    // The 3 is made where the 2 was, right beside the other 3.
+    board: board([[3, 2, 2], [4, 2, 3]]),
     tray: [none(), piece([[0, 0, 1]]), none()],
     sweeps: 0,
     hint: [[at(2, 2), 1]],
     goal: has(6),
   },
   {
-    title: 'Поставьте 1 в центр',
-    rule: 'Слияния идут цепочкой.',
+    title: 'Начните цепочку с 1',
+    rule: 'Большая плитка забирает меньшую, и цепочка идёт дальше.',
     formula: [3, '→', 6, '→', 12, '→', 24],
     card: false,
     result: 24,
-    board: board([[1, 2, 3], [3, 2, 2], [2, 1, 6], [2, 3, 12]]),
+    // The bigger tile takes the smaller in, so the chain walks along the
+    // tiles it eats: 2, 3, 6 up the column, 12 at its top.
+    board: board([[3, 2, 2], [4, 2, 3], [4, 1, 6], [4, 0, 12]]),
     tray: [none(), piece([[0, 0, 1]]), none()],
     sweeps: 0,
     hint: [[at(2, 2), 1]],

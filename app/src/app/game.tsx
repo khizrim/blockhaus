@@ -30,8 +30,10 @@ import { INTRO_STEP, MedalTrack, TaskSquares, Track, milestonesFor } from '@/com
    cascade while the marimba climbs. */
 
 const N = engine.N;
-const STEP = 150; // ms between merges of a chain
+const STEP = 190; // ms between merges of a chain: long enough to read each one
 const FLY = 110; // ms for an absorbed tile to fly into its partner
+const ECHO_MS = 460; // ms one square wave of a chained merge takes to fade
+const ECHO_GAP = 70; // ms between the waves of one merge
 const PLATE = 6; // px each sweep layer shows under the board
 const back = (d: number, k = 1.8) => ({ duration: d, easing: Easing.out(Easing.back(k)) });
 
@@ -52,7 +54,7 @@ type Hold = { slot: number; piece: Piece };
 const isMilestone = (v: number) => v >= 24 && Number.isInteger(Math.log2(v / 3));
 
 /** The placement that merges the most, as [cell, value] pairs to hatch. */
-function bestMove(g: { board: number[]; tray: (Piece | null)[] }): [number, number][] | null {
+function bestMove(g: { board: number[]; tray: (Piece | null)[]; cfg: { absorb?: 'big' | 'new' } }): [number, number][] | null {
   let top: [number, number][] | null = null;
   let most = 0;
   for (const p of g.tray) {
@@ -61,7 +63,7 @@ function bestMove(g: { board: number[]; tray: (Piece | null)[] }): [number, numb
     for (let y = 0; y <= N - h; y++)
       for (let x = 0; x <= N - w; x++) {
         if (!engine.fits(g.board, p, x, y)) continue;
-        const n = engine.applyPlacement(g.board.slice(), p, x, y).steps.length;
+        const n = engine.applyPlacement(g.board.slice(), p, x, y, g.cfg.absorb).steps.length;
         if (n > most) {
           most = n;
           top = p.cells.map(([cx, cy, v]) => [(y + cy) * N + x + cx, v] as [number, number]);
@@ -160,6 +162,8 @@ export default function Game() {
   const [nudge, setNudge] = useState<[number, number][] | null>(null);
   const idleShown = useRef(0);
   const [flights, setFlights] = useState<{ id: string; m: Move; ms: number }[]>([]);
+  /** The square waves of a second, third… merge in one chain. */
+  const [echoes, setEchoes] = useState<{ id: string; at: number; v: number; n: number }[]>([]);
   // While a swipe is held past the threshold: where the next piece will ride in.
   const [aim, setAim] = useState<{ id: string; piece: Piece; ox: number; oy: number; dir: Dir } | null>(null);
   const aimDir = useRef<Dir | null>(null);
@@ -210,6 +214,7 @@ export default function Game() {
     setFlights([]);
     setIncoming(null);
     setFloats([]);
+    setEchoes([]);
     setSliding(null);
     setReturning(null);
     setHeld(null);
@@ -395,6 +400,14 @@ export default function Game() {
       });
       later(RIPPLE_MS, () => setRipple(null));
     } else fx.merge(level, step);
+    /* A merge that a merge made: the tile sends out one square wave per
+       merge of the chain so far, in its new colour, so a double reads as
+       two rings and a triple as three. */
+    if (step > 0 && !milestone) {
+      const id = `${at}-${Date.now()}-${step}`;
+      setEchoes((e) => [...e, { id, at, v: level, n: Math.min(4, step + 1) }]);
+      later(ECHO_MS + 4 * ECHO_GAP, () => setEchoes((e) => e.filter((x) => x.id !== id)));
+    }
     float(at, pts, Math.round(pts / level));
     thump(milestone ? Math.max(level, 192) : level);
   };
@@ -606,6 +619,22 @@ export default function Game() {
     [],
   );
 
+  /* The held piece's move, played on a copy of the board: which tiles the
+     whole cascade will eat, and where it ends and as what. The bigger tile
+     takes the smaller in, so the end is often a tile already on the board.
+     The board shows exactly this, so a merge never comes as a surprise. */
+  const preview = useMemo(() => {
+    if (!hold || !target || !engine.fits(shown, hold.piece, target.gx, target.gy)) return null;
+    const b = shown.slice();
+    const { laid, steps } = engine.applyPlacement(b, hold.piece, target.gx, target.gy, g.cfg.absorb);
+    const own = new Map(laid.map((at, k) => [at, hold.piece.cells[k][2]] as [number, number]));
+    const eaten = new Set<number>();
+    for (const st of steps) for (const a of st.absorbed) if (!own.has(a)) eaten.add(a);
+    const result: Record<number, number> = {};
+    for (const st of steps) if (b[st.anchor] > 0) result[st.anchor] = b[st.anchor];
+    return { laid: own, eaten, result };
+  }, [shown, hold, target]);
+
   /* ---------- what each cell looks like right now ---------- */
   const look = useCallback(
     (i: number): CellLook | undefined => {
@@ -627,24 +656,22 @@ export default function Game() {
       if (hold) {
         const pv = hold.piece.cells[0][2];
         if (shown[i] > 0 && !engine.pairs(pv, shown[i])) l.dim = true;
-        if (target) {
-          const x = i % N;
-          const y = (i / N) | 0;
-          const mine = hold.piece.cells.find(([cx, cy]) => target.gx + cx === x && target.gy + cy === y);
-          if (mine) l.ghost = mine[2];
-          // A neighbour that pairs with the ghost gets the "about to be eaten" frame.
-          else if (
-            shown[i] > 0 &&
-            hold.piece.cells.some(
-              ([cx, cy, v]) => engine.pairs(v, shown[i]) && Math.abs(target.gx + cx - x) + Math.abs(target.gy + cy - y) === 1,
-            )
-          )
+        if (target && preview) {
+          // The move played out ahead: the tiles that will fly in get the
+          // "about to be eaten" frame, every one of the cascade and only
+          // those; the piece's cells show what they will turn into.
+          if (preview.result[i]) {
+            l.ghost = preview.result[i];
+            l.dim = false;
+          } else if (preview.eaten.has(i)) {
             l.absorb = true;
+            l.dim = false;
+          } else if (preview.laid.has(i)) l.ghost = preview.laid.get(i);
         }
       }
       return l;
     },
-    [shown, hold, target, pops, lands, lesson, coach, nudge, aim],
+    [shown, hold, target, preview, pops, lands, lesson, coach, nudge, aim],
   );
 
   const values = useMemo(() => {
@@ -658,8 +685,11 @@ export default function Game() {
     if (!hold || !target) return shown;
     const v = shown.slice();
     for (const [x, y, val] of hold.piece.cells) v[(target.gy + y) * N + target.gx + x] = val;
+    // The cell where a cascade ends shows the tile it ends as; a cell of
+    // the piece that flies into a bigger tile still shows the piece.
+    if (preview) for (const [i, r] of Object.entries(preview.result)) v[+i] = r;
     return v;
-  }, [shown, hold, target, aim]);
+  }, [shown, hold, target, aim, preview]);
 
   /* ---------- sweep: swipe the board ----------
      While the finger moves the board leans a few points that way; on release
@@ -720,12 +750,15 @@ export default function Game() {
       sx.value = withSequence(withTiming(ux * 5, { duration: 50 }), withTiming(0, back(240, 2.5)));
       sy.value = withSequence(withTiming(uy * 5, { duration: 50 }), withTiming(0, back(240, 2.5)));
     });
-    res.made.forEach((m, k) =>
+    // The k-th merge of one tile in its line is step k of its chain.
+    const nth: Record<number, number> = {};
+    res.made.forEach((m, k) => {
+      const step = (nth[m.at] = (nth[m.at] ?? -1) + 1);
       later(SLIDE + k * STEP, () => {
         setShown((sh) => (sh[m.at] === m.level ? sh : Object.assign(sh.slice(), { [m.at]: m.level })));
-        land(m.at, m.level, marks[k], after, m.pts);
-      }),
-    );
+        land(m.at, m.level, marks[k], after, m.pts, step);
+      });
+    });
     let done = SLIDE + res.made.length * STEP;
     later(done, () => setShown(after));
     const sMade = s0 + res.made.reduce((t, m) => t + m.level, 0);
@@ -975,6 +1008,9 @@ export default function Game() {
                 {incoming ? <Incoming key={incoming.id} {...incoming} cell={cell} gap={gap} /> : null}
                 {scatter ? <Scatter key={scatter.id} board={scatter.board} cell={cell} gap={gap} /> : null}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
+                {echoes.map((e) => (
+                  <Echo key={e.id} at={e.at} v={e.v} n={e.n} cell={cell} gap={gap} />
+                ))}
                 {floats.map((f) => (
                   <Float key={f.id} at={f.at} v={f.v} times={f.times} cell={cell} gap={gap} />
                 ))}
@@ -1489,6 +1525,49 @@ function Plate({ on, k, dir, width }: { on: boolean; k: number; dir: Dir; width:
 
 /** "+N" rising from the cell where a merge happened. A late merge of a
     placed piece's cascade pays double or triple, and says so: "+48 ×2". */
+/** One square wave of a chained merge: a frame of the new tile's colour, as
+    thick as the board's line, grows out of the cell and fades. Wave j of n
+    starts j beats later and goes further, so a triple sends three rings. */
+function Echo({ at, v, n, cell, gap }: { at: number; v: number; n: number; cell: number; gap: number }) {
+  return (
+    <>
+      {Array.from({ length: n }, (_, j) => (
+        <EchoRing key={j} at={at} v={v} j={j} cell={cell} gap={gap} />
+      ))}
+    </>
+  );
+}
+function EchoRing({ at, v, j, cell, gap }: { at: number; v: number; j: number; cell: number; gap: number }) {
+  const { c } = useTheme();
+  const k = useSharedValue(0);
+  useEffect(() => {
+    k.value = withDelay(j * ECHO_GAP, withTiming(1, { duration: ECHO_MS, easing: Easing.out(Easing.cubic) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const pad = gap / 2;
+  const reach = 0.55 + j * 0.45;
+  const st = useAnimatedStyle(() => ({
+    opacity: k.value === 0 ? 0 : 1 - k.value,
+    transform: [{ scale: 1 + k.value * reach }],
+  }));
+  return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          left: pad + (at % N) * cell + gap / 2,
+          top: pad + ((at / N) | 0) * cell + gap / 2,
+          width: cell - gap,
+          height: cell - gap,
+          borderWidth: Math.max(3, gap),
+          borderColor: c.tile[rank(v)],
+        },
+        st,
+      ]}
+    />
+  );
+}
+
 function Float({ at, v, times = 1, cell, gap }: { at: number; v: number; times?: number; cell: number; gap: number }) {
   const { c } = useTheme();
   const k = useSharedValue(0);

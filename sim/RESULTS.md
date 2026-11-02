@@ -123,3 +123,21 @@ Weekday rules of the game of the day (`engine.WEEKDAY`), medal lines from
 | stone | Wed | 210 | 310 | 460 |
 | still (no sweeps) | Fri | 160 | 200 | 290 |
 | big start | Sun | 450 | 510 | 860 |
+
+## The bigger tile takes the smaller in (2026-11-02)
+
+A placed merge used to stay in the laid cell: a 1 laid by a 2 made its 3 where the 1 went, and every cascade ran into the laid cell. Players expected the opposite. Now the bigger of the two takes the smaller in, and of two equals the tile already on the board takes the newcomer (`absorb: 'big'`; `'new'` is the old rule). A cascade walks along the tiles it eats.
+
+Lab run (copy of the engine, naive bot "новичок", sweeper bot "свайпер", 200 games each), share of games reaching a tile:
+
+| | old rule | bigger takes smaller |
+|---|---|---|
+| No sweeps: 24 / 48 | 10% / 0% | 38% / 2% |
+| Free sweeps, naive: 384 | 4% | 4% |
+| Free sweeps, sweeper: 384 | 56% | 70% |
+| Cascade sweeps, naive: 384 | 4% | 4% |
+| Cascade sweeps, sweeper: 384 | 18% | 75% |
+
+A beginner sees no difference; a player who plans gets a good deal further, most of all in the cascade mode, whose goal may want raising later.
+
+Daily medals (`node sim/daily.js 300 weekdays`, new rule over old, each line scaled by its own ratio): plain 300/380/500 → 310/390/670, domino 330/400/530 → 350/410/670, stone 210/310/460 → 220/320/580, still 160/200/290 → 180/240/350, big 450/510/860 → 450/520/960.

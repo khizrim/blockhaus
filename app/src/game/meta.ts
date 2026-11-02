@@ -59,7 +59,9 @@ const cascades = (n: number): Task => ({ id: `cascades${n}`, text: `${n} кас�
 
 const GROUPS: Task[][] = [
   [cascade(4), cascade(5), cascades(3), sweepMerges(3)],
-  [tile(96), tile(192), tileStill(24), tileStill(48)],
+  // Without sweeps nothing on the board moves and 3s rarely meet: 24 is a
+  // feat (about one game in six for the bots), 48 never came in 1200 games.
+  [tile(96), tile(192), tileStill(24)],
   [score(1000), score(1500), score(2000), places(60), places(100)],
 ];
 
@@ -89,7 +91,7 @@ export const POSTERS: PosterDef[] = [
   { id: 't768', title: 'Дальше цели', hint: 'Собрать плитку 768', secret: true, v: 768, seed: 7, check: (e) => !!e && e.bestTile >= 768 },
   { id: 'c5', title: 'Каскад', hint: 'Каскад из 5 слияний одной фигурой', v: 5, seed: 11, check: (e) => !!e && e.kind === 'place' && e.merges >= 5 },
   { id: 's4', title: 'Один жест', hint: 'Четыре слияния одним сдвигом', secret: true, v: 4, seed: 17, check: (e) => !!e && e.kind === 'sweep' && e.merges >= 4 },
-  { id: 'still48', title: 'Тишина', hint: 'Плитка 48 без единого сдвига', v: 48, seed: 19, check: (e) => !!e && e.bestTile >= 48 && e.sweepsUsed === 0 },
+  { id: 'still24', title: 'Тишина', hint: 'Плитка 24 без единого сдвига', v: 24, seed: 19, check: (e) => !!e && e.bestTile >= 24 && e.sweepsUsed === 0 },
   { id: 'y1919', title: '1919', hint: 'Набрать 1919 очков', secret: true, v: 1919, seed: 23, check: (e) => !!e && !e.daily && e.score >= 1919 },
   { id: 'gold', title: 'Золото', hint: 'Золото в игре дня', v: 3, seed: 29, check: (_, s) => s.dailyGold },
   { id: 'week', title: 'Неделя', hint: 'Серия игр дня 7 дней', v: 7, seed: 31, check: (_, s) => s.streak >= 7 },

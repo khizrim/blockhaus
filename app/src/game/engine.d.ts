@@ -8,7 +8,7 @@ export type Step = { absorbed: number[]; anchor: number; level: number; /** Poin
 export type Config = Record<string, unknown>;
 
 export type Game = {
-  cfg: Config & { sweepChain?: boolean; freeSweeps?: boolean; sweepCost?: 'spawn' | 'merge' | 'push' | 'tilt' | 'none'; stones?: number[]; chainScore?: number[]; goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
+  cfg: Config & { sweepChain?: boolean; freeSweeps?: boolean; sweepCost?: 'spawn' | 'merge' | 'push' | 'tilt' | 'none'; stones?: number[]; chainScore?: number[]; absorb?: 'big' | 'new'; goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
   rng: () => number;
   board: number[];
   tray: Piece[];
@@ -52,7 +52,7 @@ declare const engine: {
   rank(v: number): number;
   fits(board: number[], piece: Piece, ox: number, oy: number): boolean;
   size(piece: Piece): { w: number; h: number };
-  applyPlacement(board: number[], piece: Piece, ox: number, oy: number): { laid: number[]; steps: Step[] };
+  applyPlacement(board: number[], piece: Piece, ox: number, oy: number, absorb?: 'big' | 'new'): { laid: number[]; steps: Step[] };
   applySweep(board: number[], dir: Dir, chain?: boolean): SweepResult;
   /** Folds one lane (values nearest the wall first): each result tile, the inputs that went into it and its merge levels in order. */
   collapse(vals: number[], chain?: boolean): { v: number; from: number[]; levels: number[] }[];
