@@ -57,9 +57,9 @@ function choose(g, noise = 0, naive = false) {
     for (let oy = 0; oy <= N - h; oy++) for (let ox = 0; ox <= N - w; ox++) {
       if (!E.fits(g.board, p, ox, oy)) continue;
       const b = g.board.slice();
-      const { steps } = E.applyPlacement(b, p, ox, oy);
+      const { steps } = E.applyPlacement(b, p, ox, oy, g.cfg.absorb);
       const gained = steps.reduce((s, st) => s + st.level, 0);
-      const val = (naive ? naiveValue(b, E.applyPlacement(g.board.slice(), p, ox, oy).laid, gained) : evaluate(b, gained)) + jitter();
+      const val = (naive ? naiveValue(b, E.applyPlacement(g.board.slice(), p, ox, oy, g.cfg.absorb).laid, gained) : evaluate(b, gained)) + jitter();
       if (!best || val > best.val) best = { val, kind: 'place', slot, ox, oy };
     }
   });
@@ -103,7 +103,7 @@ function chooseSweeper(g, noise = 0) {
         if (!E.fits(o.board, p, ox, oy)) continue;
         placed = true;
         const b = o.board.slice();
-        const { steps, laid } = E.applyPlacement(b, p, ox, oy);
+        const { steps, laid } = E.applyPlacement(b, p, ox, oy, g.cfg.absorb);
         const gained = steps.reduce((s, st) => s + st.level, 0);
         // A sweep costs a little, so the player doesn't swipe for nothing.
         const val = naiveValue(b, laid, gained + o.gained) + (o.dir ? -0.5 : 0) + jitter();

@@ -15,22 +15,46 @@ test('pairing follows the Threes economy', () => {
   assert.equal(E.merged(12, 12), 24);
 });
 
-test('a placement beside a partner merges into the laid cell', () => {
-  const b = empty();
+test('the bigger tile takes the smaller in', () => {
+  // A 1 laid by a 2: the 3 is made where the 2 was.
+  let b = empty();
   b[idx(1, 0)] = 2;
-  const { steps } = E.applyPlacement(b, piece(1), 0, 0);
+  let { steps } = E.applyPlacement(b, piece(1), 0, 0);
   assert.equal(steps.length, 1);
+  assert.equal(b[idx(1, 0)], 3);
+  assert.equal(b[idx(0, 0)], 0);
+  assert.deepEqual([steps[0].absorbed, steps[0].anchor], [[idx(0, 0)], idx(1, 0)]);
+  // A 2 laid by a 1: the 2 is the bigger, so the 3 stays where it was laid.
+  b = empty();
+  b[idx(1, 0)] = 1;
+  ({ steps } = E.applyPlacement(b, piece(2), 0, 0));
   assert.equal(b[idx(0, 0)], 3);
   assert.equal(b[idx(1, 0)], 0);
 });
 
-test('merges cascade up the ladder', () => {
-  // A 1 dropped in the middle of a 2, a 3, a 6 and a 12 eats all four.
+test('of two equals the tile on the board takes the newcomer', () => {
   const b = empty();
-  b[idx(0, 1)] = 2; b[idx(2, 1)] = 3; b[idx(1, 0)] = 6; b[idx(1, 2)] = 12;
-  const { steps } = E.applyPlacement(b, piece(1), 1, 1);
+  b[idx(1, 0)] = 2; b[idx(2, 0)] = 3;
+  E.applyPlacement(b, piece(1), 0, 0);
+  assert.equal(b[idx(2, 0)], 6);
+  assert.equal(b.filter(Boolean).length, 1);
+});
+
+test('the old rule keeps every merge in the laid cell', () => {
+  const b = empty();
+  b[idx(1, 0)] = 2;
+  E.applyPlacement(b, piece(1), 0, 0, 'new');
+  assert.equal(b[idx(0, 0)], 3);
+  assert.equal(b[idx(1, 0)], 0);
+});
+
+test('merges cascade up the ladder, walking along the tiles they eat', () => {
+  // A 1 by a 2, a 3 beyond it, a 6 above that and a 12 above the 6.
+  const b = empty();
+  b[idx(1, 2)] = 2; b[idx(2, 2)] = 3; b[idx(2, 1)] = 6; b[idx(2, 0)] = 12;
+  const { steps } = E.applyPlacement(b, piece(1), 0, 2);
   assert.deepEqual(steps.map(s => s.level), [3, 6, 12, 24]);
-  assert.equal(b[idx(1, 1)], 24);
+  assert.equal(b[idx(2, 0)], 24);
   assert.equal(b.filter(Boolean).length, 1);
 });
 
@@ -292,8 +316,8 @@ test('seeded games replay identically', () => {
 test('a chain of two merges earns a sweep, up to the cap', () => {
   const g = E.newGame(E.LIMITED, E.seeded(9));
   g.board = new Array(N * N).fill(0);
-  // 1 next to 2 makes 3, which meets the 3 beside it: two merges.
-  g.board[idx(1, 0)] = 2; g.board[idx(0, 1)] = 3;
+  // 1 next to 2 makes 3 where the 2 was, which meets the 3 beyond: two merges.
+  g.board[idx(1, 0)] = 2; g.board[idx(2, 0)] = 3;
   g.tray = [piece(1), piece(1), piece(1)];
   g.sweeps = 1;
   const res = E.place(g, 0, 0, 0);
@@ -301,7 +325,7 @@ test('a chain of two merges earns a sweep, up to the cap', () => {
   assert.ok(res.bonus);
   assert.equal(g.sweeps, 2);
   g.sweeps = g.cfg.sweepsMax;
-  g.board[idx(4, 4)] = 2; g.board[idx(3, 5)] = 3;
+  g.board[idx(4, 4)] = 2; g.board[idx(5, 4)] = 3;
   const again = E.place(g, 1, 3, 4);
   assert.equal(again.steps.length, 2);
   assert.ok(!again.bonus);
@@ -320,25 +344,25 @@ test('a piece limit ends the game after that many placements', () => {
 });
 
 test('a placed cascade pays more from its third merge, ×3 from the fifth', () => {
-  // The same 1 into a 2, a 3, a 6 and a 12: levels 3, 6, 12, 24.
+  // The same 1 by a 2, then a 3, a 6 and a 12 in a walk: levels 3, 6, 12, 24.
   const setUp = cfg => {
     const g = E.newGame(cfg, E.seeded(1));
     g.board = empty();
-    g.board[idx(0, 1)] = 2; g.board[idx(2, 1)] = 3; g.board[idx(1, 0)] = 6; g.board[idx(1, 2)] = 12;
+    g.board[idx(1, 2)] = 2; g.board[idx(2, 2)] = 3; g.board[idx(2, 1)] = 6; g.board[idx(2, 0)] = 12;
     g.tray = [piece(1), piece(1), piece(2)];
     return g;
   };
   const plain = setUp({ chainScore: [] });
-  E.place(plain, 0, 1, 1);
+  E.place(plain, 0, 0, 2);
   assert.equal(plain.score, 3 + 6 + 12 + 24);
 
   const g = setUp({});
-  const res = E.place(g, 0, 1, 1);
+  const res = E.place(g, 0, 0, 2);
   assert.deepEqual(res.steps.map(s => s.pts), [3, 6, 24, 48]);
   assert.equal(g.score, 3 + 6 + 24 + 48);
 
   const steep = setUp({ chainScore: [1, 2, 3] });
-  assert.deepEqual(E.place(steep, 0, 1, 1).steps.map(s => s.pts), [3, 12, 36, 72]);
+  assert.deepEqual(E.place(steep, 0, 0, 2).steps.map(s => s.pts), [3, 12, 36, 72]);
 });
 
 test('merges made by the slide of a sweep score their plain level', () => {
@@ -356,11 +380,11 @@ test('cascade mode: one sweep a tray, a cascade of four earns one more, two at m
   const g = E.newGame(E.CASCADE, E.seeded(5));
   assert.equal(g.sweeps, 1);
   assert.equal(g.cfg.freeSweeps, false);
-  // A 1 dropped among a 2, a 3, a 6 and a 12 makes four merges.
+  // A 1 by a 2, then a 3, a 6 and a 12 in a walk: four merges.
   g.board = empty();
-  g.board[idx(0, 1)] = 2; g.board[idx(2, 1)] = 3; g.board[idx(1, 0)] = 6; g.board[idx(1, 2)] = 12;
+  g.board[idx(1, 2)] = 2; g.board[idx(2, 2)] = 3; g.board[idx(2, 1)] = 6; g.board[idx(2, 0)] = 12;
   g.tray = [piece(1), piece(1), piece(2)];
-  const r = E.place(g, 0, 1, 1);
+  const r = E.place(g, 0, 0, 2);
   assert.equal(r.steps.length, 4);
   assert.ok(r.bonus);
   assert.equal(g.sweeps, 2);

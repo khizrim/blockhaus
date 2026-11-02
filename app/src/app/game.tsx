@@ -54,7 +54,7 @@ type Hold = { slot: number; piece: Piece };
 const isMilestone = (v: number) => v >= 24 && Number.isInteger(Math.log2(v / 3));
 
 /** The placement that merges the most, as [cell, value] pairs to hatch. */
-function bestMove(g: { board: number[]; tray: (Piece | null)[] }): [number, number][] | null {
+function bestMove(g: { board: number[]; tray: (Piece | null)[]; cfg: { absorb?: 'big' | 'new' } }): [number, number][] | null {
   let top: [number, number][] | null = null;
   let most = 0;
   for (const p of g.tray) {
@@ -63,7 +63,7 @@ function bestMove(g: { board: number[]; tray: (Piece | null)[] }): [number, numb
     for (let y = 0; y <= N - h; y++)
       for (let x = 0; x <= N - w; x++) {
         if (!engine.fits(g.board, p, x, y)) continue;
-        const n = engine.applyPlacement(g.board.slice(), p, x, y).steps.length;
+        const n = engine.applyPlacement(g.board.slice(), p, x, y, g.cfg.absorb).steps.length;
         if (n > most) {
           most = n;
           top = p.cells.map(([cx, cy, v]) => [(y + cy) * N + x + cx, v] as [number, number]);
@@ -620,12 +620,13 @@ export default function Game() {
   );
 
   /* The held piece's move, played on a copy of the board: which tiles the
-     whole cascade will eat, and what each of the piece's cells ends up as.
+     whole cascade will eat, and where it ends and as what. The bigger tile
+     takes the smaller in, so the end is often a tile already on the board.
      The board shows exactly this, so a merge never comes as a surprise. */
   const preview = useMemo(() => {
     if (!hold || !target || !engine.fits(shown, hold.piece, target.gx, target.gy)) return null;
     const b = shown.slice();
-    const { laid, steps } = engine.applyPlacement(b, hold.piece, target.gx, target.gy);
+    const { laid, steps } = engine.applyPlacement(b, hold.piece, target.gx, target.gy, g.cfg.absorb);
     const own = new Map(laid.map((at, k) => [at, hold.piece.cells[k][2]] as [number, number]));
     const eaten = new Set<number>();
     for (const st of steps) for (const a of st.absorbed) if (!own.has(a)) eaten.add(a);
@@ -659,10 +660,13 @@ export default function Game() {
           // The move played out ahead: the tiles that will fly in get the
           // "about to be eaten" frame, every one of the cascade and only
           // those; the piece's cells show what they will turn into.
-          if (preview.eaten.has(i)) {
+          if (preview.result[i]) {
+            l.ghost = preview.result[i];
+            l.dim = false;
+          } else if (preview.eaten.has(i)) {
             l.absorb = true;
             l.dim = false;
-          } else if (preview.laid.has(i)) l.ghost = preview.result[i] || preview.laid.get(i);
+          } else if (preview.laid.has(i)) l.ghost = preview.laid.get(i);
         }
       }
       return l;
@@ -681,7 +685,8 @@ export default function Game() {
     if (!hold || !target) return shown;
     const v = shown.slice();
     for (const [x, y, val] of hold.piece.cells) v[(target.gy + y) * N + target.gx + x] = val;
-    // A cell where the cascade ends shows the tile it ends as.
+    // The cell where a cascade ends shows the tile it ends as; a cell of
+    // the piece that flies into a bigger tile still shows the piece.
     if (preview) for (const [i, r] of Object.entries(preview.result)) v[+i] = r;
     return v;
   }, [shown, hold, target, aim, preview]);

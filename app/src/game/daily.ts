@@ -13,28 +13,32 @@ export const DAILY = engine.DAILY;
    on 2026-11-01 for sweeps that push the next piece in, which spend pieces of
    the thirty, so silver and gold came down a little; raised on 2026-11-01
    for the cascade bonus, each line kept at the same share of runs with
-   sim/daily.js, 250/330/420 -> 300/380/500): bronze is
+   sim/daily.js, 250/330/420 -> 300/380/500, then 310/390/670 for the bigger-takes-smaller rule on 2026-11-02): bronze is
    about a casual player's best quarter, silver a regular player's median,
    gold the top tenth of a strong one. */
 export const MEDALS = [
   // `tile`: the board colour the medal wears on screen (umber, 0 = grey, yellow);
   // the emoji stay for the text people paste into chats.
-  { at: 300, name: 'бронза', of: 'бронзы', emoji: '🥉', rank: 1, tile: 9 },
-  { at: 380, name: 'серебро', of: 'серебра', emoji: '🥈', rank: 2, tile: 0 },
-  { at: 500, name: 'золото', of: 'золота', emoji: '🥇', rank: 3, tile: 3 },
+  { at: 310, name: 'бронза', of: 'бронзы', emoji: '🥉', rank: 1, tile: 9 },
+  { at: 390, name: 'серебро', of: 'серебра', emoji: '🥈', rank: 2, tile: 0 },
+  { at: 670, name: 'золото', of: 'золота', emoji: '🥇', rank: 3, tile: 3 },
 ] as const;
 export type Medal = { at: number; name: string; of: string; emoji: string; rank: number; tile: number };
 
 /* Weekday rules: some days of the week bend one rule of the game of the
    day (engine.WEEKDAY), the same for everyone. Each rule's medal lines keep
    the plain day's lines at the same share of runs (sim/daily.js weekdays,
-   2026-11-01: each line scaled by the rule's percentile over the plain one). */
+   2026-11-01: each line scaled by the rule's percentile over the plain one).
+   2026-11-02, the bigger tile takes the smaller in: every line scaled by
+   its own percentile under the new rule over the old one. Casual and mid
+   players barely move; a strong swiper's top tenth goes up about a third,
+   so gold went up most. */
 export type DayRule = 'domino' | 'stone' | 'still' | 'big';
 export const RULES: Record<DayRule, { name: string; about: string; medals: [number, number, number] }> = {
-  domino: { name: 'День домино', about: 'Все фигуры — домино.', medals: [330, 400, 530] },
-  stone: { name: 'День камней', about: 'В середине доски два камня. На них нельзя ставить, сдвиг упирается в них.', medals: [210, 310, 460] },
-  still: { name: 'День без сдвигов', about: 'Свайпы не работают, только постановка.', medals: [160, 200, 290] },
-  big: { name: 'День больших плиток', about: 'Доска начинается с крупных плиток.', medals: [450, 510, 860] },
+  domino: { name: 'День домино', about: 'Все фигуры — домино.', medals: [350, 410, 670] },
+  stone: { name: 'День камней', about: 'В середине доски два камня. На них нельзя ставить, сдвиг упирается в них.', medals: [220, 320, 580] },
+  still: { name: 'День без сдвигов', about: 'Свайпы не работают, только постановка.', medals: [180, 240, 350] },
+  big: { name: 'День больших плиток', about: 'Доска начинается с крупных плиток.', medals: [450, 520, 960] },
 };
 const weekday = (key: string) => {
   const [y, m, d] = key.split('-').map(Number);

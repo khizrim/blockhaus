@@ -84,6 +84,9 @@
     // sweep score plain, so the bonus rewards setting a cascade up, not
     // swiping.
     chainScore: [],
+    // Where a placed merge stays: 'new' in the laid cell, 'big' in the
+    // bigger tile (see applyPlacement).
+    absorb: 'new',
     goal: 192,
   };
 
@@ -121,26 +124,32 @@
   }
 
   /** Lays `piece` on `board` (mutating it) and resolves the merges.
-      Every laid cell that sits beside a partner merges into it, and a tile
-      that has just merged gets another look, so merges cascade. */
-  function applyPlacement(board, piece, ox, oy) {
+      Every laid cell that sits beside a partner merges with it, and the
+      tile that has just merged gets another look, so merges cascade.
+
+      `absorb` says where the merged tile stays. 'big' (shipped since
+      2026-11-02): the bigger of the two takes the smaller in, and of two
+      equals the one already on the board takes the newcomer, so 1 laid by a
+      2 makes its 3 where the 2 was and a cascade walks along the tiles it
+      eats. 'new': everything flies into the laid cell (the rule before). */
+  function applyPlacement(board, piece, ox, oy, absorb = 'big') {
     const laid = piece.cells.map(([dx, dy]) => idx(ox + dx, oy + dy));
     piece.cells.forEach(([, , v], k) => { board[laid[k]] = v; });
 
     const steps = [];
-    const taken = new Set();
     const frontier = [...laid];
     while (frontier.length) {
       const i = frontier.shift();
-      if (board[i] === 0) continue;
-      const partner = neighbours(i).find(n => !taken.has(n) && board[n] > 0 && pairs(board[i], board[n]));
+      if (board[i] <= 0) continue;
+      const partner = neighbours(i).find(n => board[n] > 0 && pairs(board[i], board[n]));
       if (partner === undefined) continue;
-      taken.add(partner);
       const lvl = merged(board[i], board[partner]);
-      steps.push({ absorbed: [partner], anchor: i, level: lvl });
-      board[partner] = 0;
-      board[i] = lvl;
-      frontier.push(i);
+      const into = absorb === 'big' && board[partner] >= board[i] ? partner : i;
+      const from = into === i ? partner : i;
+      steps.push({ absorbed: [from], anchor: into, level: lvl });
+      board[from] = 0;
+      board[into] = lvl;
+      frontier.push(into);
     }
     return { laid, steps };
   }
@@ -372,7 +381,7 @@
   function place(g, slot, ox, oy) {
     const p = g.tray[slot];
     if (!p || p.used || g.over || !fits(g.board, p, ox, oy)) return null;
-    const res = applyPlacement(g.board, p, ox, oy);
+    const res = applyPlacement(g.board, p, ox, oy, g.cfg.absorb);
     p.used = true;
     g.moves++;
     score(g, res.steps, true);
@@ -481,6 +490,8 @@
   const DEFAULTS = {
     ...ORIGINAL, dealer: 'need', shapes: SHIPPED_SHAPES, chainBonus: 2, sweepsMax: 3, sweepChain: true,
     freeSweeps: true, sweepCost: 'push', goal: 384,
+    // The bigger tile takes the smaller in (2026-11-02, sim/RESULTS.md).
+    absorb: 'big',
     // A cascade from a placed piece pays ×2 for its third and fourth merge
     // and ×3 from the fifth (sim/RESULTS.md). The short chains that happen on
     // their own (1+2=3, then 3+3) score plain, so the bonus marks a long
