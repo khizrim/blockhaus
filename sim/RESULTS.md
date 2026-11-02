@@ -141,3 +141,17 @@ Lab run (copy of the engine, naive bot "новичок", sweeper bot "свайп
 A beginner sees no difference; a player who plans gets a good deal further, most of all in the cascade mode, whose goal may want raising later.
 
 Daily medals (`node sim/daily.js 300 weekdays`, new rule over old, each line scaled by its own ratio): plain 300/380/500 → 310/390/670, domino 330/400/530 → 350/410/670, stone 210/310/460 → 220/320/580, still 160/200/290 → 180/240/350, big 450/510/860 → 450/520/960.
+
+## Sweeps earned by cascades become the main mode (2026-11-02)
+
+Khizri swiped at random and the game never ended. A bot that only swipes in a random direction (placing a piece only when nothing slides), 150 games per row, against the naive placer and the sweeper bot:
+
+| | random swipes: median best tile | random: 96 | naive: 384 | sweeper: 384 |
+|---|---|---|---|---|
+| free sweeps, push (was main) | 96 | 55% | 3% | 69% |
+| free, merge-only | 96 | 62% | 5% | 25% |
+| free, spawn | 384 | 99% | 10% | 98% |
+| cascade, bonus at 4 | 12 | 0% | 5% | 77% |
+| cascade, bonus at 5 | 12 | 0% | 3% | 57% |
+
+With free sweeps swiping at random goes as far as placing with thought. With sweeps earned by cascades it dies in about 35 pieces on a 12. The bonus moves from four merges to five because the bigger tile now takes the smaller and cascades run longer: the sweeper is back near where free sweeps had it. The app starts new players, and players who never picked rules in the settings, on this mode; free sweeps stay in the settings. The daily keeps its own rules (thirty pieces end it anyway).

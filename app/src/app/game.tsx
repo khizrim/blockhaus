@@ -1028,7 +1028,7 @@ export default function Game() {
                           <Formula key={k} terms={row} cell={trayCell} gap={gap} fit={Math.min(col, 360) - space.lg * 2 - space.xl * 2 - 2} />
                         ))}
                       </View>
-                      <Body style={{ marginTop: space.lg }}>{lesson.rule}</Body>
+                      <Body style={{ marginTop: space.lg }}>{(counted && lesson.ruleCascade) || lesson.rule}</Body>
                       <View style={{ marginTop: space.lg }}>
                         <Button kind="primary" size="lg" label="Понятно" onPress={nextLesson} />
                       </View>

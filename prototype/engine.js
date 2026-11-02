@@ -501,12 +501,15 @@
   // The balance before free sweeps (2026-11-01): two per tray, a chain earns
   // one more, up to three; goal 192.
   const LIMITED = { ...DEFAULTS, freeSweeps: false, sweepCost: 'none', goal: 192 };
-  // Sweeps earned by cascades (2026-11-01, a mode beside the free one): each
-  // tray brings one sweep, a placed piece whose cascade makes four merges or
-  // more earns another, two at most in hand. A sweep is a plain slide, no
-  // piece rides in. Placing well is what buys a sweep, so the swiping player
-  // no longer outplays the placing one by far (sim/RESULTS.md).
-  const CASCADE = { ...DEFAULTS, freeSweeps: false, sweepCost: 'none', sweepsPerTray: 1, chainBonus: 4, sweepsMax: 2 };
+  // Sweeps earned by cascades (2026-11-01; the app's main mode since
+  // 2026-11-02, free sweeps stay in the settings): each tray brings one
+  // sweep, a placed piece whose cascade makes five merges or more earns
+  // another, two at most in hand. A sweep is a plain slide, no piece rides
+  // in. Placing well is what buys a sweep: swiping at random dies in about
+  // 35 pieces on a 12, where free sweeps carried it to a 96 (sim/RESULTS.md).
+  // Five, not four, since the bigger tile takes the smaller in and cascades
+  // run longer.
+  const CASCADE = { ...DEFAULTS, freeSweeps: false, sweepCost: 'none', sweepsPerTray: 1, chainBonus: 5, sweepsMax: 2 };
 
   // The game of the day: thirty pieces on a board that starts with six
   // tiles. Some weekdays bend one rule, the same for everyone that day
