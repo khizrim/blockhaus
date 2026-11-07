@@ -1,14 +1,14 @@
 import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { View } from 'react-native';
-import Animated, { Easing, FadeIn, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { Overlay } from '@/components/Overlay';
 import { Block, Poster, PosterBoard, ScoreBand, usePoster } from '@/components/Poster';
 import { TileNum } from '@/components/TileNum';
 import { Track, milestonesFor } from '@/components/Track';
 import { Body, Button } from '@/components/ui';
-import { dur, space } from '@/design/system';
+import { dur, rise, space } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { rank } from '@/design/tokens';
 import engine from '@/game/engine';
@@ -37,7 +37,7 @@ export default function Win() {
       <Poster label={`Вы собрали ${goal}. ${game.score} очков.`}>
         <View style={{ flexDirection: 'row', gap: L }}>
           <PosterBoard values={game.board} />
-          <Animated.View entering={ZoomIn.delay(dur.base).duration(dur.slow).easing(Easing.out(Easing.back(1.6)))}>
+          <Animated.View entering={rise(dur.base)}>
             <Block fill={c.tile[rk]} style={{ width: side, height: board, alignItems: 'center', justifyContent: 'center' }}>
               <TileNum v={goal} color={c.ink[rk]} size={Math.round(side * 0.34)} />
             </Block>

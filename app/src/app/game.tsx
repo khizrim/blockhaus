@@ -1,14 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { Easing, FadeOut, SlideInUp, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Field, type CellLook } from '@/components/Field';
 import { Overlay } from '@/components/Overlay';
 import { Body, Button, Heading, IconButton, Label, Panel, PauseIcon, Screen, TextLink } from '@/components/ui';
 import { pieceGrid } from '@/design/mock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { dur, enter, exit, HIT, space, type } from '@/design/system';
+import { dur, enter, exit, HIT, hit, pop, rest, rise, sink, space, type } from '@/design/system';
 import { Enamel } from '@/design/depth';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
@@ -35,7 +35,6 @@ const FLY = 110; // ms for an absorbed tile to fly into its partner
 const ECHO_MS = 460; // ms one square wave of a chained merge takes to fade
 const ECHO_GAP = 70; // ms between the waves of one merge
 const PLATE = 6; // px each sweep layer shows under the board
-const back = (d: number, k = 1.8) => ({ duration: d, easing: Easing.out(Easing.back(k)) });
 
 /** A mouse or trackpad (web on a computer), not a finger. */
 const FINE_POINTER = Platform.OS === 'web' && typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: fine)').matches;
@@ -45,7 +44,7 @@ const noSelect = { userSelect: 'none' } as object;
 
 const SWIPE = 24; // px of travel that counts as a swipe
 const SLIDE = dur.base; // ms for tiles to travel in a sweep
-const PUSH_MS = 260; // ms for the pushed piece to ride in from the far edge
+const PUSH_MS = dur.slow; // ms for the pushed piece to ride in from the far edge
 const EXPLAIN_AFTER = 1100; // ms from a proved step to its explanation card
 const LESSON_READ = 1400; // ms more to read the formula of a step with no card
 
@@ -341,7 +340,7 @@ export default function Game() {
   };
 
   const kickLine = () => {
-    lineKick.value = withSequence(withTiming(1.12, { duration: 0 }), withTiming(1, back(320, 2.4)));
+    lineKick.value = withSequence(withTiming(1.12, { duration: 0 }), withTiming(1, pop()));
   };
 
   /* The end of the lessons. The lesson board breaks up: every tile lifts and
@@ -425,8 +424,8 @@ export default function Game() {
       later(RIPPLE_MS, () => setRipple(null));
       fx.cascade([3, 6, 12], 90);
       later(280, () => fx.milestone(96));
-      stamp.value = withSequence(withTiming(1, { duration: 120 }), withDelay(1100, withTiming(0, { duration: 400 })));
-      scoreKick.value = withSequence(withTiming(1.3, { duration: 0 }), withTiming(1, back(420, 2.6)));
+      stamp.value = withSequence(withTiming(1, enter(dur.micro)), withDelay(1100, withTiming(0, exit(dur.slow))));
+      scoreKick.value = withSequence(withTiming(1.3, { duration: 0 }), withTiming(1, pop()));
     });
   };
   const stamp = useSharedValue(0);
@@ -445,7 +444,7 @@ export default function Game() {
   const thump = (v: number) => {
     if (v < 12) return;
     const k = v >= 384 ? 0.06 : v >= 192 ? 0.05 : v >= 96 ? 0.04 : v >= 48 ? 0.03 : v >= 24 ? 0.02 : 0.012;
-    bump.value = withSequence(withTiming(1 - k, { duration: 60 }), withTiming(1, back(260, 2.5)));
+    bump.value = withSequence(withTiming(1 - k, { duration: hit }), withTiming(1, pop()));
   };
 
   /* ---------- drag ---------- */
@@ -492,7 +491,7 @@ export default function Game() {
     dx.value = pageX - ox;
     dy.value = pageY - oy + 20;
     dy.value = withTiming(pageY - oy, enter(dur.fast));
-    lift.value = withTiming(1, back(220, 2.4));
+    lift.value = withTiming(1, rest(dur.base));
     origin.current = { x: pageX - ox, y: pageY - oy + 20 };
     setNudge(null);
     setHold({ slot, piece: p });
@@ -700,7 +699,7 @@ export default function Game() {
   const boardStyle = useAnimatedStyle(() => ({ transform: [{ translateX: sx.value }, { translateY: sy.value }, { scale: bump.value }] }));
 
   const shake = () => {
-    sx.value = withSequence(withTiming(6, { duration: 50 }), withTiming(-6, { duration: 80 }), withTiming(0, enter(dur.fast)));
+    sx.value = withSequence(withTiming(6, { duration: hit }), withTiming(-6, { duration: dur.micro }), withTiming(0, rest(dur.base)));
   };
 
   const sweep = (dir: Dir) => {
@@ -747,8 +746,8 @@ export default function Game() {
       if (res.spawned) setLands((l) => ({ ...l, [res.spawned!.at]: Date.now() }));
       // The board meets the wall it was pushed against.
       const [ux, uy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
-      sx.value = withSequence(withTiming(ux * 5, { duration: 50 }), withTiming(0, back(240, 2.5)));
-      sy.value = withSequence(withTiming(uy * 5, { duration: 50 }), withTiming(0, back(240, 2.5)));
+      sx.value = withSequence(withTiming(ux * 5, { duration: hit }), withTiming(0, rest(dur.base)));
+      sy.value = withSequence(withTiming(uy * 5, { duration: hit }), withTiming(0, rest(dur.base)));
     });
     // The k-th merge of one tile in its line is step k of its chain.
     const nth: Record<number, number> = {};
@@ -870,15 +869,15 @@ export default function Game() {
       const [ux, uy] = UNIT[d];
       const lean = (u: number) =>
         withSequence(
-          withTiming(u * 10, { duration: 220, easing: Easing.out(Easing.cubic) }),
-          withTiming(0, back(320, 2.2)),
-          withDelay(200, withTiming(u * 10, { duration: 220, easing: Easing.out(Easing.cubic) })),
-          withTiming(0, back(320, 2.2)),
+          withTiming(u * 10, enter(dur.base)),
+          withTiming(0, rest()),
+          withDelay(200, withTiming(u * 10, enter(dur.base))),
+          withTiming(0, rest()),
         );
       sx.value = lean(ux);
       sy.value = lean(uy);
       setStuckSlot(g.tray.findIndex((p) => p && !p.used));
-      const beat = () => withSequence(withTiming(1.18, { duration: 200 }), withTiming(1, back(300, 2.2)));
+      const beat = () => withSequence(withTiming(1.18, enter(dur.base)), withTiming(1, pop()));
       stuckPulse.value = withSequence(beat(), withDelay(200, beat()));
     };
     const first = setTimeout(show, 2500);
@@ -1236,7 +1235,7 @@ function BestTile({ v, size, frame }: { v: number; size: number; frame: number }
   const first = useRef(true);
   useEffect(() => {
     if (first.current) return void (first.current = false);
-    k.value = withSequence(withTiming(1.3, { duration: 0 }), withTiming(1, back(320, 2.4)));
+    k.value = withSequence(withTiming(1.3, { duration: 0 }), withTiming(1, pop()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [v]);
   const st = useAnimatedStyle(() => ({ transform: [{ scale: k.value }] }));
@@ -1260,6 +1259,7 @@ const BAUHAUS = 1919;
 const WAVE = 55; // ms per cell of distance from the milestone
 const FLIP = 460; // ms the milestone tile turns over in the air
 const FLY_HOME = 380; // ms its copy flies into the track
+const FLASH_MS = 460; // ms the floor's flash of the new colour fades
 
 /** A milestone, played on the enamel. The tile that made it rises off the
     board and turns over once, light running across its face; a wave goes
@@ -1295,7 +1295,7 @@ function Ripple({ at, v, board, cell, gap, home, primaries }: { at: number; v: n
 function FloorFlash({ d, color, style }: { d: number; color: string; style: object }) {
   const o = useSharedValue(0);
   useEffect(() => {
-    o.value = withDelay(d * WAVE, withSequence(withTiming(0.75, { duration: 90 }), withTiming(0, { duration: 460, easing: Easing.out(Easing.quad) })));
+    o.value = withDelay(d * WAVE, withSequence(withTiming(0.75, enter(dur.micro)), withTiming(0, { duration: FLASH_MS, easing: Easing.out(Easing.quad) })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const st = useAnimatedStyle(() => ({ opacity: o.value }));
@@ -1316,21 +1316,21 @@ function LiftTile({ v, d, at, cell, gap, hero, home }: { v: number; d: number; a
   useEffect(() => {
     const delay = d * WAVE;
     if (hero) {
-      lift.value = withSequence(withTiming(1, { duration: 140, easing: Easing.out(Easing.cubic) }), withDelay(FLIP - 140, withTiming(0, { duration: 160, easing: Easing.in(Easing.quad) })));
+      lift.value = withSequence(withTiming(1, enter(dur.fast)), withDelay(FLIP - dur.fast, withTiming(0, exit(dur.fast))));
       turn.value = withTiming(1, { duration: FLIP, easing: Easing.inOut(Easing.cubic) });
-      shine.value = withDelay(FLIP * 0.45, withTiming(1, { duration: 320 }));
+      shine.value = withDelay(FLIP * 0.45, withTiming(1, { duration: dur.slow }));
       if (home) fly.value = withDelay(FLIP + 120, withTiming(1, { duration: FLY_HOME, easing: Easing.in(Easing.cubic) }));
     } else {
-      lift.value = withDelay(delay, withSequence(withTiming(1, { duration: 150, easing: Easing.out(Easing.cubic) }), withTiming(0, back(380, 2.2))));
-      shine.value = withDelay(delay + 40, withTiming(1, { duration: 300 }));
+      lift.value = withDelay(delay, withSequence(withTiming(1, enter(dur.fast)), withTiming(0, rest())));
+      shine.value = withDelay(delay + 40, withTiming(1, { duration: dur.slow }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const rise = hero ? 0.32 : 0.12;
+  const grow = hero ? 0.32 : 0.12;
   const tileSt = useAnimatedStyle(() => ({
     transform: [
       { translateY: -lift.value * cell * (hero ? 0.22 : 0.1) },
-      { scale: 1 + lift.value * rise },
+      { scale: 1 + lift.value * grow },
       // A spin seen from the front: the tile narrows to its edge and opens
       // again, twice, so its number never shows mirrored.
       { scaleX: Math.max(0.04, Math.abs(Math.cos(turn.value * Math.PI * 2))) },
@@ -1342,7 +1342,7 @@ function LiftTile({ v, d, at, cell, gap, hero, home }: { v: number; d: number; a
   const dimSt = useAnimatedStyle(() => ({ opacity: hero ? (1 - Math.abs(Math.cos(turn.value * Math.PI * 2))) * 0.35 : 0 }));
   const shadowSt = useAnimatedStyle(() => ({
     opacity: lift.value * (isDark ? 0.6 : 0.28),
-    transform: [{ translateY: lift.value * cell * 0.08 }, { scale: 1 + lift.value * rise * 0.6 }],
+    transform: [{ translateY: lift.value * cell * 0.08 }, { scale: 1 + lift.value * grow * 0.6 }],
   }));
   // The socket is shown only while the tile is off the board.
   const socketSt = useAnimatedStyle(() => ({ opacity: lift.value > 0.02 || (turn.value > 0.02 && turn.value < 0.98) ? 1 : 0 }));
@@ -1485,7 +1485,7 @@ function StripCell({ on, fill, w, dark }: { on: boolean; fill: string; w: number
   const was = useRef(on);
   useEffect(() => {
     // A spent piece: its cell drops out with a small press.
-    if (was.current && !on) k.value = withSequence(withTiming(0.6, { duration: 90 }), withTiming(1, back(260, 2.2)));
+    if (was.current && !on) k.value = withSequence(withTiming(0.6, exit(dur.micro)), withTiming(1, rest(dur.base)));
     was.current = on;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on]);
@@ -1509,13 +1509,13 @@ function Plate({ on, k, dir, width }: { on: boolean; k: number; dir: Dir; width:
     if (on) {
       x.value = 0;
       y.value = -PLATE * 2;
-      y.value = withDelay(k * 80, withTiming(0, back(300, 2.2)));
-      o.value = withDelay(k * 80, withTiming(1, { duration: 120 }));
+      y.value = withDelay(k * 80, withTiming(0, rest()));
+      o.value = withDelay(k * 80, withTiming(1, enter(dur.micro)));
     } else {
       const [ux, uy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
-      x.value = withTiming(ux * 80, { duration: 220, easing: Easing.in(Easing.quad) });
-      y.value = withTiming(uy * 24, { duration: 220, easing: Easing.in(Easing.quad) });
-      o.value = withTiming(0, { duration: 220 });
+      x.value = withTiming(ux * 80, exit(dur.base));
+      y.value = withTiming(uy * 24, exit(dur.base));
+      o.value = withTiming(0, exit(dur.base));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on]);
@@ -1606,7 +1606,7 @@ function Incoming({ piece, ox, oy, dir, delay, cell, gap }: { piece: Piece; ox: 
   const far = (ux ? w : h) * cell + gap * 2;
   const k = useSharedValue(0);
   useEffect(() => {
-    k.value = withDelay(delay, withTiming(1, { duration: PUSH_MS, easing: Easing.out(Easing.back(1.4)) }));
+    k.value = withDelay(delay, withTiming(1, rest(PUSH_MS)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const st = useAnimatedStyle(() => ({
@@ -1625,7 +1625,7 @@ function Incoming({ piece, ox, oy, dir, delay, cell, gap }: { piece: Piece; ox: 
 function TrayPiece({ delay, opacity, children }: { delay: number; opacity: number; children: React.ReactNode }) {
   const k = useSharedValue(0);
   useEffect(() => {
-    k.value = withDelay(delay, withTiming(1, back(300, 2.2)));
+    k.value = withDelay(delay, withTiming(1, pop()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const st = useAnimatedStyle(() => ({ transform: [{ scale: 0.4 + k.value * 0.6 }], opacity: Math.min(1, k.value * 2) * opacity }));
@@ -1718,8 +1718,8 @@ function NewsCard({ news, onDone }: { news: News; onDone: () => void }) {
   }, []);
   return (
     <Animated.View
-      entering={SlideInUp.duration(260)}
-      exiting={FadeOut.duration(200)}
+      entering={rise(0, -8)}
+      exiting={sink()}
       pointerEvents="none"
       accessibilityLiveRegion="polite"
       style={{ position: 'absolute', top: ins.top + space.sm, left: space.lg, right: space.lg, alignItems: 'center' }}>

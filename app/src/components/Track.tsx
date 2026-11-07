@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 
 import { TileNum } from '@/components/TileNum';
 import { Enamel } from '@/design/depth';
 import { useTheme } from '@/design/theme';
-import { type } from '@/design/system';
+import { dur, enter, pop, type } from '@/design/system';
 import { rank } from '@/design/tokens';
 import { minutesLeft } from '@/game/daily';
 
-const back = (d: number, k = 1.8) => ({ duration: d, easing: Easing.out(Easing.back(k)) });
 export const INTRO_STEP = 110; // ms between the track's squares as it assembles
 
 /** The milestones: every new best from 24 up to the goal and two rungs past
@@ -51,11 +50,11 @@ function TrackStep({ v, on, next, goal, w, h, frame, intro, delay, progress }: {
   useEffect(() => {
     if (!intro) return;
     k.value = 0;
-    k.value = withDelay(delay, withSequence(withTiming(goal ? 1.35 : 1.18, { duration: 110, easing: Easing.out(Easing.cubic) }), withTiming(1, back(320, 2.6))));
+    k.value = withDelay(delay, withSequence(withTiming(goal ? 1.35 : 1.18, enter(dur.micro)), withTiming(1, pop())));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intro]);
   useEffect(() => {
-    if (on && !was.current) k.value = withSequence(withTiming(1.25, { duration: 0 }), withTiming(1, back(360, 2.6)));
+    if (on && !was.current) k.value = withSequence(withTiming(1.25, { duration: 0 }), withTiming(1, pop()));
     was.current = on;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on]);
@@ -63,15 +62,15 @@ function TrackStep({ v, on, next, goal, w, h, frame, intro, delay, progress }: {
   // The next milestone fills along its floor as the board gathers toward it.
   const p = useSharedValue(progress);
   useEffect(() => {
-    p.value = withTiming(progress, { duration: 300, easing: Easing.out(Easing.cubic) });
+    p.value = withTiming(progress, enter(dur.slow));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress]);
-  const bar = useAnimatedStyle(() => ({ width: `${p.value * 100}%` }));
+  const bar = useAnimatedStyle(() => ({ transform: [{ scaleX: p.value }], transformOrigin: 'left center' }));
   return (
     <Animated.View style={[{ width: w, height: h, padding: frame, backgroundColor: on || next ? c.line : c.hair }, st]}>
       <View style={{ flex: 1, backgroundColor: on ? c.tile[rk] : c.canvas, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         <Enamel fill={on ? c.tile[rk] : c.canvas} size={h} empty={!on} dark={isDark} />
-        {!on && next && progress > 0 ? <Animated.View style={[{ position: 'absolute', left: 0, bottom: 0, height: Math.max(4, Math.round(h * 0.22)), backgroundColor: c.tile[rk] }, bar]} /> : null}
+        {!on && next && progress > 0 ? <Animated.View style={[{ position: 'absolute', left: 0, right: 0, bottom: 0, height: Math.max(4, Math.round(h * 0.22)), backgroundColor: c.tile[rk] }, bar]} /> : null}
         <TileNum v={v} color={on ? c.ink[rk] : next ? c.text : goal ? c.muted : c.faint} size={Math.max(11, Math.round(h * 0.36))} />
       </View>
     </Animated.View>
@@ -108,22 +107,22 @@ function MedalStep({ at, on, fill, ink, tint, progress, framed, w, h, frame, dar
   const k = useSharedValue(1);
   const was = useRef(on);
   useEffect(() => {
-    if (on && !was.current) k.value = withSequence(withTiming(1.25, { duration: 0 }), withTiming(1, back(360, 2.6)));
+    if (on && !was.current) k.value = withSequence(withTiming(1.25, { duration: 0 }), withTiming(1, pop()));
     was.current = on;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on]);
   const st = useAnimatedStyle(() => ({ transform: [{ scale: k.value }] }));
   const p = useSharedValue(progress);
   useEffect(() => {
-    p.value = withTiming(progress, { duration: 300, easing: Easing.out(Easing.cubic) });
+    p.value = withTiming(progress, enter(dur.slow));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress]);
-  const bar = useAnimatedStyle(() => ({ width: `${p.value * 100}%` }));
+  const bar = useAnimatedStyle(() => ({ transform: [{ scaleX: p.value }], transformOrigin: 'left center' }));
   return (
     <Animated.View style={[{ width: w, height: h, padding: frame, backgroundColor: framed ? c.line : c.hair }, st]}>
       <View style={{ flex: 1, backgroundColor: fill, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         <Enamel fill={fill} size={h} empty={!on} dark={dark} />
-        {!on && progress > 0 ? <Animated.View style={[{ position: 'absolute', left: 0, bottom: 0, height: Math.max(4, Math.round(h * 0.22)), backgroundColor: tint }, bar]} /> : null}
+        {!on && progress > 0 ? <Animated.View style={[{ position: 'absolute', left: 0, right: 0, bottom: 0, height: Math.max(4, Math.round(h * 0.22)), backgroundColor: tint }, bar]} /> : null}
         <TileNum v={at} color={ink} size={Math.max(11, Math.round(h * 0.36))} />
       </View>
     </Animated.View>
