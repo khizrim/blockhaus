@@ -238,6 +238,20 @@
       the bottom eats one 1 and one 2, so a board with ten 2s and two 1s wants
       1s, and dealing more 2s only buries it. */
   function chanceOfOnes(cfg, board) {
+    if (cfg.dealer === 'touch') {
+      // Counting tiles misses where they are: a 1 walled in by 2s is no use
+      // to a new 2. 'touch' counts the open sides instead. An empty cell next
+      // to a 1 is a place a 2 could pair, next to a 2 a place for a 1, so
+      // the value dealt is the one with more places waiting for it.
+      let for1 = 0, for2 = 0;
+      board.forEach((v, i) => {
+        if (v !== 1 && v !== 2) return;
+        for (const j of neighbours(i)) if (board[j] === 0) { if (v === 1) for2++; else for1++; }
+      });
+      const k = cfg.needSmoothing ?? 2;
+      const lo = cfg.needFloor ?? 0.15;
+      return Math.min(1 - lo, Math.max(lo, (for1 + k) / (for1 + for2 + 2 * k)));
+    }
     if (cfg.dealer !== 'need') return 0.5;
     let ones = 0, twos = 0;
     for (const v of board) { if (v === 1) ones++; else if (v === 2) twos++; }
@@ -492,6 +506,9 @@
     freeSweeps: true, sweepCost: 'push', goal: 384,
     // The bigger tile takes the smaller in (2026-11-02, sim/RESULTS.md).
     absorb: 'big',
+    // The dealer reads open sides, not tile counts (2026-11-07,
+    // sim/RESULTS.md): fewer 1s and 2s end up walled in.
+    dealer: 'touch',
     // A cascade from a placed piece pays ×2 for its third and fourth merge
     // and ×3 from the fifth (sim/RESULTS.md). The short chains that happen on
     // their own (1+2=3, then 3+3) score plain, so the bonus marks a long

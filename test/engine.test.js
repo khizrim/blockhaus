@@ -297,6 +297,20 @@ test('the need dealer leans toward the value the board is short of', () => {
   assert.equal(E.chanceOfOnes(E.ORIGINAL, b), 0.5);
 });
 
+test('the touch dealer deals the value that has open sides waiting for it', () => {
+  const cfg = { ...E.DEFAULTS, dealer: 'touch' };
+  // A 2 alone in the middle: four open sides want a 1.
+  const b = empty();
+  b[idx(2, 2)] = 2;
+  assert.ok(E.chanceOfOnes(cfg, b) > 0.6);
+  // Ten 2s walled in by 3s count for nothing, while one open 1 wants a 2.
+  const w = empty().fill(3);
+  for (let i = 0; i < 10; i++) w[i] = 2;
+  w[idx(5, 5)] = 1; w[idx(4, 5)] = 0; w[idx(5, 4)] = 0;
+  assert.ok(E.chanceOfOnes(cfg, w) < 0.4);
+  assert.equal(E.chanceOfOnes(cfg, empty()), 0.5);
+});
+
 test('balanced trays keep 1-cells and 2-cells within the slack', () => {
   const rng = E.seeded(6);
   const cfg = { ...E.ORIGINAL, balancedTray: 1 };

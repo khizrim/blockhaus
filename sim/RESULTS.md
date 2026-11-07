@@ -155,3 +155,39 @@ Khizri swiped at random and the game never ended. A bot that only swipes in a ra
 | cascade, bonus at 5 | 12 | 0% | 3% | 57% |
 
 With free sweeps swiping at random goes as far as placing with thought. With sweeps earned by cascades it dies in about 35 pieces on a 12. The bonus moves from four merges to five because the bigger tile now takes the smaller and cascades run longer: the sweeper is back near where free sweeps had it. The app starts new players, and players who never picked rules in the settings, on this mode; free sweeps stay in the settings. The daily keeps its own rules (thirty pieces end it anyway).
+
+## Thinking stops paying, and the board fills with 1s and 2s (2026-11-07)
+
+Khizri: mid-game he stops thinking and just swipes, and the board fills up
+with 1s and 2s. `node sim/thinking.js 60` (one-move-ahead thinker, the
+same with blurred judgement, and a random swiper):
+
+| rules | player | moves | sweeps | 96 / 192 / 384 | 1s and 2s on board | walled-in 1s/2s |
+|---|---|---|---|---|---|---|
+| free sweeps (shipped) | thinker | 577 | 48% | 100 / 98 / 85% | 33% | 4.2 |
+| free sweeps (shipped) | noisy | 513 | 41% | 100 / 98 / 85% | 34% | 4.1 |
+| free sweeps (shipped) | swiper | 101 | 99% | 42 / 12 / 0% | 58% | 6.9 |
+| cascade, need dealer | thinker | 203 | 20% | 87 / 55 / 15% | 32% | 2.8 |
+| cascade, need dealer | noisy | 183 | 19% | 85 / 57 / 5% | 34% | 2.5 |
+| cascade, touch dealer | thinker | 252 | 21% | 97 / 77 / 28% | 29% | 2.5 |
+| cascade, touch dealer | noisy | 189 | 19% | 88 / 48 / 7% | 33% | 2.4 |
+| cascade, either dealer | swiper | ~50 | 26% | 0 / 0 / 0% | 66% | 4.1 |
+
+Both complaints come from the free sweep. Every swipe shoves the next piece
+of 1s or 2s onto an edge the player didn't pick, so swiping without looking
+still makes progress (a 96 in about half the games) while it lays small
+tiles where nothing pairs with them: 58% of the board, seven of them walled
+in. A careful player, meanwhile, almost never loses (some 550 moves, 384 in
+85% of games), so the middle of the game has no pressure to think about.
+
+With sweeps earned by cascades the swiper reaches nothing, a game is about
+200 moves, and walled-in small tiles drop from four to two and a half.
+
+The 'touch' dealer counts open sides instead of tiles: an empty cell next
+to a 1 waits for a 2, next to a 2 for a 1, and the dealer leans to the value
+with more places waiting. With cascades it lifts the careful player from
+55% to 77% at 192 and from 15% to 28% at 384, and trims the share of small
+tiles; the blurred player stays within noise (57% vs 48% at 192 over 60
+games) and the swiper at zero. So it rewards looking at the board, which is
+the point. Under free sweeps it changes nothing measurable, and the daily medal lines move within noise
+(`node sim/daily.js 300 weekdays`), so they stay. It becomes the dealer.
