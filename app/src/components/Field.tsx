@@ -11,7 +11,7 @@ import Animated, {
 import Svg, { Defs, Pattern, Rect } from 'react-native-svg';
 
 import { Enamel, panelEnamel } from '@/design/depth';
-import { dur, enter } from '@/design/system';
+import { dur, enter, pop } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, mix, rank } from '@/design/tokens';
 import { TileNum } from './TileNum';
@@ -173,18 +173,18 @@ const Cell = memo(function Cell(p: CellProps) {
   const flash = useSharedValue(0);
   const num = useSharedValue(1);
   const drop = useSharedValue(0);
-  const kick = { duration: 280, easing: Easing.out(Easing.back(2.2)) };
+  const kick = pop();
 
   useEffect(() => {
     if (!look?.pop) return;
-    flash.value = withSequence(withTiming(0.6, { duration: 0 }), withTiming(0, { duration: 320, easing: Easing.out(Easing.quad) }));
+    flash.value = withSequence(withTiming(0.6, { duration: 0 }), withTiming(0, { duration: dur.slow, easing: Easing.out(Easing.quad) }));
     num.value = withSequence(withTiming(1.55, { duration: 0 }), withTiming(1, kick));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [look?.pop]);
 
   useEffect(() => {
     if (!look?.land) return;
-    flash.value = withSequence(withTiming(0.35, { duration: 0 }), withTiming(0, { duration: 240, easing: Easing.out(Easing.quad) }));
+    flash.value = withSequence(withTiming(0.35, { duration: 0 }), withTiming(0, { duration: dur.base, easing: Easing.out(Easing.quad) }));
     drop.value = withSequence(withTiming(-0.18, { duration: 0 }), withTiming(0, kick));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [look?.land]);

@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Field } from '@/components/Field';
+import { pop } from '@/design/system';
 import { useTheme } from '@/design/theme';
 
 /** One part of a formula: a tile, a piece of several tiles side by side, or
@@ -40,7 +41,7 @@ function Tiles({ vs, cell, gap, empty }: { vs: number[]; cell: number; gap: numb
   const was = useRef(empty);
   useEffect(() => {
     // The result arriving: the cell fills and pops, as a milestone does.
-    if (was.current && !empty) k.value = withSequence(withTiming(1.25, { duration: 0 }), withTiming(1, { duration: 360, easing: Easing.out(Easing.back(2.6)) }));
+    if (was.current && !empty) k.value = withSequence(withTiming(1.25, { duration: 0 }), withTiming(1, pop()));
     was.current = empty;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empty]);

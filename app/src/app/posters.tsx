@@ -1,14 +1,14 @@
 import { router } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { Overlay } from '@/components/Overlay';
 import { PosterFrame } from '@/components/WallPoster';
 import { Enamel, panelEnamel } from '@/design/depth';
 import { font } from '@/design/tokens';
 import { Body, Button, Heading, Screen, TopBar } from '@/components/ui';
-import { space, type } from '@/design/system';
+import { dur, rise, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { dayLabel } from '@/game/daily';
 import { POSTERS, WALL, type PosterDef } from '@/game/meta';
@@ -65,7 +65,7 @@ export default function Posters() {
               const r = WALL.frames[k];
               const box = rect(r);
               return (
-                <Animated.View key={p.id} entering={FadeIn.delay(80 + k * 45).duration(220)} style={{ position: 'absolute', ...box }}>
+                <Animated.View key={p.id} entering={FadeIn.delay(80 + k * 45).duration(dur.base)} style={{ position: 'absolute', ...box }}>
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={on ? `Плакат «${p.title}»` : p.secret ? 'Секретная рамка' : `Пустая рамка: ${p.hint}`}
@@ -84,7 +84,7 @@ export default function Posters() {
           {/* What an empty frame wants, once it is tapped. A secret keeps its secret. */}
           <View style={{ width: wallW, minHeight: 48, marginTop: space.md, justifyContent: 'center' }}>
             {peek ? (
-              <Animated.View key={peek.id} entering={FadeIn.duration(160)}>
+              <Animated.View key={peek.id} entering={FadeIn.duration(dur.fast)}>
                 <Text style={[type.secondaryStrong, { color: c.text }]}>{peek.secret ? 'Секрет' : peek.title}</Text>
                 <Text style={[type.secondary, { color: c.muted }]}>{peek.secret ? 'Найдётся в игре' : peek.hint}</Text>
               </Animated.View>
@@ -96,7 +96,7 @@ export default function Posters() {
       {open ? (
         <View style={StyleSheet.absoluteFill}>
           <Overlay onDismiss={() => setOpen(null)}>
-            <Animated.View entering={ZoomIn.duration(240)}>
+            <Animated.View entering={rise()}>
               {/* The picture that is sent: the poster and its caption on paper. */}
               <View ref={shot} collapsable={false} style={{ backgroundColor: c.bg, padding: space.lg, gap: space.md, alignItems: 'center' }}>
                 {(() => {
