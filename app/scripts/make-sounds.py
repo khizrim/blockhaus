@@ -166,19 +166,23 @@ def main():
         out = layer(out, bell, 0.14)
         write(f'milestone-{r}', out, 0.5)
 
-    # Sweep: the board slides on felt. Band-limited noise with a falling
-    # cutoff, then a knock as it settles.
-    d = 0.24
+    # Sweep, in two halves so each lands on its own frame. The slide: the
+    # board on felt, band-limited noise with a falling cutoff, as long as the
+    # tiles travel (dur.base, 200 ms). The settle: the knock of the board
+    # meeting the wall, played by the game on the frame of the hit.
+    d = 0.2
     x = t(d)
     cut = 2200 * np.exp(-x / 0.08) + 250
     sweep = lowpass(lowpass(highpass(noise(d), 200), cut), cut) * np.sin(np.pi * np.clip(x / d, 0, 1)) ** 0.6
-    write('sweep', layer(sweep * 0.8, knock(240, d=0.12, bright=0.5), 0.16, 0.6), 0.4)
+    write('sweep', sweep, 0.2)
+    write('settle', knock(240, d=0.12, bright=0.5), 0.4)
 
-    # A fresh tray: three quick ticks, rising.
+    # A fresh tray: three quick ticks, rising, one per slot as its piece
+    # springs in (game.tsx staggers the slots 70 ms apart).
     out = np.zeros(int(SR * 0.22))
     for k, f in enumerate([700, 850, 1000]):
         s = tick(f, 0.06)
-        out = layer(out, s, 0.055 * k)
+        out = layer(out, s, 0.07 * k)
     write('tray', out, 0.25)
 
     # UI: a quiet paper tap for buttons, and two for a switch.
@@ -186,14 +190,17 @@ def main():
     write('toggle-on', layer(tick(1200, 0.05), tick(1600, 0.05), 0.03, 0.6), 0.2)
     write('toggle-off', layer(tick(1600, 0.05), tick(1200, 0.05), 0.03, 0.6), 0.2)
 
-    # Win: the ladder, rung by rung, then the top note and its fifth held.
+    # Win: the ladder, rung by rung from 3 to 192, then the goal's own note,
+    # 384 on E6, with its fifth and its octave below. The chord lands at
+    # 0.52 s, as the goal block on the win poster comes to rest (sfx.ts
+    # WIN_CHORD presses on the same beat).
     total = 2.0
     out = np.zeros(int(SR * total))
-    for k, r in enumerate(range(3, 9)):
+    for k, r in enumerate(range(3, 10)):
         s = marimba(RUNG_NOTE[r], 0.5) * 0.7
-        out = layer(out, s, 0.09 * k)
-    i = int(SR * 0.09 * 6 + 0.05 * SR)
-    for f, a in [(RUNG_NOTE[9], 1.0), (RUNG_NOTE[9] * 1.5, 0.5), (RUNG_NOTE[9] / 2, 0.45)]:
+        out = layer(out, s, 0.07 * k)
+    i = int(SR * 0.52)
+    for f, a in [(RUNG_NOTE[10], 1.0), (RUNG_NOTE[10] * 1.5, 0.5), (RUNG_NOTE[10] / 2, 0.45)]:
         s = modes([f, f * 3.99], [a, 0.15 * a], [0.6, 0.1], total - i / SR, attack=0.005)
         out = layer(out, s, i / SR)
     write('win', out, 0.55)
