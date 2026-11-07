@@ -23,11 +23,38 @@ type Music = { setVolume: (v: number, ms: number) => void; stop: () => void; res
 
 /* ---------- web: Web Audio ---------- */
 
+let ctxCache: AudioContext | null | undefined;
+/** The page's one audio context, shared by the music and the sounds. Null
+    where the browser has none. */
+export function webAudio(): AudioContext | null {
+  if (ctxCache !== undefined) return ctxCache;
+  const g = globalThis as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext; navigator?: { audioSession?: { type: string } } };
+  // Safari 17+: an ambient session obeys the silent switch and mixes with
+  // the player's own music, the way the app's audio mode does on the phone.
+  try {
+    if (g.navigator?.audioSession) g.navigator.audioSession.type = 'ambient';
+  } catch {}
+  const AC = g.AudioContext ?? g.webkitAudioContext;
+  ctxCache = AC ? new AC() : null;
+  return ctxCache;
+}
+
+/** A bundled sound's bytes. A packed single-file build carries it as a data
+    URI; that is decoded by hand, since a sandboxed page may not fetch data URIs. */
+export async function soundBytes(module: number): Promise<ArrayBuffer> {
+  const uri = Asset.fromModule(module).uri;
+  if (uri.startsWith('data:')) {
+    const bin = atob(uri.slice(uri.indexOf(',') + 1));
+    const u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    return u.buffer;
+  }
+  return (await fetch(uri)).arrayBuffer();
+}
+
 function webMusic(): Music {
-  const AC = (globalThis as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext
-    ?? (globalThis as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AC) return { setVolume: () => {}, stop: () => {}, resume: () => {} };
-  const ctx = new AC();
+  const ctx = webAudio();
+  if (!ctx) return { setVolume: () => {}, stop: () => {}, resume: () => {} };
   const gain = ctx.createGain();
   gain.gain.value = 0;
   gain.connect(ctx.destination);
@@ -35,24 +62,9 @@ function webMusic(): Music {
   let buffer: AudioBuffer | null = null;
   let wanted = false;
 
-  const bytes = async (uri: string) => {
-    // A packed single-file build carries the sound as a data URI; decode it
-    // by hand, since a sandboxed page may not fetch data URIs.
-    if (uri.startsWith('data:')) {
-      const bin = atob(uri.slice(uri.indexOf(',') + 1));
-      const u = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-      return u.buffer;
-    }
-    return (await fetch(uri)).arrayBuffer();
-  };
-
   const start = async () => {
     if (src || !wanted) return;
-    if (!buffer) {
-      const uri = Asset.fromModule(SRC).uri;
-      buffer = await ctx.decodeAudioData(await bytes(uri));
-    }
+    if (!buffer) buffer = await ctx.decodeAudioData(await soundBytes(SRC));
     if (src || !wanted) return;
     src = ctx.createBufferSource();
     src.buffer = buffer;

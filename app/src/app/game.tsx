@@ -541,7 +541,11 @@ export default function Game() {
     const s0 = g.score;
     const res = store.place(h.slot, t.gx, t.gy);
     if (!res) return;
-    if (res.refilled) trayId.current++;
+    // The new pieces spring into the tray now; their ticks go with them.
+    if (res.refilled) {
+      trayId.current++;
+      fx.tray();
+    }
 
     // Frame 0: the piece laid. Then one frame per merge of the chain.
     const frame = before.slice();
@@ -556,7 +560,6 @@ export default function Game() {
        plays, the haptic taps and the points float up, all on the same frame. */
     const done = playChain(frame, res.steps, milestonesIn(res.steps.map((st) => st.level)), 90);
     later(done + 20, () => setShown(g.board.slice()));
-    if (res.refilled) later(done + 120, () => fx.tray());
     // A chain of two or more earns a sweep: its layer slides in under the
     // board as the last merge lands, with its own two rising ticks.
     if (res.bonus) {
@@ -729,7 +732,10 @@ export default function Game() {
     const push = res.pushed ?? null;
     const allMarks = milestonesIn([...res.made.map((m) => m.level), ...(push ? push.steps.map((st) => st.level) : [])]);
     const marks = allMarks.slice(0, res.made.length);
-    if (push?.refilled) trayId.current++;
+    if (push?.refilled) {
+      trayId.current++;
+      fx.tray();
+    }
     // Stones stay put while the tiles slide around them.
     setShown(before.map((v) => (v < 0 ? v : 0)));
     setSliding({ moves, id: Date.now() });
@@ -745,6 +751,7 @@ export default function Game() {
       setShown(landed);
       // The new tile slides in at the far edge as the board settles.
       if (res.spawned) setLands((l) => ({ ...l, [res.spawned!.at]: Date.now() }));
+      fx.settle();
       // The board meets the wall it was pushed against.
       const [ux, uy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
       sx.value = withSequence(withTiming(ux * 5, { duration: 50 }), withTiming(0, back(240, 2.5)));
@@ -782,7 +789,6 @@ export default function Game() {
       if (push.steps.length) bauhausCheck(sMade, chainEnd, push.steps[push.steps.length - 1].anchor);
       done = chainEnd;
       later(done + 20, () => setShown(g.board.slice()));
-      if (push.refilled) later(done + 120, () => fx.tray());
     }
     afterMove(done);
   };

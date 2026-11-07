@@ -18,8 +18,9 @@ const GROUPS: { title: string; items: { name: SoundName; label: string; note: st
       { name: 'place-2', label: 'Поставить, 2 клетки', note: 'Стук чуть ниже и плотнее' },
       { name: 'place-3', label: 'Поставить, 3 клетки', note: 'Самый тяжёлый стук' },
       { name: 'invalid', label: 'Не помещается', note: 'Два глухих удара, без зуммера' },
-      { name: 'tray', label: 'Новый лоток', note: 'Три коротких щелчка вверх' },
-      { name: 'sweep', label: 'Сдвиг', note: 'Доска скользит по сукну и встаёт' },
+      { name: 'tray', label: 'Новый лоток', note: 'Три щелчка вверх, по одному на фигуру' },
+      { name: 'sweep', label: 'Сдвиг', note: 'Доска скользит по сукну' },
+      { name: 'settle', label: 'Сдвиг: удар о стенку', note: 'Стук, когда доска встаёт' },
     ],
   },
   {
@@ -49,7 +50,7 @@ const GROUPS: { title: string; items: { name: SoundName; label: string; note: st
   {
     title: 'Конец партии',
     items: [
-      { name: 'win', label: 'Победа', note: 'Вся лесенка и аккорд на 192' },
+      { name: 'win', label: 'Победа', note: 'Вся лесенка и аккорд на 384' },
       { name: 'over', label: 'Места нет', note: 'Две ноты вниз, спокойно' },
     ],
   },
@@ -87,6 +88,10 @@ export default function Sounds() {
           <Label>Цепочки</Label>
           <Button label="Каскад 3 → 6 → 12" onPress={() => fx.cascade([3, 6, 12])} />
           <Button label="Вся лесенка 3 → 192" onPress={() => fx.cascade([3, 6, 12, 24, 48, 96, 192])} />
+          <Button label="Сдвиг: скольжение и удар" onPress={() => {
+            fx.sweep();
+            setTimeout(() => fx.settle(), 200);
+          }} />
           <Button label="Ход: взять, поставить, слить" onPress={() => {
             fx.pick();
             setTimeout(() => fx.place(2), 450);
