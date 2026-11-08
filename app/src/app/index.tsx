@@ -1,6 +1,6 @@
-import { PosterMenu } from '@/brand/menus';
+import { Home } from '@/brand/home';
 
-/* First screen: the poster. */
+/* First screen: the menu, after the splash on launch. */
 export default function Menu() {
-  return <PosterMenu />;
+  return <Home />;
 }

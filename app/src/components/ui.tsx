@@ -1,6 +1,7 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, Text, View, type TextStyle, type ViewStyle } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { dur, enter, exit, HIT, space, type } from '@/design/system';
@@ -452,26 +453,111 @@ export function Segmented<T extends string>({
 
 /* ---------- a dialog card: L2, hairline plus a soft shadow ---------- */
 
+/** A card of white plastic: a rounded plate on its own ledge, like the board. */
 export function Panel({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   const { c } = useTheme();
   return (
     <View
       style={[
         {
-          backgroundColor: c.surface,
-          borderWidth: 1,
-          borderColor: c.hair,
+          backgroundColor: c.plate,
+          borderRadius: 20,
           padding: space.xl,
-          shadowColor: c.shadow,
-          shadowOpacity: 1,
-          shadowRadius: 24,
-          shadowOffset: { width: 0, height: 8 },
-          elevation: 4,
+          boxShadow: `0 6px 0 ${c.plateEdge}, 0 14px 24px rgba(0,0,0,0.08)`,
         },
         style,
       ]}>
       {children}
     </View>
+  );
+}
+
+/** A whole-screen page in the table colour (pause, game over, win): no
+    scrim, the content rises 24pt as it fades in. */
+export function Page({ children, top }: { children: ReactNode; top?: ReactNode }) {
+  const { c } = useTheme();
+  const ins = useSafeAreaInsets();
+  const k = useSharedValue(0);
+  useEffect(() => {
+    k.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const st = useAnimatedStyle(() => ({ opacity: k.value, transform: [{ translateY: (1 - k.value) * 24 }] }));
+  return (
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <Animated.View
+        accessibilityViewIsModal
+        style={[
+          {
+            flex: 1,
+            width: '100%',
+            maxWidth: 440,
+            alignSelf: 'center',
+            paddingTop: ins.top + 12,
+            paddingBottom: ins.bottom + 24,
+            paddingHorizontal: 16,
+          },
+          st,
+        ]}>
+        {top}
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
+/** A small plastic chip: grey text on the table, or yellow for news (a record). */
+export function Chip({ children, yellow, style }: { children: ReactNode; yellow?: boolean; style?: ViewStyle }) {
+  const { c } = useTheme();
+  return (
+    <View
+      style={[
+        { height: 32, paddingHorizontal: 12, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+        yellow ? { backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 3px 0 #C9A21F' } : null,
+        style,
+      ]}>
+      {typeof children === 'string' ? <Text style={{ fontFamily: font.bodySemi, fontSize: 15, color: yellow ? '#2A2A2A' : c.muted }}>{children}</Text> : children}
+    </View>
+  );
+}
+
+/** A big score, Rubik 700, counting up from zero once. */
+export function CountUp({ to, size = 64, ms = 600 }: { to: number; size?: number; ms?: number }) {
+  const { c } = useTheme();
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    const t0 = Date.now();
+    const id = setInterval(() => {
+      const k = Math.min(1, (Date.now() - t0) / ms);
+      setV(Math.round(to * (1 - Math.pow(1 - k, 3))));
+      if (k >= 1) clearInterval(id);
+    }, 16);
+    return () => clearInterval(id);
+  }, [to, ms]);
+  return <TileNum v={v} size={size} color={c.text} style={{ lineHeight: Math.round(size * 1.1), fontVariant: ['tabular-nums'] }} />;
+}
+
+/** A gear drawn as a plastic cog: a ring with six teeth. */
+export function Gear({ color }: { color: string }) {
+  return (
+    <View style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}>
+      {[0, 60, 120].map((r) => (
+        <View key={r} style={{ position: 'absolute', width: 6, height: 22, borderRadius: 2, backgroundColor: color, transform: [{ rotate: `${r}deg` }] }} />
+      ))}
+      <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#F3F2EF' }} />
+      </View>
+    </View>
+  );
+}
+
+/** The sound glyph: a speaker with two waves, the waves faint when off. */
+export function SoundIcon({ on, color }: { on: boolean; color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 22 22">
+      <Path d="M3 8.5h3.5L11 4.5v13l-4.5-4H3z" fill={color} stroke={color} strokeWidth={1.4} strokeLinejoin="round" />
+      <Path d="M14.5 7.5c1.2 1 1.8 2.2 1.8 3.5s-.6 2.5-1.8 3.5M17 5c2 1.6 3 3.6 3 6s-1 4.4-3 6" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" opacity={on ? 1 : 0.25} />
+    </Svg>
   );
 }
 
