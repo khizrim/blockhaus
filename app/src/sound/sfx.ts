@@ -32,7 +32,11 @@ const SRC = {
   'milestone-9': require('../../assets/sounds/milestone-9.wav'),
   'milestone-10': require('../../assets/sounds/milestone-10.wav'),
   'milestone-11': require('../../assets/sounds/milestone-11.wav'),
-  sweep: require('../../assets/sounds/sweep.wav'),
+  'sweep-1': require('../../assets/sounds/sweep-1.wav'),
+  'sweep-2': require('../../assets/sounds/sweep-2.wav'),
+  'knock-1': require('../../assets/sounds/knock-1.wav'),
+  'knock-2': require('../../assets/sounds/knock-2.wav'),
+  'knock-3': require('../../assets/sounds/knock-3.wav'),
   tray: require('../../assets/sounds/tray.wav'),
   tap: require('../../assets/sounds/tap.wav'),
   'toggle-on': require('../../assets/sounds/toggle-on.wav'),
@@ -172,9 +176,16 @@ export const fx = {
   cascade: (values: number[], beat = 120) => {
     values.forEach((v, k) => setTimeout(() => fx.merge(v, k), k * beat));
   },
-  sweep: () => {
-    play('sweep');
-    buzz(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft));
+  /** A sweep's slide, on release: the skid swells as the blocks speed up.
+      `moved` is how many blocks travel. */
+  sweep: (moved = 4) => {
+    play(moved > 4 ? 'sweep-2' : 'sweep-1');
+  },
+  /** The blocks hit the wall, on the frame they arrive: a clack, and the
+      hand feels the stop. Heavier when more blocks hit. */
+  knock: (moved = 4) => {
+    play(moved > 8 ? 'knock-3' : moved > 3 ? 'knock-2' : 'knock-1');
+    buzz(() => Haptics.impactAsync(moved > 8 ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Rigid));
   },
   tray: () => play('tray'),
   /** A new best of 24 and up: the rung's bell, and a firm tap. */

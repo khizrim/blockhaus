@@ -156,6 +156,31 @@ def tone(f, d=0.5, vol=0.2):
     return mix(osc('sine', f, f, d, vol), osc('sine', f * 2, f * 2, d * 0.24, vol * 0.25))
 
 
+def slide(d, h=1.0):
+    """Plastic skidding on plastic, speeding up: band-passed noise whose band
+    climbs as it swells (t squared), over a faint rising hum; a 3 ms cut at
+    the end so the knock lands on silence."""
+    n = int(SR * d)
+    k = np.arange(n) / n
+    x = rng.uniform(-1, 1, n)
+    out = np.zeros(n)
+    # The band climbs in steps of 10 ms so a fixed biquad can follow it.
+    seg = int(SR * 0.01)
+    for a in range(0, n, seg):
+        f = (600 + 1300 * (a / n) ** 1.5) / h
+        out[a:a + seg] = biquad_bandpass(x[max(0, a - 256):a + seg], f, 1.1)[-len(out[a:a + seg]):]
+    g = 0.04 + 0.96 * k ** 2
+    tail = np.minimum(1, (n - np.arange(n)) / (SR * 0.003))
+    hum = osc('triangle', 70 / h, 120 / h, d, 0.08)[:n]
+    hum = hum * (0.2 + 0.8 * k) * tail
+    return out * g * tail * 0.5 + hum
+
+
+def knock(h=1.0, vol=1.0):
+    """A block hitting the board's wall: a hard click and a short hollow body."""
+    return mix(burst(0.018, 2600 / h, 1.4, 0.4 * vol), osc('triangle', 240 / h, 120 / h, 0.06 * h, 0.26 * vol))
+
+
 ONLY = set(sys.argv[1:])
 
 
@@ -184,8 +209,18 @@ def main():
         out = mix(tone(note(i), 0.7), layer(np.zeros(0), tone(note(i + 3), 0.7, 0.14), 0.07), layer(np.zeros(0), tone(note(i + 5), 0.9, 0.16), 0.14))
         write(f'milestone-{r}', out, 0.5)
 
-    # Sweep: the blocks slide, then hit the wall.
-    write('sweep', mix(burst(0.16, 500, 0.7, 0.18), osc('triangle', 140, 60, 0.1, 0.22, 0.14)), 0.4)
+    # Sweep, in two halves on the frames of the animation. The slide plays on
+    # release: the blocks accelerate for 200 ms (ease-in), so the skid swells
+    # and climbs instead of fading, and stops dead where the knock takes over.
+    # sweep-1 for a few blocks, sweep-2 for many.
+    write('sweep-1', slide(0.19, 1.0), 0.32)
+    write('sweep-2', slide(0.19, 1.25), 0.4)
+    # The knock at the wall, on the frame the blocks arrive (with the board's
+    # 2 px bump): a hard plastic clack with a short body. More blocks hit a
+    # hair apart, so the heavier ones are a flam, lower and fuller.
+    write('knock-1', knock(1.0), 0.5)
+    write('knock-2', mix(knock(1.12), layer(np.zeros(0), knock(1.2, 0.6), 0.009)), 0.58)
+    write('knock-3', mix(knock(1.25), layer(np.zeros(0), knock(1.35, 0.7), 0.008), layer(np.zeros(0), knock(1.3, 0.5), 0.017)), 0.65)
 
     # A fresh tray: one soft pop.
     write('tray', osc('triangle', 520, 820, 0.07, 0.1), 0.25)

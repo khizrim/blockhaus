@@ -752,7 +752,8 @@ export default function Game() {
       tilt(dir, 1.5, 0);
       return;
     }
-    fx.sweep();
+    const moved = moves.filter((m) => m.from !== m.to).length;
+    fx.sweep(moved);
     tilt(dir, 3, SLIDE - 90);
     const push = res.pushed ?? null;
     const allMarks = milestonesIn([...res.made.map((m) => m.level), ...(push ? push.steps.map((st) => st.level) : [])]);
@@ -774,6 +775,7 @@ export default function Game() {
       // The new tile slides in at the far edge as the board settles.
       if (res.spawned) setLands((l) => ({ ...l, [res.spawned!.at]: Date.now() }));
       // The board meets the wall it was pushed against.
+      fx.knock(moved);
       const [ux, uy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
       sx.value = withSequence(withTiming(ux * 2, { duration: 50 }), withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) }));
       sy.value = withSequence(withTiming(uy * 2, { duration: 50 }), withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) }));
