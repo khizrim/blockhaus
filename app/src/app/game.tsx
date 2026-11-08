@@ -954,7 +954,7 @@ export default function Game() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.lesson, store.version, coach, width, height]);
 
-  const lineStyle = useAnimatedStyle(() => ({ transform: [{ scale: lineKick.value }], transformOrigin: 'left center' }));
+  const lineStyle = useAnimatedStyle(() => ({ transform: [{ scale: lineKick.value }], transformOrigin: 'center' }));
 
   return (
     <View style={[{ flex: 1 }, noSelect]}>
@@ -988,7 +988,7 @@ export default function Game() {
                 accessible
                 accessibilityRole="header"
                 accessibilityLabel={lesson.title}
-                style={[{ height: LESSON_H, justifyContent: 'center' }, lineStyle]}>
+                style={[{ height: LESSON_H, justifyContent: 'center', alignItems: 'center' }, lineStyle]}>
                 <Formula terms={lesson.formula} cell={trayCell} gap={gap} open={coach === 'task'} fit={col} />
               </Animated.View>
             </View>
