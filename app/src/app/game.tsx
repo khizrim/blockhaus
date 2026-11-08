@@ -5,7 +5,7 @@ import Animated, { Easing, FadeOut, SlideInUp, useAnimatedStyle, useSharedValue,
 
 import { Field, type CellLook } from '@/components/Field';
 import { Overlay } from '@/components/Overlay';
-import { Body, Button, Heading, IconButton, Label, Panel, PauseIcon, Screen, TextLink } from '@/components/ui';
+import { Body, Button, Heading, IconButton, Key, Label, Panel, PauseIcon, Screen, TextLink } from '@/components/ui';
 import { pieceGrid } from '@/design/mock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dur, enter, exit, HIT, space, type } from '@/design/system';
@@ -22,6 +22,7 @@ import { WallPoster } from '@/components/WallPoster';
 import { fx } from '@/sound/sfx';
 import { TileNum } from '@/components/TileNum';
 import { Block, Socket } from '@/components/Block';
+import Svg, { Path } from 'react-native-svg';
 import { Formula } from '@/components/Formula';
 import { INTRO_STEP, MedalTrack, TaskSquares, Track, milestonesFor } from '@/components/Track';
 
@@ -53,6 +54,13 @@ const LESSON_READ = 1400; // ms more to read the formula of a step with no card
 type Hold = { slot: number; piece: Piece };
 
 const isMilestone = (v: number) => v >= 24 && Number.isInteger(Math.log2(v / 3));
+
+/** Whether a piece fits anywhere on the board; one that fits nowhere is dimmed in the tray. */
+function fitsSomewhere(board: number[], p: Piece) {
+  const { w, h } = engine.size(p);
+  for (let y = 0; y <= N - h; y++) for (let x = 0; x <= N - w; x++) if (engine.fits(board, p, x, y)) return true;
+  return false;
+}
 
 /** The placement that merges the most, as [cell, value] pairs to hatch. */
 function bestMove(g: { board: number[]; tray: (Piece | null)[]; cfg: { absorb?: 'big' | 'new' } }): [number, number][] | null {
@@ -119,7 +127,8 @@ export default function Game() {
   /* The free game with sweeps earned by cascades keeps both: the layers
      of sweeps in hand right under the board, the milestones under them. */
   const counted = !g.cfg.freeSweeps && g.cfg.sweepsMax > 0;
-  const showTrack = !isDaily && (g.cfg.freeSweeps || store.rules === 'cascade');
+  // The milestone track under the board is gone with the plastic redesign (2026-11-08): the board stands alone.
+  const showTrack = false;
   const lastMedal = useRef({ rank: medalRank, daily: isDaily });
   useEffect(() => {
     // Opening the daily with medals already won is not a new medal.
@@ -261,13 +270,14 @@ export default function Game() {
      paddings around them. Never wider than the screen, never under 240. */
   // The line above the board: a lesson's formula, its tiles at the tray's cell.
   const LESSON_H = trayMax;
-  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || isDaily ? LESSON_H + space.lg : 0) + (showTrack ? 44 : 18) + (counted && showTrack ? g.cfg.sweepsMax * (PLATE + 2) + 4 : 0) + trayMax * 3 + 32 + 48;
+  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || isDaily ? LESSON_H + space.lg : 0) + (isDaily ? 44 : 12) + trayMax * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
   /* One column for the whole screen: the header, the lesson, the board and
      the tray share the board's left and right edges. */
   const col = cell * N + gap;
-  const trayCell = Math.min(trayMax, Math.floor(col / 3 / 3.3));
+  // Tray pieces at 0.7 of a board cell, as large as three slots of three cells allow.
+  const trayCell = Math.min(Math.round(cell * 0.7), Math.floor(col / 9));
   /* The interface unit: the header squares are one board cell, the score is
      set to the cell's height, and the steps between blocks are a share of it,
      so the chrome grows and shrinks with the board instead of staying fixed. */
@@ -436,7 +446,7 @@ export default function Game() {
   const stamp = useSharedValue(0);
   const scoreKick = useSharedValue(1);
   const stampStyle = useAnimatedStyle(() => ({ opacity: stamp.value, transform: [{ scaleX: 0.6 + stamp.value * 0.4 }] }));
-  const scoreStyle = useAnimatedStyle(() => ({ transform: [{ scale: scoreKick.value }], transformOrigin: 'left center' }));
+  const scoreStyle = useAnimatedStyle(() => ({ transform: [{ scale: scoreKick.value }], transformOrigin: 'center' }));
 
   /** Points rise from where a merge happened. */
   const float = (at: number, v: number, times = 1) => {
@@ -711,6 +721,15 @@ export default function Game() {
   const sy = useSharedValue(0);
   const boardStyle = useAnimatedStyle(() => ({ transform: [{ translateX: sx.value }, { translateY: sy.value }, { scale: bump.value }] }));
 
+  /* The sweep key shows the gesture instead of doing it: the board leans
+     each way in turn, the way a swipe would tip it. */
+  const hintSweep = () => {
+    const lean = Math.round(cell * 0.12);
+    const go = (v: number) => withSequence(withTiming(v, { duration: 120, easing: Easing.out(Easing.quad) }), withTiming(0, { duration: 120, easing: Easing.in(Easing.quad) }));
+    sx.value = withSequence(go(-lean), go(lean), withTiming(0, { duration: 480 }));
+    sy.value = withSequence(withTiming(0, { duration: 480 }), go(-lean), go(lean));
+  };
+
   const shake = () => {
     sx.value = withSequence(withTiming(6, { duration: 50 }), withTiming(-6, { duration: 80 }), withTiming(0, enter(dur.fast)));
   };
@@ -953,22 +972,23 @@ export default function Game() {
   return (
     <View style={[{ flex: 1 }, noSelect]}>
       <Screen style={{ width: col }}>
-        {/* header without labels: the score leads; the best tile and pause are
-            two squares of one size on the right */}
-        <View style={{ height: unit, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Animated.View accessible accessibilityLabel={`Очки: ${g.score}`} style={scoreStyle}>
-            {/* The 1919 stamp: a yellow enamel block flashes in behind the score. */}
-            <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: -space.sm, right: -space.sm, top: unit * 0.12, bottom: unit * 0.12, backgroundColor: c.tile[3], borderWidth: gap, borderColor: c.line, transformOrigin: 'left center' }, stampStyle]}>
-              <Enamel fill={c.tile[3]} size={unit} dark={isDark} />
-            </Animated.View>
-            <TileNum v={g.score.toLocaleString('ru-RU')} size={Math.round(unit * 0.72)} color={c.text} style={{ lineHeight: unit, letterSpacing: -0.5 }} />
+        {/* The header (2026-11-08): pause key, the score in the middle with
+            the cascade's multiplier beside it, the sweep key with its studs. */}
+        <View style={{ height: 52, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <IconButton label="Пауза" size={48} onPress={() => router.push('/pause')}>
+            <PauseIcon color={c.text} s={16} />
+          </IconButton>
+          <Animated.View accessible accessibilityLabel={`Очки: ${g.score}`} style={[{ height: 48, justifyContent: 'center', alignItems: 'center' }, scoreStyle]}>
+            {/* The 1919 stamp: a yellow chip flashes in behind the score. */}
+            <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: -space.md, right: -space.md, top: 2, bottom: 2, borderRadius: 12, backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 3px 0 #C9A21F' }, stampStyle]} />
+            <ScoreNum v={g.score} />
+            {chainMult(g.cfg.chainScore, chain) > 1 ? <MultChip k={chainMult(g.cfg.chainScore, chain)} /> : null}
           </Animated.View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-            <BestTile v={best} size={unit} frame={gap} />
-            <IconButton label="Пауза" size={unit} onPress={() => router.push('/pause')}>
-              <PauseIcon color={c.text} s={Math.round(unit * 0.32)} />
-            </IconButton>
-          </View>
+          <SweepKey
+            studs={counted ? g.cfg.sweepsMax : 0}
+            filled={g.sweeps - (bonusHeld ? 1 : 0)}
+            onPress={hintSweep}
+          />
         </View>
 
         {/* the lesson and the board, centred between the header and the tray, never closer than one step */}
@@ -1053,45 +1073,9 @@ export default function Game() {
           {/* The sweeps are the board's thickness: one layer under it per
               sweep left. A sweep pulls a layer out the way the board went; a
               new tray slides them back in. */}
-          {isDaily ? (
-            /* The game of the day climbs to medals, not to 384. */
-            <MedalTrack medals={MEDALS} score={g.score} width={col} gap={gap} top={trackTop} />
-          ) : showTrack ? (
-            /* With free sweeps there is nothing to count under the board:
-               the milestones on the way to the goal sit there instead. With
-               sweeps earned by cascades the layers come first, then the track. */
-            <View>
-              {counted ? (
-                <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: col, alignItems: 'center', height: g.cfg.sweepsMax * (PLATE + 2) + 2 }}>
-                  {Array.from({ length: g.cfg.sweepsMax }, (_, k) => k).map((k) => (
-                    <Plate key={k} on={g.sweeps - (bonusHeld ? 1 : 0) > k} k={k} dir={lastDir.current} width={col - 2 * (k + 1) * space.sm} />
-                  ))}
-                  {(() => {
-                    const k = g.sweeps - (bonusHeld ? 1 : 0);
-                    if (k >= g.cfg.sweepsMax || !g.cfg.chainBonus || store.lesson !== null) return null;
-                    const w = col - 2 * (k + 1) * space.sm;
-                    return <ChainMeter n={g.cfg.chainBonus} filled={chain} width={w} left={(col - w) / 2} top={4 + k * (PLATE + 2)} />;
-                  })()}
-                </View>
-              ) : null}
-              <Track
-                steps={milestones}
-                best={trackHold ? Math.min(trackBest, trackHold / 2) : trackBest}
-                next={nextStep}
-                progress={nextStep ? progressTo(shown, nextStep) : 0}
-                width={col}
-                gap={gap}
-                top={trackTop}
-                intro={trackIntro}
-              />
-            </View>
-          ) : (
-            <View pointerEvents="none" accessibilityLabel={`Сдвигов: ${g.sweeps}`} style={{ width: col, alignItems: 'center' }}>
-              {Array.from({ length: g.cfg.sweepsMax }, (_, k) => k).map((k) => (
-                <Plate key={k} on={g.sweeps - (bonusHeld ? 1 : 0) > k} k={k} dir={lastDir.current} width={col - 2 * (k + 1) * space.sm} />
-              ))}
-            </View>
-          )}
+          {/* The game of the day climbs to medals, not to 384. Sweeps are
+              counted by the studs on the sweep key. */}
+          {isDaily ? <MedalTrack medals={MEDALS} score={g.score} width={col} gap={gap} top={trackTop} /> : null}
         </View>
 
         {/* tray: an L1 surface with three slots */}
@@ -1099,9 +1083,6 @@ export default function Game() {
           style={{
             height: trayCell * 3 + space.xxl,
             flexDirection: 'row',
-            backgroundColor: c.surface,
-            borderWidth: 1,
-            borderColor: c.hair,
           }}>
           {g.tray.map((p, slot) => (
             <View
@@ -1114,21 +1095,20 @@ export default function Game() {
                 flex: 1,
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderLeftWidth: slot ? 1 : 0,
-                borderColor: c.hair,
               }}>
               {/* What comes into this slot with the next tray: its shape only,
                   small and grey in the corner. The values are dealt when it
                   arrives, from the board as it is then. */}
-              {g.next?.[slot] && store.lesson === null && !g.over ? (
-                <NextShape cells={g.next[slot]} cell={Math.max(5, Math.round(trayCell * 0.28))} />
+              {g.next?.[slot] && store.lesson === null && !g.over && (!p || p.used) ? (
+                <NextShape cells={g.next[slot]} cell={trayCell} gap={gap} />
               ) : null}
               {p ? (
                 <Animated.View style={slot === stuckSlot ? stuckStyle : undefined}>
                 <TrayPiece
                   key={`${trayId.current}-${slot}-${JSON.stringify(p.cells)}`}
-                  delay={slot * 70}
-                  opacity={p.used || hold?.slot === slot || returning === slot ? 0 : g.over ? 0.35 : 1}>
+                  delay={slot * 60}
+                  rise={trayCell}
+                  opacity={p.used || hold?.slot === slot || returning === slot ? 0 : g.over || !fitsSomewhere(shown, p) ? 0.35 : 1}>
                   <Field variant="piece" {...pieceGrid(p)} cell={trayCell} gap={gap} />
                 </TrayPiece>
                 </Animated.View>
@@ -1552,14 +1532,14 @@ function ChainSegment({ on, line, hair }: { on: boolean; line: string; hair: str
 }
 
 /** The shape of the piece coming next into a tray slot, in the slot's corner. */
-function NextShape({ cells, cell }: { cells: [number, number][]; cell: number }) {
-  const { c } = useTheme();
+function NextShape({ cells, cell, gap }: { cells: [number, number][]; cell: number; gap: number }) {
   const w = Math.max(...cells.map(([x]) => x)) + 1;
   const h = Math.max(...cells.map(([, y]) => y)) + 1;
+  // The shape that comes next, as moulds sunk into the table where it will rise.
   return (
-    <View pointerEvents="none" accessibilityLabel="Следующая фигура" style={{ position: 'absolute', top: space.sm, right: space.sm, width: w * cell, height: h * cell }}>
+    <View pointerEvents="none" accessibilityLabel="Следующая фигура" style={{ width: w * cell, height: h * cell, position: 'absolute' }}>
       {cells.map(([x, y], k) => (
-        <View key={k} style={{ position: 'absolute', left: x * cell, top: y * cell, width: cell - 1, height: cell - 1, backgroundColor: c.faint }} />
+        <Socket key={k} size={cell - gap} style={{ position: 'absolute', left: x * cell + gap / 2, top: y * cell + gap / 2 }} />
       ))}
     </View>
   );
@@ -1664,13 +1644,14 @@ function Incoming({ piece, ox, oy, dir, delay, cell, gap }: { piece: Piece; ox: 
 
 /** A tray piece. New ones spring in one after another. Own shared values, not
     `entering`, so Safari keeps their size. */
-function TrayPiece({ delay, opacity, children }: { delay: number; opacity: number; children: React.ReactNode }) {
+function TrayPiece({ delay, opacity, rise, children }: { delay: number; opacity: number; rise: number; children: React.ReactNode }) {
+  // A new piece rises out of its moulds: up from a third of a cell below, no bounce.
   const k = useSharedValue(0);
   useEffect(() => {
-    k.value = withDelay(delay, withTiming(1, back(300, 2.2)));
+    k.value = withDelay(delay, withTiming(1, { duration: 200, easing: Easing.out(Easing.cubic) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const st = useAnimatedStyle(() => ({ transform: [{ scale: 0.4 + k.value * 0.6 }], opacity: Math.min(1, k.value * 2) * opacity }));
+  const st = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - k.value) * rise * 0.35 }, { scale: 0.92 + k.value * 0.08 }], opacity: Math.min(1, k.value * 2) * opacity }));
   return <Animated.View style={st}>{children}</Animated.View>;
 }
 
@@ -1773,5 +1754,102 @@ function NewsCard({ news, onDone }: { news: News; onDone: () => void }) {
         </View>
       </View>
     </Animated.View>
+  );
+}
+
+/** The score: Rubik 700, one size, counting up with every merge. */
+function ScoreNum({ v }: { v: number }) {
+  const { c } = useTheme();
+  const [shownV, setShownV] = useState(v);
+  const from = useRef(v);
+  useEffect(() => {
+    const a = from.current;
+    if (v <= a) {
+      from.current = v;
+      setShownV(v);
+      return;
+    }
+    const t0 = Date.now();
+    const id = setInterval(() => {
+      const k = Math.min(1, (Date.now() - t0) / 300);
+      const x = Math.round(a + (v - a) * (1 - Math.pow(1 - k, 3)));
+      setShownV(x);
+      if (k >= 1) {
+        clearInterval(id);
+        from.current = v;
+      }
+    }, 16);
+    return () => {
+      clearInterval(id);
+      from.current = v;
+    };
+  }, [v]);
+  return <TileNum v={shownV} size={40} color={c.text} style={{ lineHeight: 48, fontVariant: ['tabular-nums'] }} />;
+}
+
+/** The cascade's score multiplier for the merge in hand, from chainScore. */
+function chainMult(table: number[] | undefined, k: number) {
+  if (!table || !table.length || k <= 0) return 1;
+  return table[Math.min(k, table.length) - 1];
+}
+
+/** A yellow chip beside the score: ×2, ×3 while a cascade pays more. */
+function MultChip({ k }: { k: number }) {
+  const s = useSharedValue(0);
+  useEffect(() => {
+    s.value = withSequence(withTiming(1.15, { duration: 100 }), withTiming(1, { duration: 120 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [k]);
+  const st = useAnimatedStyle(() => ({ transform: [{ translateY: -14 }, { scale: s.value }] }));
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[{ position: 'absolute', left: '100%', marginLeft: 8, top: '50%', height: 28, paddingHorizontal: 8, borderRadius: 8, justifyContent: 'center', backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 3px 0 #C9A21F' }, st]}>
+      <TileNum v={`×${k}`} size={16} color="#2A2A2A" />
+    </Animated.View>
+  );
+}
+
+/** The sweep key: a four-way arrow and one stud socket per sweep the game
+    can hold; a held sweep is a yellow chip in its socket. */
+function SweepKey({ studs, filled, onPress }: { studs: number; filled: number; onPress: () => void }) {
+  const { c } = useTheme();
+  const empty = studs > 0 && filled <= 0;
+  return (
+    <Key label={studs ? `Сдвиги: ${Math.max(0, filled)}` : 'Сдвиги'} onPress={onPress}>
+      <Svg width={22} height={22} viewBox="0 0 22 22" style={{ opacity: empty ? 0.3 : 1 }}>
+        <Path
+          d="M11 1.5 L14.6 5.2 L12.4 5.2 L12.4 9.6 L16.8 9.6 L16.8 7.4 L20.5 11 L16.8 14.6 L16.8 12.4 L12.4 12.4 L12.4 16.8 L14.6 16.8 L11 20.5 L7.4 16.8 L9.6 16.8 L9.6 12.4 L5.2 12.4 L5.2 14.6 L1.5 11 L5.2 7.4 L5.2 9.6 L9.6 9.6 L9.6 5.2 L7.4 5.2 Z"
+          fill={c.text}
+          stroke={c.text}
+          strokeWidth={1.2}
+          strokeLinejoin="round"
+        />
+      </Svg>
+      {studs > 0 ? (
+        <View style={{ flexDirection: 'row', gap: 5 }}>
+          {Array.from({ length: studs }, (_, k) => (
+            <Stud key={k} on={k < filled} />
+          ))}
+        </View>
+      ) : null}
+    </Key>
+  );
+}
+
+function Stud({ on }: { on: boolean }) {
+  const { isDark } = useTheme();
+  const k = useSharedValue(on ? 1 : 0);
+  useEffect(() => {
+    k.value = on ? withSequence(withTiming(1.5, { duration: 0 }), withTiming(1, { duration: 180 })) : withTiming(0, { duration: 120 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on]);
+  const st = useAnimatedStyle(() => ({ opacity: Math.min(1, k.value), transform: [{ translateY: -2 }, { scale: Math.max(1, k.value) }] }));
+  return (
+    <View style={{ width: 14, height: 14, borderRadius: 4, backgroundColor: isDark ? '#1E2025' : '#E4E2DB', boxShadow: 'inset 0 2px 2px rgba(0,0,0,0.14)' }}>
+      <Animated.View
+        style={[{ position: 'absolute', left: 0, top: 0, width: 14, height: 14, borderRadius: 4, backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 2px 0 #C9A21F, inset 0 1px 0 rgba(255,255,255,0.8)' }, st]}
+      />
+    </View>
   );
 }

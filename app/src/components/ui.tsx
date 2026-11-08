@@ -111,46 +111,116 @@ type BtnProps = {
   accessibilityLabel?: string;
 };
 
-export function Button({ label, onPress, kind = 'secondary', size = 'md', disabled, trailing, style, accessibilityLabel }: BtnProps) {
+/* A plastic key (2026-11-08): a rounded face standing on its own darker
+   ledge. Pressed, the face goes down 3px onto the ledge. White for most
+   keys, blue for the one step a page leads to. */
+export function Key({
+  children,
+  onPress,
+  blue,
+  height = 48,
+  width,
+  disabled,
+  quiet,
+  label,
+  style,
+  faceStyle,
+}: {
+  children: ReactNode;
+  onPress?: () => void;
+  blue?: boolean;
+  height?: number;
+  width?: number | `${number}%`;
+  disabled?: boolean;
+  quiet?: boolean;
+  label: string;
+  style?: ViewStyle;
+  faceStyle?: ViewStyle;
+}) {
   const { c, isDark } = useTheme();
-  const k = kind === 'outline' ? 'secondary' : kind;
   const press = useSharedValue(0);
-  const face = useAnimatedStyle(() => ({ opacity: 1 - press.value * 0.25 }));
-  const primary = k === 'primary';
-  const bg = primary ? (isDark ? c.text : c.line) : k === 'ghost' ? 'transparent' : c.surface;
-  const fg = primary ? c.bg : k === 'danger' ? c.tile[2] : c.text;
+  const face = useAnimatedStyle(() => ({ transform: [{ translateY: press.value * 3 }] }));
+  const LEDGE_H = 4;
+  const r = 12;
+  const top = blue ? '#5A86FF' : isDark ? '#3A3D44' : '#FFFFFF';
+  const base = blue ? '#356BFF' : isDark ? '#30333A' : '#F3F2EF';
+  const ledge = blue ? '#1F48C2' : isDark ? '#16171A' : '#CFCDC6';
+  const hi = blue ? 'rgba(255,255,255,0.45)' : isDark ? 'rgba(255,255,255,0.10)' : '#FFFFFF';
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityLabel={label}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={() => {
-        fx.tap();
+        if (!quiet) fx.tap();
         onPress?.();
       }}
-      onPressIn={() => (press.value = withTiming(1, enter(dur.fast)))}
-      onPressOut={() => (press.value = withTiming(0, exit(dur.fast)))}
-      style={[{ opacity: disabled ? 0.4 : 1 }, style]}>
+      onPressIn={() => (press.value = withTiming(1, { duration: 80 }))}
+      onPressOut={() => (press.value = withTiming(0, { duration: 100 }))}
+      style={[{ width, minWidth: height, height: height + LEDGE_H, opacity: disabled ? 0.4 : 1 }, style]}>
+      <View style={{ position: 'absolute', left: 0, right: 0, top: LEDGE_H, bottom: 0, borderRadius: r, backgroundColor: ledge }} />
       <Animated.View
         style={[
           {
-            minHeight: size === 'lg' ? 56 : 48,
-            paddingHorizontal: space.lg,
-            borderWidth: k === 'ghost' || primary ? 0 : 1,
-            borderColor: c.hair,
-            backgroundColor: bg,
+            height,
+            borderRadius: r,
+            backgroundColor: base,
+            backgroundImage: `linear-gradient(180deg, ${top}, ${base})`,
+            boxShadow: `inset 0 2px 0 ${hi}`,
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: trailing ? 'space-between' : 'center',
+            justifyContent: 'center',
+            gap: 10,
+            paddingHorizontal: 12,
           },
+          faceStyle,
           face,
         ]}>
-        {primary ? <Enamel fill={bg} size={44} dark={isDark} /> : null}
-        <Text style={[type.bodyStrong, { color: fg }]}>{label}</Text>
-        {typeof trailing === 'string' ? <Text style={[type.bodyStrong, { color: fg, opacity: 0.7, fontVariant: ['tabular-nums'] }]}>{trailing}</Text> : trailing}
+        {children}
       </Animated.View>
     </Pressable>
+  );
+}
+
+export function Button({ label, onPress, kind = 'secondary', size = 'md', disabled, trailing, style, accessibilityLabel }: BtnProps) {
+  const { c } = useTheme();
+  const k = kind === 'outline' ? 'secondary' : kind;
+  const primary = k === 'primary';
+  const fg = primary ? '#FFFFFF' : k === 'danger' ? c.tile[2] : c.text;
+  const text = (
+    <>
+      <Text style={[type.bodyStrong, { color: fg, fontFamily: font.bodySemi }]}>{label}</Text>
+      {typeof trailing === 'string' ? <Text style={[type.bodyStrong, { color: fg, opacity: 0.7, fontVariant: ['tabular-nums'] }]}>{trailing}</Text> : trailing}
+    </>
+  );
+  if (k === 'ghost') {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel ?? label}
+        accessibilityState={{ disabled }}
+        disabled={disabled}
+        onPress={() => {
+          fx.tap();
+          onPress?.();
+        }}
+        style={({ pressed }) => [{ minHeight: size === 'lg' ? 56 : 48, paddingHorizontal: space.lg, flexDirection: 'row', alignItems: 'center', justifyContent: trailing ? 'space-between' : 'center', opacity: disabled ? 0.4 : pressed ? 0.6 : 1 }, style]}>
+        {text}
+      </Pressable>
+    );
+  }
+  return (
+    <Key
+      label={accessibilityLabel ?? label}
+      onPress={onPress}
+      disabled={disabled}
+      blue={primary}
+      height={size === 'lg' ? 56 : 48}
+      style={style}
+      faceStyle={{ paddingHorizontal: space.lg, justifyContent: trailing ? 'space-between' : 'center' }}>
+      {text}
+    </Key>
   );
 }
 
@@ -186,34 +256,32 @@ export function IconButton({
   disabled?: boolean;
   /** No tap sound: the action plays its own. */
   quiet?: boolean;
-  /** No surface: for top bars. */
+  /** No key: a bare glyph, for top bars. */
   plain?: boolean;
-  /** Side of the square; never under HIT. */
+  /** Side of the key; never under HIT. */
   size?: number;
 }) {
-  const { c } = useTheme();
+  const s = Math.max(HIT, size);
+  if (plain) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ disabled }}
+        onPress={() => {
+          if (!quiet) fx.tap();
+          onPress?.();
+        }}
+        disabled={disabled}
+        style={({ pressed }) => ({ width: s, height: s, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.35 : pressed ? 0.6 : 1 })}>
+        {children}
+      </Pressable>
+    );
+  }
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      onPress={() => {
-        if (!quiet) fx.tap();
-        onPress?.();
-      }}
-      disabled={disabled}
-      style={({ pressed }) => ({
-        width: Math.max(HIT, size),
-        height: Math.max(HIT, size),
-        borderWidth: plain ? 0 : 1,
-        borderColor: c.hair,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: plain ? 'transparent' : c.surface,
-        opacity: disabled ? 0.35 : pressed ? 0.6 : 1,
-      })}>
+    <Key label={label} onPress={onPress} disabled={disabled} quiet={quiet} height={s} width={s} faceStyle={{ paddingHorizontal: 0 }}>
       {children}
-    </Pressable>
+    </Key>
   );
 }
 
@@ -221,9 +289,9 @@ export function IconButton({
 
 export function PauseIcon({ color, s = 14 }: { color: string; s?: number }) {
   return (
-    <View style={{ flexDirection: 'row', gap: s * 0.28 }}>
-      <View style={{ width: s * 0.3, height: s, backgroundColor: color }} />
-      <View style={{ width: s * 0.3, height: s, backgroundColor: color }} />
+    <View style={{ flexDirection: 'row', gap: s * 0.3 }}>
+      <View style={{ width: s * 0.32, height: s, borderRadius: s * 0.1, backgroundColor: color }} />
+      <View style={{ width: s * 0.32, height: s, borderRadius: s * 0.1, backgroundColor: color }} />
     </View>
   );
 }
