@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, type SharedValue, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Block, plastic } from '@/components/Block';
 import { Field, type CellLook } from '@/components/Field';
@@ -53,7 +53,8 @@ export function Home() {
           </View>
         }>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 28 }}>
-          {splash ? <View style={{ height: 1 }} /> : <Demo />}
+          {/* The plate is there from the first frame, so nothing moves when the splash lifts; it plays once the splash is gone. */}
+          <Demo play={!splash} />
           <Logo />
           {stats.best > 0 ? <Chip>{`Рекорд ${stats.best.toLocaleString('ru-RU')}`}</Chip> : <View style={{ height: 32 }} />}
         </View>
@@ -139,7 +140,7 @@ const CHAIN: [number, number, number][] = [
   [at(2, 2), at(3, 2), 24],
 ];
 
-function Demo() {
+function Demo({ play }: { play: boolean }) {
   const { width } = useWindowDimensions();
   const cell = Math.floor(Math.min(58, (Math.min(width, 440) - 32) / 5.4) * 1.1);
   const gap = Math.round(cell * 0.1);
@@ -153,8 +154,9 @@ function Demo() {
   const [fly, setFly] = useState<{ from: number; to: number; v: number; id: number } | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => {
+    if (!play) return;
     const later = (ms: number, f: () => void) => timers.current.push(setTimeout(f, ms));
-    let t = 900;
+    let t = 700;
     later(t, () => {
       setVals((v) => Object.assign(v.slice(), { [at(0, 1)]: 1 }));
       setLook({ [at(0, 1)]: { land: Date.now() } });
@@ -179,7 +181,7 @@ function Demo() {
     }
     const list = timers.current;
     return () => list.forEach(clearTimeout);
-  }, []);
+  }, [play]);
   return (
     <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <Field w={4} h={4} values={vals} cell={cell} gap={gap} look={(i) => look[i]} />
@@ -205,71 +207,61 @@ function Flyer({ from, to, v, cell, gap }: { from: number; to: number; v: number
   );
 }
 
-/* ---------- the splash ---------- */
+/* ---------- the splash ----------
+   Every move is driven from one clock on the UI thread, so the sound, the
+   swap of 2 into 3 and the 1 vanishing land on the same frame. The 2 is set
+   down in the middle; the 1 two cells to its left, one empty cell between
+   them so the pull is seen; the 2 leans toward it, the 1 accelerates across
+   the gap and they become a 3 where the 2 stood: the middle of the screen. */
+
+const SP = { two: 200, fall: 170, one: 560, lean: 780, pull: 960, travel: 170, hold: 700, fade: 220 };
+const MERGE = SP.pull + SP.travel;
 
 function Splash({ onDone }: { onDone: () => void }) {
   const { c } = useTheme();
   const { width } = useWindowDimensions();
   const sz = Math.floor((Math.min(width, 440) - 32) / 6.75);
-  const gap = Math.round(sz * 0.1);
+  const step = sz + Math.round(sz * 0.1);
+  const lift = sz * 0.7;
   const page = useSharedValue(1);
-  const twoY = useSharedValue(-sz * 0.25);
+  const twoY = useSharedValue(-lift);
   const twoO = useSharedValue(0);
   const twoX = useSharedValue(0);
   const twoSx = useSharedValue(1);
   const twoSy = useSharedValue(1);
-  const oneY = useSharedValue(-sz * 0.25);
+  const oneY = useSharedValue(-lift);
   const oneO = useSharedValue(0);
   const oneX = useSharedValue(0);
-  const [merged, setMerged] = useState(false);
-  const left = useSharedValue(sz + gap);
+  const three = useSharedValue(0);
   const live = useRef(true);
 
   useEffect(() => {
-    const T: ReturnType<typeof setTimeout>[] = [];
-    const later = (ms: number, f: () => void) => T.push(setTimeout(() => live.current && f(), ms));
-    const fall = { duration: 160, easing: Easing.bezier(0.55, 0, 1, 0.45) };
-    const squash = (sx: number, sy: number) => {
-      twoSx.value = withSequence(withTiming(sx, { duration: 45 }), withTiming(1, { duration: 95 }));
-      twoSy.value = withSequence(withTiming(sy, { duration: 45 }), withTiming(1, { duration: 95 }));
+    const fall = { duration: SP.fall, easing: Easing.in(Easing.quad) };
+    const land = (sx: SharedValue<number>, sy: SharedValue<number>, at: number, k: number) => {
+      sx.value = withDelay(at, withSequence(withTiming(1 + 0.06 * k, { duration: 50 }), withTiming(1, { duration: 140, easing: Easing.out(Easing.cubic) })));
+      sy.value = withDelay(at, withSequence(withTiming(1 - 0.06 * k, { duration: 50 }), withTiming(1, { duration: 140, easing: Easing.out(Easing.cubic) })));
     };
-    // the 2 is set down
-    twoO.value = withDelay(200, withTiming(1, fall));
-    twoY.value = withDelay(200, withTiming(0, fall));
-    later(360, () => {
-      fx.place(1);
-      squash(1.04, 0.94);
-    });
-    // the 1 beside it
-    later(620, () => {
-      oneO.value = withTiming(1, fall);
-      oneY.value = withTiming(0, fall);
-    });
-    later(780, () => {
-      fx.place(1);
-      // the 2 leans in
-      twoX.value = withTiming(-sz * 0.09, { duration: 120 });
-    });
-    // the 1 is pulled and accelerates into it
-    later(1000, () => {
-      oneX.value = withTiming(sz + gap, { duration: 130, easing: Easing.bezier(0.6, 0, 1, 0.6) });
-    });
-    later(1130, () => {
-      oneO.value = 0;
-      twoX.value = 0;
-      setMerged(true);
-      twoSx.value = withSequence(withTiming(0.88, { duration: 55 }), withTiming(1.03, { duration: 88 }), withTiming(1, { duration: 77 }));
-      twoSy.value = withSequence(withTiming(1.06, { duration: 55 }), withTiming(0.98, { duration: 88 }), withTiming(1, { duration: 77 }));
-      fx.merge(3, 0);
-    });
-    // the 3 slides to the middle
-    later(1370, () => {
-      left.value = withTiming(Math.round((sz + gap) / 2), { duration: 260, easing: Easing.bezier(0.3, 0.6, 0.4, 1) });
-    });
-    later(2170, () => {
-      page.value = withTiming(0, { duration: 220 });
-    });
-    later(2400, onDone);
+    // the 2 is set down: it appears above its socket and falls in, opaque
+    twoO.value = withDelay(SP.two, withTiming(1, { duration: 0 }));
+    twoY.value = withDelay(SP.two, withTiming(0, fall));
+    land(twoSx, twoSy, SP.two + SP.fall, 1);
+    // the 1 two cells to the left
+    oneY.value = withDelay(SP.one, withTiming(0, fall));
+    // the 2 leans toward it, then the 1 is pulled across and the 2 takes the hit
+    twoX.value = withDelay(SP.lean, withSequence(withTiming(-sz * 0.09, { duration: 120, easing: Easing.out(Easing.quad) }), withDelay(SP.pull + SP.travel - SP.lean - 120, withTiming(0, { duration: 0 }))));
+    oneX.value = withDelay(SP.pull, withTiming(step * 2 - sz * 0.09, { duration: SP.travel, easing: Easing.bezier(0.6, 0, 1, 0.6) }));
+    oneO.value = withDelay(SP.one, withSequence(withTiming(1, { duration: 0 }), withDelay(MERGE - SP.one, withTiming(0, { duration: 0 }))));
+    three.value = withDelay(MERGE, withTiming(1, { duration: 0 }));
+    twoSx.value = withDelay(SP.two + SP.fall, withSequence(withTiming(1.06, { duration: 50 }), withTiming(1, { duration: 140 }), withDelay(MERGE - SP.two - SP.fall - 190, withSequence(withTiming(0.88, { duration: 55 }), withTiming(1.03, { duration: 90 }), withTiming(1, { duration: 80 })))));
+    twoSy.value = withDelay(SP.two + SP.fall, withSequence(withTiming(0.94, { duration: 50 }), withTiming(1, { duration: 140 }), withDelay(MERGE - SP.two - SP.fall - 190, withSequence(withTiming(1.06, { duration: 55 }), withTiming(0.98, { duration: 90 }), withTiming(1, { duration: 80 })))));
+    page.value = withDelay(MERGE + SP.hold, withTiming(0, { duration: SP.fade }));
+
+    const T = [
+      setTimeout(() => live.current && fx.place(1), SP.two + SP.fall),
+      setTimeout(() => live.current && fx.place(1), SP.one + SP.fall),
+      setTimeout(() => live.current && fx.merge(3, 0), MERGE),
+      setTimeout(() => live.current && onDone(), MERGE + SP.hold + SP.fade),
+    ];
     return () => {
       live.current = false;
       T.forEach(clearTimeout);
@@ -279,11 +271,12 @@ function Splash({ onDone }: { onDone: () => void }) {
 
   const pageSt = useAnimatedStyle(() => ({ opacity: page.value }));
   const twoSt = useAnimatedStyle(() => ({
-    left: left.value,
     opacity: twoO.value,
     transform: [{ translateX: twoX.value }, { translateY: twoY.value }, { scaleX: twoSx.value }, { scaleY: twoSy.value }],
     transformOrigin: 'bottom',
   }));
+  const asTwo = useAnimatedStyle(() => ({ opacity: 1 - three.value }));
+  const asThree = useAnimatedStyle(() => ({ opacity: three.value }));
   const oneSt = useAnimatedStyle(() => ({ opacity: oneO.value, transform: [{ translateX: oneX.value }, { translateY: oneY.value }] }));
 
   return (
@@ -295,12 +288,18 @@ function Splash({ onDone }: { onDone: () => void }) {
           onDone();
         }}
         style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <View style={{ width: sz * 2 + gap, height: sz }}>
-          <Animated.View style={[{ position: 'absolute', left: 0, top: 0 }, oneSt]}>
-            <Block v={1} size={sz} />
+        <View style={{ width: sz, height: sz }}>
+          <Animated.View style={[{ position: 'absolute', left: 0, top: 0 }, twoSt]}>
+            <Animated.View style={asTwo}>
+              <Block v={2} size={sz} />
+            </Animated.View>
+            <Animated.View style={[{ position: 'absolute', left: 0, top: 0 }, asThree]}>
+              <Block v={3} size={sz} />
+            </Animated.View>
           </Animated.View>
-          <Animated.View style={[{ position: 'absolute', top: 0 }, twoSt]}>
-            <Block v={merged ? 3 : 2} size={sz} />
+          {/* the 1 flies over the 2, the lighter block into the heavier one */}
+          <Animated.View style={[{ position: 'absolute', left: -step * 2, top: 0 }, oneSt]}>
+            <Block v={1} size={sz} />
           </Animated.View>
         </View>
       </Pressable>
