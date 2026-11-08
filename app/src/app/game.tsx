@@ -4,8 +4,7 @@ import { PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimension
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Field, type CellLook } from '@/components/Field';
-import { Overlay } from '@/components/Overlay';
-import { Body, Button, Heading, IconButton, Key, Label, Panel, Screen, TextLink } from '@/components/ui';
+import { IconButton, Key, Screen } from '@/components/ui';
 import { pieceGrid } from '@/design/mock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dur, enter, exit, HIT, space, type } from '@/design/system';
@@ -17,7 +16,7 @@ import { slideMoves, type Move } from '@/game/slide';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
 import { TileNum } from '@/components/TileNum';
-import { Block, plateStyle, Socket } from '@/components/Block';
+import { Block, Socket } from '@/components/Block';
 import { Icon } from '@/components/icons';
 import { Formula } from '@/components/Formula';
 import { INTRO_STEP, milestonesFor } from '@/components/Track';
@@ -33,8 +32,8 @@ const STEP = 190; // ms between merges of a chain: long enough to read each one
 const GAPS = [180, 160, 140, 120, 110];
 const chainAt = (k: number) => GAPS.slice(0, k).reduce((a, b) => a + b, 0) + Math.max(0, k - GAPS.length) * GAPS[GAPS.length - 1];
 const FLY = 110; // ms for an absorbed tile to fly into its partner
-const ECHO_MS = 460; // ms one square wave of a chained merge takes to fade
-const ECHO_GAP = 70; // ms between the waves of one merge
+const BURST_MS = 620; // ms the crumbs of a merge fly and fall
+const STUD_FLY = 520; // ms an earned sweep's stud flies to the sweep key
 const PLATE = 6; // px each sweep layer shows under the board
 const back = (d: number, k = 1.8) => ({ duration: d, easing: Easing.out(Easing.back(k)) });
 
@@ -47,8 +46,7 @@ const noSelect = { userSelect: 'none' } as object;
 const SWIPE = 24; // px of travel that counts as a swipe
 const SLIDE = dur.base; // ms for tiles to travel in a sweep
 const PUSH_MS = 260; // ms for the pushed piece to ride in from the far edge
-const EXPLAIN_AFTER = 1100; // ms from a proved step to its explanation card
-const LESSON_READ = 1400; // ms more to read the formula of a step with no card
+const LESSON_READ = 2500; // ms to read the proved formula before the next step slides in
 
 type Hold = { slot: number; piece: Piece };
 
@@ -118,8 +116,6 @@ export default function Game() {
   const showTrack = false;
   const lesson = store.lesson === null ? null : LESSONS[store.lesson];
   const [coach, setCoach] = useState<'task' | 'done'>('task');
-  /** The lesson whose explanation card is up, if any. */
-  const [explain, setExplain] = useState<number | null>(null);
   // The lesson on the board now, for timers that outlive a render (skip from pause).
   const lessonNow = useRef(store.lesson);
   lessonNow.current = store.lesson;
@@ -131,7 +127,6 @@ export default function Game() {
   }, [store.ready, learn]);
   useEffect(() => {
     setCoach('task');
-    setExplain(null);
     if (store.lesson === 0) lessonPeak.current = 0;
   }, [store.lesson]);
 
@@ -144,7 +139,11 @@ export default function Game() {
   const idleShown = useRef(0);
   const [flights, setFlights] = useState<{ id: string; m: Move; ms: number }[]>([]);
   /** The square waves of a second, third… merge in one chain. */
-  const [echoes, setEchoes] = useState<{ id: string; at: number; v: number; n: number }[]>([]);
+  /** Plastic crumbs thrown off a cascade's merges and a new best tile. */
+  const [bursts, setBursts] = useState<{ id: string; at: number; v: number; n: number; power: number }[]>([]);
+  /** An earned sweep: a stud flying from the merge that earned it to the sweep key. */
+  const [studFly, setStudFly] = useState<{ id: number; at: number; to: { x: number; y: number } } | null>(null);
+  const keyRef = useRef<ComponentRef<typeof View>>(null);
   // While a swipe is held past the threshold: where the next piece will ride in.
   const [aim, setAim] = useState<{ id: string; piece: Piece; ox: number; oy: number; dir: Dir } | null>(null);
   const aimDir = useRef<Dir | null>(null);
@@ -198,7 +197,8 @@ export default function Game() {
     setFlights([]);
     setIncoming(null);
     setFloats([]);
-    setEchoes([]);
+    setBursts([]);
+    setStudFly(null);
     setSliding(null);
     setReturning(null);
     setHeld(null);
@@ -288,12 +288,8 @@ export default function Game() {
         if (!milestoneFired) fx.milestone(24 * 2 ** Math.min(k, 4));
         setCoach('done');
         kickLine();
-        // When the show has played, the board dims and a card says what
-        // happened. The player moves on with the button, in their own time.
-        // A step that only repeats an idea moves on by itself.
-        const wait = milestoneFired ? RIPPLE_MS + 200 : EXPLAIN_AFTER;
-        if (L.card) later(wait, () => lessonNow.current === k && setExplain(k));
-        else later(wait + LESSON_READ, () => advance(k));
+        // The formula stays up to be read, then the next step slides in.
+        later(milestoneFired ? RIPPLE_MS + 200 + LESSON_READ - 1100 : LESSON_READ, () => advance(k));
       } else if (pieceStep) {
         // Cannot happen with moves locked, but never leave a lesson stuck.
         later(400, () => lessonNow.current === k && store.startLesson(k));
@@ -301,13 +297,6 @@ export default function Game() {
     });
   };
 
-  /** «Понятно» on the explanation card: the card goes, then the next step. */
-  const nextLesson = () => {
-    const k = explain;
-    if (k === null) return;
-    setExplain(null);
-    advance(k);
-  };
   const advance = (k: number) => {
     later(dur.base, () => {
       if (lessonNow.current !== k) return;
@@ -388,13 +377,18 @@ export default function Game() {
     /* A merge that a merge made: the tile sends out one square wave per
        merge of the chain so far, in its new colour, so a double reads as
        two rings and a triple as three. */
-    if (step > 0 && !milestone) {
+    /* Every merge throws plastic crumbs in the new tile's colour: a few for
+       a lone merge, more and further with every step of a cascade, and the
+       score jumps with it. A new best tile throws the most. */
+    {
       const id = `${at}-${Date.now()}-${step}`;
-      setEchoes((e) => [...e, { id, at, v: level, n: Math.min(4, step + 1) }]);
-      later(ECHO_MS + 4 * ECHO_GAP, () => setEchoes((e) => e.filter((x) => x.id !== id)));
+      const power = milestone ? 5 : Math.min(4, step + 1);
+      setBursts((e) => [...e, { id, at, v: level, n: 1 + power * 3, power }]);
+      later(BURST_MS + 80, () => setBursts((e) => e.filter((x) => x.id !== id)));
+      if (!milestone) scoreKick.value = withSequence(withTiming(1 + 0.04 * power, { duration: 60 }), withTiming(1, back(260, 2.4)));
     }
     float(at, pts, Math.round(pts / level));
-    thump(milestone ? Math.max(level, 192) : level);
+    thump(milestone ? Math.max(level, 192) : level, step);
   };
 
   /* 1919 points, the year the Bauhaus opened: a milestone of the score,
@@ -427,9 +421,10 @@ export default function Game() {
   };
   /** Big merges move the board: a small press, bigger for higher rungs. */
   const bump = useSharedValue(1);
-  const thump = (v: number) => {
-    if (v < 12) return;
-    const k = v >= 384 ? 0.06 : v >= 192 ? 0.05 : v >= 96 ? 0.04 : v >= 48 ? 0.03 : v >= 24 ? 0.02 : 0.012;
+  const thump = (v: number, step = 0) => {
+    if (v < 12 && step < 2) return;
+    // A long cascade presses the board harder as it climbs, whatever the tile.
+    const k = Math.max(v >= 384 ? 0.06 : v >= 192 ? 0.05 : v >= 96 ? 0.04 : v >= 48 ? 0.03 : v >= 24 ? 0.02 : v >= 12 ? 0.012 : 0, Math.min(0.035, step * 0.007));
     bump.value = withSequence(withTiming(1 - k, { duration: 60 }), withTiming(1, back(260, 2.5)));
   };
 
@@ -552,11 +547,22 @@ export default function Game() {
       res.steps.slice(0, g.cfg.chainBonus).forEach((_, k) => later(90 + chainAt(k) + FLY, () => setChain(k + 1)));
       later(done + (res.bonus ? 0 : 700), () => setChain(0));
     }
+    /* An earned sweep is seen being earned: a yellow stud pops out of the
+       merge that completed the cascade and flies in an arc into its socket on
+       the sweep key, and clicks in on the frame it lands. */
     if (res.bonus) {
       setBonusHeld(true);
+      const from = res.steps[Math.min(res.steps.length, g.cfg.chainBonus) - 1]?.anchor ?? res.steps[res.steps.length - 1].anchor;
       later(done, () => {
-        setBonusHeld(false);
-        fx.bonus();
+        keyRef.current?.measureInWindow((kx, ky, kw, kh) => {
+          const to = { x: kx + kw - 24 - boardAt.current.x, y: ky + kh / 2 - 9 - boardAt.current.y };
+          setStudFly({ id: Date.now(), at: from, to });
+        });
+        later(STUD_FLY, () => {
+          setStudFly(null);
+          setBonusHeld(false);
+          fx.bonus();
+        });
       });
     }
     if (res.steps.length) bauhausCheck(s0, done, res.steps[res.steps.length - 1].anchor);
@@ -663,6 +669,10 @@ export default function Game() {
             if (l.lean) break;
           }
         }
+        if (target) {
+          const m = hold.piece.cells.find(([cx, cy]) => (target.gy + cy) * N + target.gx + cx === i);
+          if (m) l.ghost = m[2];
+        }
         if (target && preview) {
           // The move played out ahead: the tiles that will fly in get the
           // "about to be eaten" frame, every one of the cascade and only
@@ -690,11 +700,11 @@ export default function Game() {
       return v;
     }
     if (!hold || !target) return shown;
+    /* The landing is previewed in the sockets, never as blocks: the piece's
+       cells and the tile a cascade ends as are lit moulds (CellLook.ghost),
+       so the cell where a cascade ends gives up its tile to its mould. */
     const v = shown.slice();
-    for (const [x, y, val] of hold.piece.cells) v[(target.gy + y) * N + target.gx + x] = val;
-    // The cell where a cascade ends shows the tile it ends as; a cell of
-    // the piece that flies into a bigger tile still shows the piece.
-    if (preview) for (const [i, r] of Object.entries(preview.result)) v[+i] = r;
+    if (preview) for (const i of Object.keys(preview.result)) v[+i] = 0;
     return v;
   }, [shown, hold, target, aim, preview]);
 
@@ -966,7 +976,7 @@ export default function Game() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.lesson, store.version, coach, width, height]);
 
-  const lineStyle = useAnimatedStyle(() => ({ transform: [{ scale: lineKick.value }], transformOrigin: 'left center' }));
+  const lineStyle = useAnimatedStyle(() => ({ transform: [{ scale: lineKick.value }], transformOrigin: 'center' }));
 
   return (
     <View style={[{ flex: 1 }, noSelect]}>
@@ -983,11 +993,9 @@ export default function Game() {
             <ScoreNum v={g.score} />
             {chainMult(g.cfg.chainScore, chain) > 1 ? <MultChip k={chainMult(g.cfg.chainScore, chain)} /> : null}
           </Animated.View>
-          <SweepKey
-            studs={counted ? g.cfg.sweepsMax : 0}
-            filled={g.sweeps - (bonusHeld ? 1 : 0)}
-            onPress={hintSweep}
-          />
+          <View ref={keyRef} collapsable={false}>
+            <SweepKey studs={counted ? g.cfg.sweepsMax : 0} filled={g.sweeps - (bonusHeld ? 1 : 0)} onPress={hintSweep} />
+          </View>
         </View>
 
         {/* the lesson and the board, centred between the header and the tray, never closer than one step */}
@@ -1000,7 +1008,7 @@ export default function Game() {
                 accessible
                 accessibilityRole="header"
                 accessibilityLabel={lesson.title}
-                style={[{ height: LESSON_H, justifyContent: 'center' }, lineStyle]}>
+                style={[{ height: LESSON_H, justifyContent: 'center', alignItems: 'center' }, lineStyle]}>
                 <Formula terms={lesson.formula} cell={trayCell} gap={gap} open={coach === 'task'} fit={col} />
               </Animated.View>
             </View>
@@ -1032,31 +1040,12 @@ export default function Game() {
                 ))}
                 {incoming ? <Incoming key={incoming.id} {...incoming} cell={cell} gap={gap} /> : null}
                 {scatter ? <Scatter key={scatter.id} board={scatter.board} cell={cell} gap={gap} /> : null}
+                {bursts.map((b) => (
+                  <Burst key={b.id} at={b.at} v={b.v} n={b.n} power={b.power} cell={cell} gap={gap} />
+                ))}
+                {studFly ? <StudFlight key={studFly.id} at={studFly.at} to={studFly.to} cell={cell} gap={gap} /> : null}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
               </View>
-              {/* After a proved step: the board dims and a card says what
-                  happened and why. Nothing moves on until «Понятно». */}
-              {lesson && explain === store.lesson ? (
-                <View style={[StyleSheet.absoluteFill, { justifyContent: 'center' }]}>
-                  {/* A solid plate over the board, no scrim: the board is never seen through a page. */}
-                  <View style={[StyleSheet.absoluteFill, { left: -Math.max(0, Math.round(cell * 0.14) - gap / 2), right: -Math.max(0, Math.round(cell * 0.14) - gap / 2), top: -Math.max(0, Math.round(cell * 0.14) - gap / 2), bottom: -Math.max(0, Math.round(cell * 0.14) - gap / 2) }, plateStyle(c, Math.round(cell * 0.26))]} />
-                  <View style={{ padding: space.xl }}>
-                    <View>
-                      {/* The proved formula and the related rows, all at the
-                          tray's size, so the card reads as one table. */}
-                      <View style={{ gap: space.md }}>
-                        {[lesson.formula, ...(lesson.also ?? [])].map((row, k) => (
-                          <Formula key={k} terms={row} cell={trayCell} gap={gap} fit={col - space.xl * 2} />
-                        ))}
-                      </View>
-                      <Body style={{ marginTop: space.lg }}>{(counted && lesson.ruleCascade) || lesson.rule}</Body>
-                      <View style={{ marginTop: space.lg }}>
-                        <Button kind="primary" size="lg" label="Понятно" onPress={nextLesson} />
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              ) : null}
             </View>
           </Animated.View>
           {/* The sweeps are the board's thickness: one layer under it per
@@ -1389,43 +1378,78 @@ function NextShape({ cells, cell, gap }: { cells: [number, number][]; cell: numb
 
 /** "+N" rising from the cell where a merge happened. A late merge of a
     placed piece's cascade pays double or triple, and says so: "+48 ×2". */
-/** One square wave of a chained merge: a frame of the new tile's colour, as
-    thick as the board's line, grows out of the cell and fades. Wave j of n
-    starts j beats later and goes further, so a triple sends three rings. */
-function Echo({ at, v, n, cell, gap }: { at: number; v: number; n: number; cell: number; gap: number }) {
+/** Plastic crumbs off a merge: small blocks in the new tile's colour burst
+    out of the cell, spin, and fall under gravity off the board. `power` 1-5
+    sets how many and how far. Seeded by the cell, so a replay looks alike. */
+function Burst({ at, v, n, power, cell, gap }: { at: number; v: number; n: number; power: number; cell: number; gap: number }) {
+  const pad = gap / 2;
+  const cx = pad + (at % N) * cell + cell / 2;
+  const cy = pad + ((at / N) | 0) * cell + cell / 2;
+  let seed = at * 9301 + v * 49297 + power;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const chips = Array.from({ length: n }, (_, k) => {
+    const a = (k / n) * Math.PI * 2 + rnd() * 0.6;
+    const speed = cell * (0.9 + power * 0.32) * (0.6 + rnd() * 0.6);
+    return { vx: Math.cos(a) * speed, vy: Math.sin(a) * speed - cell * (0.6 + power * 0.15), spin: (rnd() - 0.5) * 720, size: Math.round(cell * (0.13 + rnd() * 0.08)), delay: Math.round(rnd() * 40) };
+  });
   return (
     <>
-      {Array.from({ length: n }, (_, j) => (
-        <EchoRing key={j} at={at} v={v} j={j} cell={cell} gap={gap} />
+      {chips.map((ch, k) => (
+        <Chip key={k} {...ch} cx={cx} cy={cy} v={v} cell={cell} />
       ))}
     </>
   );
 }
-function EchoRing({ at, v, j, cell, gap }: { at: number; v: number; j: number; cell: number; gap: number }) {
-  const { c } = useTheme();
-  const k = useSharedValue(0);
+
+function Chip({ vx, vy, spin, size, delay, cx, cy, v, cell }: { vx: number; vy: number; spin: number; size: number; delay: number; cx: number; cy: number; v: number; cell: number }) {
+  const t = useSharedValue(0);
   useEffect(() => {
-    k.value = withDelay(j * ECHO_GAP, withTiming(1, { duration: ECHO_MS, easing: Easing.out(Easing.cubic) }));
+    t.value = withDelay(delay, withTiming(1, { duration: BURST_MS - delay, easing: Easing.linear }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const g = cell * 3.2; // gravity, in cells per (burst time)^2
+  const st = useAnimatedStyle(() => {
+    const k = t.value;
+    // Thrown out fast, slowed by the air, pulled down.
+    const d = 1 - Math.pow(1 - k, 2.2);
+    return {
+      opacity: k === 0 ? 0 : k < 0.75 ? 1 : (1 - k) / 0.25,
+      transform: [{ translateX: cx - size / 2 + vx * d }, { translateY: cy - size / 2 + vy * d + g * k * k }, { rotate: `${spin * k}deg` }, { scale: 1 - k * 0.3 }],
+    };
+  });
+  return (
+    <Animated.View style={[{ position: 'absolute', left: 0, top: 0 }, st]}>
+      <Block v={v} size={size} numbers={false} />
+    </Animated.View>
+  );
+}
+
+/** The stud of an earned sweep, flying from its merge to the sweep key in an
+    arc, turning as it goes, and shrinking to the stud's size on arrival. */
+function StudFlight({ at, to, cell, gap }: { at: number; to: { x: number; y: number }; cell: number; gap: number }) {
   const pad = gap / 2;
-  const reach = 0.55 + j * 0.45;
-  const st = useAnimatedStyle(() => ({
-    opacity: k.value === 0 ? 0 : 1 - k.value,
-    transform: [{ scale: 1 + k.value * reach }],
-  }));
+  const from = { x: pad + (at % N) * cell + cell / 2 - 9, y: pad + ((at / N) | 0) * cell + cell / 2 - 9 };
+  const k = useSharedValue(0);
+  useEffect(() => {
+    k.value = withTiming(1, { duration: STUD_FLY, easing: Easing.inOut(Easing.cubic) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const st = useAnimatedStyle(() => {
+    const p = k.value;
+    const lift = Math.sin(Math.PI * p) * cell * 1.2;
+    return {
+      transform: [
+        { translateX: from.x + (to.x - from.x) * p },
+        { translateY: from.y + (to.y - from.y) * p - lift },
+        { rotate: `${p * 360}deg` },
+        { scale: 1.9 - p * 0.9 + Math.sin(Math.PI * p) * 0.4 },
+      ],
+    };
+  });
   return (
     <Animated.View
       style={[
-        {
-          position: 'absolute',
-          left: pad + (at % N) * cell + gap / 2,
-          top: pad + ((at / N) | 0) * cell + gap / 2,
-          width: cell - gap,
-          height: cell - gap,
-          borderWidth: Math.max(3, gap),
-          borderColor: c.tile[rank(v)],
-        },
+        { position: 'absolute', left: 0, top: 0, width: 18, height: 18, borderRadius: 5, backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 2px 0 #C9A21F, inset 0 1px 0 rgba(255,255,255,0.8)' },
         st,
       ]}
     />

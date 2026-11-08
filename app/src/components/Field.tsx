@@ -12,7 +12,8 @@ import Animated, {
 import { enter } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { mix, rank } from '@/design/tokens';
-import { Block, plateStyle, RADIUS, Socket } from './Block';
+import { Block, numSize, plateStyle, RADIUS, Socket } from './Block';
+import { TileNum } from './TileNum';
 
 /* The one drawing used everywhere: the board, pieces in the tray, the held
    piece. Plastic blocks (2026-11-08): the board is a white plate with a
@@ -167,8 +168,25 @@ const Cell = memo(function Cell({ v, left, top, size, board, numbers, look, c }:
   return (
     <>
       {board || v === 0 ? <Socket size={size} style={box} /> : null}
+      {/* Where a held piece will land, and what it will make: the socket
+          itself lights up in the tile's colour, a ring and the number, so it
+          never reads as a block already standing there. */}
       {look?.ghost ? (
-        <View pointerEvents="none" style={[box, { borderRadius: r, backgroundColor: c.tile[rank(look.ghost)], opacity: 0.32 }]} />
+        <View
+          pointerEvents="none"
+          style={[
+            box,
+            {
+              borderRadius: r,
+              borderWidth: Math.max(2, Math.round(size * 0.06)),
+              borderColor: c.tile[rank(look.ghost)],
+              backgroundColor: mix(c.tile[rank(look.ghost)], c.canvas, 0.12),
+              alignItems: 'center',
+              justifyContent: 'center',
+            },
+          ]}>
+          {numbers && look.ghost > 0 ? <TileNum v={look.ghost} size={numSize(size)} color={c.tile[rank(look.ghost)]} /> : null}
+        </View>
       ) : null}
       {block ? (
         <Animated.View pointerEvents="none" style={[box, { transformOrigin: 'bottom' }, anim]}>
