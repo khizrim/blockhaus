@@ -2,13 +2,14 @@
 
     python3 scripts/make-sounds.py      # writes assets/sounds/*.wav
 
-The palette follows the board: physical blocks of painted wood. Placing,
-picking up and sweeping are wood (short inharmonic modes, a puff of noise for
-the contact). Merges are a tuned mallet, a soft marimba, that climbs the major
-pentatonic one step per rung, so a cascade audibly goes up a staircase. The
-win plays the whole ladder; game over steps down two notes. Everything is
-short, soft at the attack and quiet: a puzzle you play for an hour must not
-tire the ear.
+The palette follows the board: glossy plastic blocks on a plastic plate
+(2026-11-08). Placing is a short plastic thud, a triangle wave falling in
+pitch with a puff of band-passed noise for the contact; heavier pieces sit
+lower. Keys are a bright plastic click. Merges are clean sine notes that
+climb the C major pentatonic one degree per merge of a cascade, with no
+click on top, so a chain is a staircase and never a drum roll. A new tray is
+one soft pop. Everything is short and quiet: a puzzle you play for an hour
+must not tire the ear.
 """
 import os
 import sys
@@ -93,41 +94,66 @@ def write(name, x, peak=0.5):
         w.writeframes(data.tobytes())
 
 
-# ---------- wood ----------
+# ---------- the two voices of the sandbox ----------
 
-def knock(f0, d=0.16, bright=1.0):
-    """A block of wood set down on wood: low body modes plus a contact click."""
-    body = modes([f0, f0 * 2.31, f0 * 3.9, f0 * 5.6], [1, 0.5 * bright, 0.25 * bright, 0.1 * bright], [0.05, 0.025, 0.012, 0.007], d)
-    click = lowpass(highpass(noise(d), 1500), 3500) * env(d, 0.0005, 0.004) * 0.3 * bright
-    return lowpass(lowpass(body + click, 4000), 5000)
-
-
-def tick(f0, d=0.06):
-    """A light tap: the piece leaving the tray, a button."""
-    body = modes([f0, f0 * 2.7], [1, 0.35], [0.012, 0.006], d, attack=0.0008)
-    click = lowpass(highpass(noise(d), 2000), 4500) * env(d, 0.0003, 0.002) * 0.2
-    return lowpass(body + click, 6000)
-
-
-# ---------- mallet ----------
-
-def marimba(f, d=0.7, soft=1.0):
-    """A soft marimba bar: fundamental, the 4th partial a bar is tuned to, a
-    faint 10th, and a felt-mallet thump."""
-    x = modes([f, f * 3.99, f * 9.9], [1, 0.22 * soft, 0.05 * soft], [0.28, 0.06, 0.02], d, attack=0.004)
-    thump = lowpass(noise(d), 900) * env(d, 0.001, 0.008) * 0.25
-    return x + thump
+def osc(kind, f0, f1, d, vol, delay=0.0):
+    """An oscillator gliding exponentially from f0 to f1 over d, 3 ms attack, exponential decay."""
+    x = t(d + 0.02)
+    f = f0 * (f1 / f0) ** np.clip(x / d, 0, 1)
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    if kind == 'triangle':
+        w = 2 / np.pi * np.arcsin(np.sin(ph))
+    else:
+        w = np.sin(ph)
+    g = np.where(x < 0.003, x / 0.003 * vol, vol * (0.0001 / vol) ** np.clip((x - 0.003) / (d - 0.003), 0, 1))
+    return layer(np.zeros(0), w * g, delay)
 
 
-def note(semis_from_c5):
-    return 523.25 * 2 ** (semis_from_c5 / 12)
+def biquad_bandpass(x, f, q):
+    w0 = 2 * np.pi * f / SR
+    al = np.sin(w0) / (2 * q)
+    b0, b2 = al, -al
+    a0, a1, a2 = 1 + al, -2 * np.cos(w0), 1 - al
+    y = np.zeros_like(x)
+    x1 = x2 = y1 = y2 = 0.0
+    for i in range(len(x)):
+        y0 = (b0 * x[i] + b2 * x2 - a1 * y1 - a2 * y2) / a0
+        x2, x1, y2, y1 = x1, x[i], y1, y0
+        y[i] = y0
+    return y
 
 
-# Major pentatonic from C5, one step per rung. Rung 3 (the first merge, 1+2)
-# is C5; 96, rung 8, is C6 an octave above; 192 steps on to D6, 384 to E6
-# and 768 to G6.
-PENT = [0, 2, 4, 7, 9, 12, 14, 16, 19]
-RUNG_NOTE = {r: note(PENT[r - 3]) for r in range(3, 12)}
+def burst(d, f, q, vol, delay=0.0):
+    """White noise fading out linearly over d, through a band-pass at f."""
+    n = int(SR * d)
+    x = rng.uniform(-1, 1, n) * (1 - np.arange(n) / n)
+    return layer(np.zeros(0), biquad_bandpass(x, f, q) * vol, delay)
+
+
+def mix(*parts):
+    out = np.zeros(0)
+    for p in parts:
+        out = layer(out, p)
+    return out
+
+
+def thud(h=1.0):
+    """A plastic block set down; h is its weight, 1 for 1s and 2s."""
+    return mix(osc('triangle', 320 / h, 150 / h, 0.07 * h, 0.22), burst(0.035, 1900 / h, 0.8, 0.22))
+
+
+def click():
+    return mix(burst(0.015, 5200, 2, 0.35), osc('triangle', 1400, 1100, 0.03, 0.08))
+
+
+def note(i):
+    """Degree i of the C major pentatonic from C5."""
+    semi = 12 * (i // 5) + [0, 2, 4, 7, 9][i % 5]
+    return 523.25 * 2 ** (semi / 12)
+
+
+def tone(f, d=0.5, vol=0.2):
+    return mix(osc('sine', f, f, d, vol), osc('sine', f * 2, f * 2, d * 0.24, vol * 0.25))
 
 
 ONLY = set(sys.argv[1:])
@@ -136,74 +162,47 @@ ONLY = set(sys.argv[1:])
 def main():
     os.makedirs(OUT, exist_ok=True)
 
-    # Placing: the wood knock. Three sizes so a three-cell piece sounds a
-    # touch heavier than a single cell.
-    write('place-1', knock(330, bright=1.0), 0.55)
-    write('place-2', layer(knock(280, bright=0.9), knock(300, bright=0.6), 0.012, 0.4), 0.6)
-    write('place-3', layer(knock(230, d=0.2, bright=0.85), knock(260, bright=0.5), 0.016, 0.4), 0.65)
+    # Placing: the plastic thud, a touch heavier for a bigger piece.
+    write('place-1', thud(1.0), 0.55)
+    write('place-2', thud(1.08), 0.6)
+    write('place-3', thud(1.16), 0.65)
 
-    # Picking up: a light upward tick.
-    write('pick', tick(1100) + 0.5 * tick(1500), 0.3)
+    # Picking up: a short breath of noise.
+    write('pick', burst(0.05, 1800, 1.2, 0.12), 0.3)
 
-    # Dropped where it does not fit: two muffled low taps, never a buzzer.
-    d = 0.2
-    a = lowpass(knock(180, d=d, bright=0.3), 1200)
-    write('invalid', layer(a, lowpass(knock(160, d=d, bright=0.3), 1000), 0.075, 0.8), 0.4)
+    # Dropped where it does not fit: the repelling magnet, two low pushes.
+    write('invalid', mix(osc('sine', 110, 80, 0.12, 0.25), osc('sine', 110, 80, 0.1, 0.18, 0.07)), 0.4)
 
-    # Merges, one per rung the merge produces.
-    for r in range(3, 12):
-        write(f'merge-{r}', marimba(RUNG_NOTE[r]), 0.5)
+    # Merges: merge-3 … merge-11 are the 1st … 9th merge of a cascade, one
+    # pentatonic degree each, starting a step above C5.
+    for k in range(9):
+        write(f'merge-{k + 3}', tone(note(1 + k)), 0.5)
 
-    # A milestone (a new best of 24, rung 6, and up): the rung's note struck with its
-    # octave and fifth a beat apart, like a bell, then a soft held shimmer.
+    # A milestone: its note with the fifth and the octave a beat apart.
     for r in range(6, 12):
-        f = RUNG_NOTE[r]
-        out = np.zeros(int(SR * 1.3))
-        out = layer(out, marimba(f, 0.9) * 0.8, 0.0)
-        out = layer(out, marimba(f * 1.5, 0.8) * 0.5, 0.07)
-        out = layer(out, marimba(f * 2, 0.9) * 0.55, 0.14)
-        bell = modes([f * 2, f * 2 * 2.76], [0.25, 0.06], [0.9, 0.3], 1.1, attack=0.01)
-        out = layer(out, bell, 0.14)
+        i = r - 2
+        out = mix(tone(note(i), 0.7), layer(np.zeros(0), tone(note(i + 3), 0.7, 0.14), 0.07), layer(np.zeros(0), tone(note(i + 5), 0.9, 0.16), 0.14))
         write(f'milestone-{r}', out, 0.5)
 
-    # Sweep: the board slides on felt. Band-limited noise with a falling
-    # cutoff, then a knock as it settles.
-    d = 0.24
-    x = t(d)
-    cut = 2200 * np.exp(-x / 0.08) + 250
-    sweep = lowpass(lowpass(highpass(noise(d), 200), cut), cut) * np.sin(np.pi * np.clip(x / d, 0, 1)) ** 0.6
-    write('sweep', layer(sweep * 0.8, knock(240, d=0.12, bright=0.5), 0.16, 0.6), 0.4)
+    # Sweep: the blocks slide, then hit the wall.
+    write('sweep', mix(burst(0.16, 500, 0.7, 0.18), osc('triangle', 140, 60, 0.1, 0.22, 0.14)), 0.4)
 
-    # A fresh tray: three quick ticks, rising.
-    out = np.zeros(int(SR * 0.22))
-    for k, f in enumerate([700, 850, 1000]):
-        s = tick(f, 0.06)
-        out = layer(out, s, 0.055 * k)
-    write('tray', out, 0.25)
+    # A fresh tray: one soft pop.
+    write('tray', osc('triangle', 520, 820, 0.07, 0.1), 0.25)
 
-    # UI: a quiet paper tap for buttons, and two for a switch.
-    write('tap', lowpass(tick(1400, 0.04), 5000), 0.18)
-    write('toggle-on', layer(tick(1200, 0.05), tick(1600, 0.05), 0.03, 0.6), 0.2)
-    write('toggle-off', layer(tick(1600, 0.05), tick(1200, 0.05), 0.03, 0.6), 0.2)
+    # Keys: the plastic click, and two for a switch.
+    write('tap', click(), 0.2)
+    write('toggle-on', mix(click(), layer(np.zeros(0), osc('triangle', 1400, 1900, 0.04, 0.08), 0.03)), 0.22)
+    write('toggle-off', mix(click(), layer(np.zeros(0), osc('triangle', 1400, 1000, 0.04, 0.08), 0.03)), 0.22)
 
-    # Win: the ladder, rung by rung, then the top note and its fifth held.
-    total = 2.0
-    out = np.zeros(int(SR * total))
-    for k, r in enumerate(range(3, 9)):
-        s = marimba(RUNG_NOTE[r], 0.5) * 0.7
-        out = layer(out, s, 0.09 * k)
-    i = int(SR * 0.09 * 6 + 0.05 * SR)
-    for f, a in [(RUNG_NOTE[9], 1.0), (RUNG_NOTE[9] * 1.5, 0.5), (RUNG_NOTE[9] / 2, 0.45)]:
-        s = modes([f, f * 3.99], [a, 0.15 * a], [0.6, 0.1], total - i / SR, attack=0.005)
-        out = layer(out, s, i / SR)
+    # Win: the block lands, then a chord climbs, 90 ms a note.
+    out = thud(1.8)
+    for k, i in enumerate([0, 2, 4, 7]):
+        out = layer(out, tone(note(i), 0.9), 0.09 + 0.09 * k)
     write('win', out, 0.55)
 
-    # Game over: two soft notes stepping down, no drama.
-    out = np.zeros(int(SR * 1.2))
-    for k, f in enumerate([note(4), note(-3)]):
-        s = marimba(f, 0.9, soft=0.6) * (1 - 0.2 * k)
-        out = layer(out, s, 0.22 * k)
-    write('over', lowpass(out, 3000), 0.45)
+    # Game over: two soft notes gliding down.
+    write('over', mix(osc('sine', 330, 220, 0.3, 0.2), osc('sine', 247, 165, 0.4, 0.2, 0.18)), 0.45)
 
 
 if __name__ == '__main__':

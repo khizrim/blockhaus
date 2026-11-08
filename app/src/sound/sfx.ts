@@ -158,18 +158,19 @@ export const fx = {
     play('invalid');
     buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));
   },
-  /** One merge producing `value`. `step` is its place in a placed piece's
-      cascade: each later step plays a semitone higher (up to five) and
-      presses a little harder, so a long chain is heard before its ×2 shows. */
+  /** One merge producing `value`. `step` is its place in the cascade: each
+      merge plays the next degree of the pentatonic, so a chain climbs a
+      staircase; the hand presses harder as the chain grows and as the tile
+      gets heavier. */
   merge: (value: number, step = 0) => {
     const r = rungOf(value);
-    play(`merge-${r}` as SoundName, step ? 2 ** (Math.min(step, 5) / 12) : 1);
+    play(`merge-${3 + Math.min(8, step)}` as SoundName);
     const style = step >= 4 ? Haptics.ImpactFeedbackStyle.Heavy : step >= 2 || r >= 6 ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Soft;
     buzz(() => Haptics.impactAsync(style));
   },
   /** A chain: each step one beat after the last, so it climbs audibly. */
   cascade: (values: number[], beat = 120) => {
-    values.forEach((v, k) => setTimeout(() => fx.merge(v), k * beat));
+    values.forEach((v, k) => setTimeout(() => fx.merge(v, k), k * beat));
   },
   sweep: () => {
     play('sweep');

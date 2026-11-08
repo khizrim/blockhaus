@@ -35,6 +35,8 @@ export type CellLook = {
   shadow?: boolean;
   /** Delay for the first appearance, for staggered intros. */
   enterDelay?: number;
+  /** Leaning toward (or away from) a held piece, in parts of a cell. */
+  lean?: [number, number];
 };
 
 type Props = {
@@ -103,6 +105,15 @@ const Cell = memo(function Cell({ v, left, top, size, board, numbers, look, c }:
   const sx = useSharedValue(1);
   const sy = useSharedValue(1);
   const dy = useSharedValue(0);
+  const lx = useSharedValue(0);
+  const ly = useSharedValue(0);
+  const leanX = look?.lean?.[0] ?? 0;
+  const leanY = look?.lean?.[1] ?? 0;
+  useEffect(() => {
+    lx.value = withTiming(leanX * size, { duration: 120, easing: Easing.out(Easing.quad) });
+    ly.value = withTiming(leanY * size, { duration: 120, easing: Easing.out(Easing.quad) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leanX, leanY]);
 
   useEffect(() => {
     if (look?.enterDelay !== undefined) appear.value = withDelay(look.enterDelay, withTiming(1, enter()));
@@ -131,7 +142,7 @@ const Cell = memo(function Cell({ v, left, top, size, board, numbers, look, c }:
 
   const anim = useAnimatedStyle(() => ({
     opacity: Math.min(1, appear.value * 1.5),
-    transform: [{ translateY: dy.value + (1 - appear.value) * size * 0.3 }, { scaleX: sx.value }, { scaleY: sy.value * (0.6 + appear.value * 0.4) }],
+    transform: [{ translateX: lx.value }, { translateY: dy.value + ly.value + (1 - appear.value) * size * 0.3 }, { scaleX: sx.value }, { scaleY: sy.value * (0.6 + appear.value * 0.4) }],
   }));
 
   const box: ViewStyle = { position: 'absolute', left, top, width: size, height: size };

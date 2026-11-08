@@ -33,6 +33,9 @@ import { INTRO_STEP, MedalTrack, TaskSquares, Track, milestonesFor } from '@/com
 
 const N = engine.N;
 const STEP = 190; // ms between merges of a chain: long enough to read each one
+/** A cascade speeds up as it goes: the gap before merge k+1. */
+const GAPS = [180, 160, 140, 120, 110];
+const chainAt = (k: number) => GAPS.slice(0, k).reduce((a, b) => a + b, 0) + Math.max(0, k - GAPS.length) * GAPS[GAPS.length - 1];
 const FLY = 110; // ms for an absorbed tile to fly into its partner
 const ECHO_MS = 460; // ms one square wave of a chained merge takes to fade
 const ECHO_GAP = 70; // ms between the waves of one merge
@@ -578,7 +581,7 @@ export default function Game() {
        the frame it lands, so a chain of three shows how far it got: three of
        five. A full layer becomes the earned sweep. */
     if (counted && g.cfg.chainBonus && res.steps.length) {
-      res.steps.slice(0, g.cfg.chainBonus).forEach((_, k) => later(90 + k * STEP + FLY, () => setChain(k + 1)));
+      res.steps.slice(0, g.cfg.chainBonus).forEach((_, k) => later(90 + chainAt(k) + FLY, () => setChain(k + 1)));
       later(done + (res.bonus ? 0 : 700), () => setChain(0));
     }
     if (res.bonus) {
@@ -599,7 +602,7 @@ export default function Game() {
       when the last merge has landed. */
   const playChain = (frame: number[], steps: Step[], marks: boolean[], base: number) => {
     steps.forEach((st, k) => {
-      const t0 = base + k * STEP;
+      const t0 = base + chainAt(k);
       const value = frame[st.absorbed[0]];
       for (const a of st.absorbed) frame[a] = 0;
       const mid = frame.slice();
@@ -615,7 +618,7 @@ export default function Game() {
         land(st.anchor, st.level, marks[k], snap, st.pts, k);
       });
     });
-    return base + Math.max(0, steps.length - 1) * STEP + (steps.length ? FLY : 0);
+    return base + chainAt(Math.max(0, steps.length - 1)) + (steps.length ? FLY : 0);
   };
 
   const holdRef = useRef<Hold | null>(null);
@@ -678,6 +681,20 @@ export default function Game() {
       if (hold) {
         const pv = hold.piece.cells[0][2];
         if (shown[i] > 0 && !engine.pairs(pv, shown[i])) l.dim = true;
+        /* Magnets: a tile next to where the piece would land leans toward a
+           partner it would join, and away from a like pole (1 by 1, 2 by 2). */
+        if (target && shown[i] > 0) {
+          const x = i % N;
+          const y = (i / N) | 0;
+          for (const [cx, cy, cv] of hold.piece.cells) {
+            const dx = target.gx + cx - x;
+            const dy = target.gy + cy - y;
+            if (Math.abs(dx) + Math.abs(dy) !== 1) continue;
+            if (engine.pairs(cv, shown[i])) l.lean = [dx * 0.09, dy * 0.09];
+            else if (cv < 3 && cv === shown[i]) l.lean = [-dx * 0.07, -dy * 0.07];
+            if (l.lean) break;
+          }
+        }
         if (target && preview) {
           // The move played out ahead: the tiles that will fly in get the
           // "about to be eaten" frame, every one of the cascade and only
@@ -719,7 +736,18 @@ export default function Game() {
      two tiles met. */
   const sx = useSharedValue(0);
   const sy = useSharedValue(0);
-  const boardStyle = useAnimatedStyle(() => ({ transform: [{ translateX: sx.value }, { translateY: sy.value }, { scale: bump.value }] }));
+  // The board tips like a tray in the hands when swept: 3° toward the way the blocks go.
+  const tx = useSharedValue(0);
+  const ty = useSharedValue(0);
+  const boardStyle = useAnimatedStyle(() => ({
+    transform: [{ perspective: 900 }, { translateX: sx.value }, { translateY: sy.value }, { rotateX: `${tx.value}deg` }, { rotateY: `${ty.value}deg` }, { scale: bump.value }],
+  }));
+  const tilt = (dir: Dir, deg: number, hold: number) => {
+    const [ux, uy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
+    const go = (v: number) => withSequence(withTiming(v, { duration: 90, easing: Easing.out(Easing.quad) }), withDelay(hold, withTiming(0, { duration: 160, easing: Easing.inOut(Easing.quad) })));
+    tx.value = go(-uy * deg);
+    ty.value = go(ux * deg);
+  };
 
   /* The sweep key shows the gesture instead of doing it: the board leans
      each way in turn, the way a swipe would tip it. */
@@ -742,7 +770,7 @@ export default function Game() {
     if (lesson?.dirs && !lesson.dirs.includes(dir)) return;
     if (!g.cfg.freeSweeps && g.sweeps === 0) {
       fx.invalid();
-      shake();
+      tilt(dir, 1.5, 0);
       return;
     }
     settle();
@@ -753,10 +781,11 @@ export default function Game() {
     const res = store.sweep(dir);
     if (!res) {
       fx.invalid();
-      shake();
+      tilt(dir, 1.5, 0);
       return;
     }
     fx.sweep();
+    tilt(dir, 3, SLIDE - 90);
     const push = res.pushed ?? null;
     const allMarks = milestonesIn([...res.made.map((m) => m.level), ...(push ? push.steps.map((st) => st.level) : [])]);
     const marks = allMarks.slice(0, res.made.length);
@@ -778,8 +807,8 @@ export default function Game() {
       if (res.spawned) setLands((l) => ({ ...l, [res.spawned!.at]: Date.now() }));
       // The board meets the wall it was pushed against.
       const [ux, uy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
-      sx.value = withSequence(withTiming(ux * 5, { duration: 50 }), withTiming(0, back(240, 2.5)));
-      sy.value = withSequence(withTiming(uy * 5, { duration: 50 }), withTiming(0, back(240, 2.5)));
+      sx.value = withSequence(withTiming(ux * 2, { duration: 50 }), withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) }));
+      sy.value = withSequence(withTiming(uy * 2, { duration: 50 }), withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) }));
     });
     // The k-th merge of one tile in its line is step k of its chain.
     const nth: Record<number, number> = {};
@@ -1208,7 +1237,8 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
   const b = at(m.to);
   const k = useSharedValue(0);
   useEffect(() => {
-    k.value = withTiming(1, ms === SLIDE ? enter(ms) : { duration: ms, easing: Easing.in(Easing.quad) });
+    // A sweep slides in; a merge's lighter tile is pulled and accelerates into its partner.
+    k.value = withTiming(1, ms === SLIDE ? { duration: ms, easing: Easing.in(Easing.quad) } : { duration: ms, easing: Easing.bezier(0.6, 0, 1, 0.6) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const st = useAnimatedStyle(() => ({
