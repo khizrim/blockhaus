@@ -117,6 +117,11 @@ function kickMusic() {
   if (musicOn) getMusic().resume();
 }
 
+/* A cascade's notes ring one over the next, so a long chain piles up into
+   a cluster. At most two merge notes ring at once: a third one stops the
+   oldest, so the chain stays a climbing line. */
+const ringing: AudioPlayer[] = [];
+
 /** Play one sound, regardless of the haptic. */
 export function play(name: SoundName, rate = 1) {
   kickMusic();
@@ -132,6 +137,12 @@ export function play(name: SoundName, rate = 1) {
     p.setPlaybackRate(rate);
     p.seekTo(0).catch(() => {});
     p.play();
+    if (name.startsWith('merge-')) {
+      const i = ringing.indexOf(p);
+      if (i >= 0) ringing.splice(i, 1);
+      ringing.push(p);
+      while (ringing.length > 2) ringing.shift()!.pause();
+    }
   } catch {
     // Sound is a garnish: a failed play never reaches the game.
   }
