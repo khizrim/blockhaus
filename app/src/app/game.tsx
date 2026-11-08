@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { Easing, FadeOut, SlideInUp, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Field, type CellLook } from '@/components/Field';
 import { Overlay } from '@/components/Overlay';
@@ -12,18 +12,16 @@ import { dur, enter, exit, HIT, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Game as EngineGame, type Piece, type Step } from '@/game/engine';
-import { DAILY, RULES, medalOf, medalsFor, ruleOf } from '@/game/daily';
+import { DAILY } from '@/game/daily';
 import { LESSONS } from '@/game/lessons';
 import { slideMoves, type Move } from '@/game/slide';
-import { useGame, type News } from '@/game/store';
-import { POSTERS } from '@/game/meta';
-import { WallPoster } from '@/components/WallPoster';
+import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
 import { TileNum } from '@/components/TileNum';
 import { Block, plateStyle, Socket } from '@/components/Block';
 import Svg, { Path } from 'react-native-svg';
 import { Formula } from '@/components/Formula';
-import { INTRO_STEP, MedalTrack, TaskSquares, Track, milestonesFor } from '@/components/Track';
+import { INTRO_STEP, milestonesFor } from '@/components/Track';
 
 /* The game. The rules are the engine the prototype and the balance simulator
    run; this screen only shows them. A placement lands first, then each merge
@@ -120,23 +118,8 @@ export default function Game() {
   /* The daily's rules stay in sight: pieces left and the next medal. */
   const piecesLeft = Math.max(0, DAILY.pieceLimit - g.moves);
   // A medal reached mid-game rings once, on the move that reached it.
-  const medalRank = isDaily ? (medalOf(g.score, store.daily.key)?.rank ?? 0) : 0;
-  const MEDALS = medalsFor(store.daily.key);
-  const dayRule = isDaily ? ruleOf(store.daily.key) : null;
-  const [ruleSeen, setRuleSeen] = useState(false);
-  // The news card on screen: shown once, then it slides away.
-  const [newsShown, setNewsShown] = useState(store.news?.id ?? 0);
-  /* The free game with sweeps earned by cascades keeps both: the layers
-     of sweeps in hand right under the board, the milestones under them. */
   const counted = !g.cfg.freeSweeps && g.cfg.sweepsMax > 0;
-  // The milestone track under the board is gone with the plastic redesign (2026-11-08): the board stands alone.
   const showTrack = false;
-  const lastMedal = useRef({ rank: medalRank, daily: isDaily });
-  useEffect(() => {
-    // Opening the daily with medals already won is not a new medal.
-    if (lastMedal.current.daily === isDaily && medalRank > lastMedal.current.rank) fx.bonus();
-    lastMedal.current = { rank: medalRank, daily: isDaily };
-  }, [medalRank, isDaily]);
   const lesson = store.lesson === null ? null : LESSONS[store.lesson];
   const [coach, setCoach] = useState<'task' | 'done'>('task');
   /** The lesson whose explanation card is up, if any. */
@@ -1099,7 +1082,6 @@ export default function Game() {
               new tray slides them back in. */}
           {/* The game of the day climbs to medals, not to 384. Sweeps are
               counted by the studs on the sweep key. */}
-          {isDaily ? <MedalTrack medals={MEDALS} score={g.score} width={col} gap={gap} top={trackTop} /> : null}
         </View>
 
         {/* tray: an L1 surface with three slots */}
@@ -1141,58 +1123,6 @@ export default function Game() {
           ))}
         </View>
       </Screen>
-
-      {/* The first daily explains itself once: what is different and why. */}
-      {isDaily && !store.dailyIntro && g.moves === 0 ? (
-        <View style={StyleSheet.absoluteFill}>
-          <Overlay>
-            <Panel>
-              <Heading>Игра дня</Heading>
-              <Body muted style={{ marginTop: space.sm }}>
-                Сегодня у всех одна и та же доска и одни и те же фигуры. Партия короткая: {DAILY.pieceLimit} фигур. Наберите очки на медаль и сравните результат с друзьями.
-              </Body>
-              {dayRule ? <Body style={{ marginTop: space.sm }}>{`${RULES[dayRule].name}: ${RULES[dayRule].about.charAt(0).toLowerCase()}${RULES[dayRule].about.slice(1)}`}</Body> : null}
-              <View style={{ flexDirection: 'row', gap: space.xl, marginTop: space.lg }}>
-                {MEDALS.map((m) => (
-                  <View key={m.rank} style={{ gap: space.xs, alignItems: 'flex-start' }}>
-                    <Block v={1} size={28} numbers={false} fill={m.tile ? c.tile[m.tile] : c.faint} />
-                    <Text style={[type.secondary, { color: c.muted }]}>{m.at}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={{ marginTop: space.xl }}>
-                <Button kind="primary" size="lg" label="Начать" onPress={store.markDailyIntro} />
-              </View>
-            </Panel>
-          </Overlay>
-        </View>
-      ) : null}
-
-      {/* A weekday rule says itself before the first piece of the day. */}
-      {isDaily && store.dailyIntro && dayRule && !ruleSeen && g.moves === 0 ? (
-        <View style={StyleSheet.absoluteFill}>
-          <Overlay onDismiss={() => setRuleSeen(true)}>
-            <Panel>
-              <Heading>{RULES[dayRule].name}</Heading>
-              <Body muted style={{ marginTop: space.sm }}>{RULES[dayRule].about} Медали сегодня свои.</Body>
-              <View style={{ flexDirection: 'row', gap: space.xl, marginTop: space.lg }}>
-                {MEDALS.map((m) => (
-                  <View key={m.rank} style={{ gap: space.xs, alignItems: 'flex-start' }}>
-                    <Block v={1} size={28} numbers={false} fill={m.tile ? c.tile[m.tile] : c.faint} />
-                    <Text style={[type.secondary, { color: c.muted }]}>{m.at}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={{ marginTop: space.xl }}>
-                <Button kind="primary" size="lg" label="Начать" onPress={() => setRuleSeen(true)} />
-              </View>
-            </Panel>
-          </Overlay>
-        </View>
-      ) : null}
-
-      {/* What the move just earned: a task of the day done, or a poster for the wall. */}
-      {store.news && newsShown !== store.news.id ? <NewsCard key={store.news.id} news={store.news} onDone={() => setNewsShown(store.news!.id)} /> : null}
 
       {lesson && coach === 'task' && !hold && !held && !sliding && geo ? (
         demoSlot >= 0 && geo.slot && lesson.hint ? (
@@ -1685,36 +1615,6 @@ function progressTo(board: number[], next: number): number {
   let sum = 0;
   for (const v of board) if (v >= next / 4 && v < next) sum += v;
   return Math.min(0.95, sum / next);
-}
-
-/** A card that drops in at the top of the screen for a moment: the task of
-    the day just done (its square lit) or the poster just earned. */
-function NewsCard({ news, onDone }: { news: News; onDone: () => void }) {
-  const { c } = useTheme();
-  const ins = useSafeAreaInsets();
-  const p = POSTERS.find((x) => x.id === news.ref);
-  useEffect(() => {
-    fx.bonus();
-    const t = setTimeout(onDone, 2600);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return (
-    <Animated.View
-      entering={SlideInUp.duration(260)}
-      exiting={FadeOut.duration(200)}
-      pointerEvents="none"
-      accessibilityLiveRegion="polite"
-      style={{ position: 'absolute', top: ins.top + space.sm, left: space.lg, right: space.lg, alignItems: 'center' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: 16, backgroundColor: c.plate, boxShadow: `0 4px 0 ${c.plateEdge}, 0 10px 20px rgba(0,0,0,0.08)`, maxWidth: 400 }}>
-        {news.kind === 'poster' && p ? <WallPoster p={p} width={40} /> : <TaskSquares done={[true]} size={28} />}
-        <View style={{ flexShrink: 1 }}>
-          <Text style={[type.meta, { color: c.muted }]}>{news.kind === 'poster' ? 'Новый плакат' : 'Задание дня'}</Text>
-          <Text numberOfLines={2} style={[type.secondaryStrong, { color: c.text }]}>{news.title}</Text>
-        </View>
-      </View>
-    </Animated.View>
-  );
 }
 
 /** The score: Rubik 700, one size, counting up with every merge. */
