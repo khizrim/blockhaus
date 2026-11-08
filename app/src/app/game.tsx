@@ -4,8 +4,7 @@ import { PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimension
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Field, type CellLook } from '@/components/Field';
-import { Overlay } from '@/components/Overlay';
-import { Body, Button, Heading, IconButton, Key, Label, Panel, Screen, TextLink } from '@/components/ui';
+import { IconButton, Key, Screen } from '@/components/ui';
 import { pieceGrid } from '@/design/mock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dur, enter, exit, HIT, space, type } from '@/design/system';
@@ -17,7 +16,7 @@ import { slideMoves, type Move } from '@/game/slide';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
 import { TileNum } from '@/components/TileNum';
-import { Block, plateStyle, Socket } from '@/components/Block';
+import { Block, Socket } from '@/components/Block';
 import { Icon } from '@/components/icons';
 import { Formula } from '@/components/Formula';
 import { INTRO_STEP, milestonesFor } from '@/components/Track';
@@ -47,8 +46,7 @@ const noSelect = { userSelect: 'none' } as object;
 const SWIPE = 24; // px of travel that counts as a swipe
 const SLIDE = dur.base; // ms for tiles to travel in a sweep
 const PUSH_MS = 260; // ms for the pushed piece to ride in from the far edge
-const EXPLAIN_AFTER = 1100; // ms from a proved step to its explanation card
-const LESSON_READ = 1400; // ms more to read the formula of a step with no card
+const LESSON_READ = 2500; // ms to read the proved formula before the next step slides in
 
 type Hold = { slot: number; piece: Piece };
 
@@ -118,8 +116,6 @@ export default function Game() {
   const showTrack = false;
   const lesson = store.lesson === null ? null : LESSONS[store.lesson];
   const [coach, setCoach] = useState<'task' | 'done'>('task');
-  /** The lesson whose explanation card is up, if any. */
-  const [explain, setExplain] = useState<number | null>(null);
   // The lesson on the board now, for timers that outlive a render (skip from pause).
   const lessonNow = useRef(store.lesson);
   lessonNow.current = store.lesson;
@@ -131,7 +127,6 @@ export default function Game() {
   }, [store.ready, learn]);
   useEffect(() => {
     setCoach('task');
-    setExplain(null);
     if (store.lesson === 0) lessonPeak.current = 0;
   }, [store.lesson]);
 
@@ -288,12 +283,8 @@ export default function Game() {
         if (!milestoneFired) fx.milestone(24 * 2 ** Math.min(k, 4));
         setCoach('done');
         kickLine();
-        // When the show has played, the board dims and a card says what
-        // happened. The player moves on with the button, in their own time.
-        // A step that only repeats an idea moves on by itself.
-        const wait = milestoneFired ? RIPPLE_MS + 200 : EXPLAIN_AFTER;
-        if (L.card) later(wait, () => lessonNow.current === k && setExplain(k));
-        else later(wait + LESSON_READ, () => advance(k));
+        // The formula stays up to be read, then the next step slides in.
+        later(milestoneFired ? RIPPLE_MS + 200 + LESSON_READ - 1100 : LESSON_READ, () => advance(k));
       } else if (pieceStep) {
         // Cannot happen with moves locked, but never leave a lesson stuck.
         later(400, () => lessonNow.current === k && store.startLesson(k));
@@ -301,13 +292,6 @@ export default function Game() {
     });
   };
 
-  /** «Понятно» on the explanation card: the card goes, then the next step. */
-  const nextLesson = () => {
-    const k = explain;
-    if (k === null) return;
-    setExplain(null);
-    advance(k);
-  };
   const advance = (k: number) => {
     later(dur.base, () => {
       if (lessonNow.current !== k) return;
@@ -663,6 +647,10 @@ export default function Game() {
             if (l.lean) break;
           }
         }
+        if (target) {
+          const m = hold.piece.cells.find(([cx, cy]) => (target.gy + cy) * N + target.gx + cx === i);
+          if (m) l.ghost = m[2];
+        }
         if (target && preview) {
           // The move played out ahead: the tiles that will fly in get the
           // "about to be eaten" frame, every one of the cascade and only
@@ -690,11 +678,11 @@ export default function Game() {
       return v;
     }
     if (!hold || !target) return shown;
+    /* The landing is previewed in the sockets, never as blocks: the piece's
+       cells and the tile a cascade ends as are lit moulds (CellLook.ghost),
+       so the cell where a cascade ends gives up its tile to its mould. */
     const v = shown.slice();
-    for (const [x, y, val] of hold.piece.cells) v[(target.gy + y) * N + target.gx + x] = val;
-    // The cell where a cascade ends shows the tile it ends as; a cell of
-    // the piece that flies into a bigger tile still shows the piece.
-    if (preview) for (const [i, r] of Object.entries(preview.result)) v[+i] = r;
+    if (preview) for (const i of Object.keys(preview.result)) v[+i] = 0;
     return v;
   }, [shown, hold, target, aim, preview]);
 
@@ -1034,29 +1022,6 @@ export default function Game() {
                 {scatter ? <Scatter key={scatter.id} board={scatter.board} cell={cell} gap={gap} /> : null}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
               </View>
-              {/* After a proved step: the board dims and a card says what
-                  happened and why. Nothing moves on until «Понятно». */}
-              {lesson && explain === store.lesson ? (
-                <View style={[StyleSheet.absoluteFill, { justifyContent: 'center' }]}>
-                  {/* A solid plate over the board, no scrim: the board is never seen through a page. */}
-                  <View style={[StyleSheet.absoluteFill, { left: -Math.max(0, Math.round(cell * 0.14) - gap / 2), right: -Math.max(0, Math.round(cell * 0.14) - gap / 2), top: -Math.max(0, Math.round(cell * 0.14) - gap / 2), bottom: -Math.max(0, Math.round(cell * 0.14) - gap / 2) }, plateStyle(c, Math.round(cell * 0.26))]} />
-                  <View style={{ padding: space.xl }}>
-                    <View>
-                      {/* The proved formula and the related rows, all at the
-                          tray's size, so the card reads as one table. */}
-                      <View style={{ gap: space.md }}>
-                        {[lesson.formula, ...(lesson.also ?? [])].map((row, k) => (
-                          <Formula key={k} terms={row} cell={trayCell} gap={gap} fit={col - space.xl * 2} />
-                        ))}
-                      </View>
-                      <Body style={{ marginTop: space.lg }}>{(counted && lesson.ruleCascade) || lesson.rule}</Body>
-                      <View style={{ marginTop: space.lg }}>
-                        <Button kind="primary" size="lg" label="Понятно" onPress={nextLesson} />
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              ) : null}
             </View>
           </Animated.View>
           {/* The sweeps are the board's thickness: one layer under it per
