@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, Text, View, type TextStyle, type ViewStyle } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { dur, enter, exit, HIT, space, type } from '@/design/system';
@@ -9,6 +8,7 @@ import { useTheme } from '@/design/theme';
 import { font, LADDER, rank } from '@/design/tokens';
 import { fx } from '@/sound/sfx';
 import { Block, Socket } from './Block';
+import { Icon } from './icons';
 import { TileNum } from './TileNum';
 
 /* ---------- screen shell ---------- */
@@ -267,32 +267,16 @@ export function IconButton({
 
 /* ---------- icons, drawn from blocks ---------- */
 
-export function PauseIcon({ color, s = 14 }: { color: string; s?: number }) {
-  return (
-    <View style={{ flexDirection: 'row', gap: s * 0.3 }}>
-      <View style={{ width: s * 0.32, height: s, borderRadius: s * 0.1, backgroundColor: color }} />
-      <View style={{ width: s * 0.32, height: s, borderRadius: s * 0.1, backgroundColor: color }} />
-    </View>
-  );
+export function PauseIcon({ color, s = 24 }: { color: string; s?: number }) {
+  return <Icon name="pause" color={color} size={Math.max(24, s)} />;
 }
 
-export function Arrow({ dir, color, s = 16 }: { dir: 'left' | 'right' | 'up' | 'down'; color: string; s?: number }) {
-  const rot = { right: 0, down: 90, left: 180, up: 270 }[dir];
-  const w = Math.max(2, s * 0.15);
-  return (
-    <Svg width={s} height={s} viewBox="0 0 16 16" style={{ transform: [{ rotate: `${rot}deg` }] }}>
-      <Path d="M2.5 8H13M8.5 3.5L13 8L8.5 12.5" stroke={color} strokeWidth={(w * 16) / s} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-    </Svg>
-  );
+export function Arrow({ dir, color, s = 24 }: { dir: 'left' | 'right' | 'up' | 'down'; color: string; s?: number }) {
+  return <Icon name={dir === 'left' ? 'back' : dir === 'right' ? 'chevron' : dir} color={color} size={Math.max(20, s)} />;
 }
 
-export function CloseIcon({ color, s = 16 }: { color: string; s?: number }) {
-  const w = Math.max(2, s * 0.15);
-  return (
-    <Svg width={s} height={s} viewBox="0 0 16 16">
-      <Path d="M3 3L13 13M13 3L3 13" stroke={color} strokeWidth={(w * 16) / s} strokeLinecap="round" fill="none" />
-    </Svg>
-  );
+export function CloseIcon({ color, s = 24 }: { color: string; s?: number }) {
+  return <Icon name="close" color={color} size={Math.max(20, s)} />;
 }
 
 /* ---------- ladder: the legend of rungs ---------- */
@@ -516,28 +500,12 @@ export function CountUp({ to, size = 64, ms = 600 }: { to: number; size?: number
   return <TileNum v={v} size={size} color={c.text} style={{ lineHeight: Math.round(size * 1.1), fontVariant: ['tabular-nums'] }} />;
 }
 
-/** A gear: a toothed ring with a hole, one shape, so the key face shows through. */
 export function Gear({ color }: { color: string }) {
-  const teeth = Array.from({ length: 8 }, (_, k) => {
-    const a = (k * Math.PI) / 4;
-    const p = (r: number, d: number) => `${(11 + r * Math.cos(a + d)).toFixed(2)} ${(11 + r * Math.sin(a + d)).toFixed(2)}`;
-    return `M${p(7, -0.28)}L${p(10.2, -0.2)}L${p(10.2, 0.2)}L${p(7, 0.28)}Z`;
-  }).join('');
-  return (
-    <Svg width={22} height={22} viewBox="0 0 22 22">
-      <Path d={`${teeth}M11 3.6a7.4 7.4 0 1 0 0.01 0ZM11 8a3 3 0 1 1 -0.01 0Z`} fill={color} fillRule="evenodd" />
-    </Svg>
-  );
+  return <Icon name="gear" color={color} />;
 }
 
-/** The sound glyph: a speaker with two waves, the waves faint when off. */
 export function SoundIcon({ on, color }: { on: boolean; color: string }) {
-  return (
-    <Svg width={22} height={22} viewBox="0 0 22 22">
-      <Path d="M3 8.5h3.5L11 4.5v13l-4.5-4H3z" fill={color} stroke={color} strokeWidth={1.4} strokeLinejoin="round" />
-      <Path d="M14.5 7.5c1.2 1 1.8 2.2 1.8 3.5s-.6 2.5-1.8 3.5M17 5c2 1.6 3 3.6 3 6s-1 4.4-3 6" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" opacity={on ? 1 : 0.25} />
-    </Svg>
-  );
+  return <Icon name={on ? 'sound' : 'mute'} color={color} />;
 }
 
 /* ---------- top bar for pushed screens ---------- */
@@ -547,7 +515,7 @@ export function TopBar({ title, onBack, close }: { title: string; onBack: () => 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.lg }}>
       <IconButton label={close ? 'Закрыть' : 'Назад'} size={48} onPress={onBack}>
-        {close ? <CloseIcon color={c.text} s={16} /> : <Arrow dir="left" color={c.text} s={18} />}
+        <Icon name={close ? 'close' : 'back'} color={c.text} />
       </IconButton>
       <Heading level="heading" style={{ marginBottom: 4 }}>{title}</Heading>
     </View>
@@ -563,7 +531,7 @@ export function Row({ label, note, children, onPress }: { label: string; note?: 
         <Text style={[type.body, { color: c.text }]}>{label}</Text>
         {note ? <Text style={[type.secondary, { color: c.muted }]}>{note}</Text> : null}
       </View>
-      {children ?? (onPress ? <Arrow dir="right" color={c.muted} s={14} /> : null)}
+      {children ?? (onPress ? <Icon name="chevron" color={c.muted} size={20} /> : null)}
     </View>
   );
   if (!onPress) return inner();

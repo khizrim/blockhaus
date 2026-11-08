@@ -5,7 +5,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequ
 
 import { Field, type CellLook } from '@/components/Field';
 import { Overlay } from '@/components/Overlay';
-import { Body, Button, Heading, IconButton, Key, Label, Panel, PauseIcon, Screen, TextLink } from '@/components/ui';
+import { Body, Button, Heading, IconButton, Key, Label, Panel, Screen, TextLink } from '@/components/ui';
 import { pieceGrid } from '@/design/mock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dur, enter, exit, HIT, space, type } from '@/design/system';
@@ -19,7 +19,7 @@ import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
 import { TileNum } from '@/components/TileNum';
 import { Block, plateStyle, Socket } from '@/components/Block';
-import Svg, { Path } from 'react-native-svg';
+import { Icon } from '@/components/icons';
 import { Formula } from '@/components/Formula';
 import { INTRO_STEP, milestonesFor } from '@/components/Track';
 
@@ -987,7 +987,7 @@ export default function Game() {
             the cascade's multiplier beside it, the sweep key with its studs. */}
         <View style={{ height: 52, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <IconButton label="Пауза" size={48} onPress={() => router.push('/pause')}>
-            <PauseIcon color={c.text} s={16} />
+            <Icon name="pause" color={c.text} />
           </IconButton>
           <Animated.View accessible accessibilityLabel={`Очки: ${g.score}`} style={[{ height: 48, justifyContent: 'center', alignItems: 'center' }, scoreStyle]}>
             {/* The 1919 stamp: a yellow chip flashes in behind the score. */}
@@ -1677,15 +1677,9 @@ function SweepKey({ studs, filled, onPress }: { studs: number; filled: number; o
   const empty = studs > 0 && filled <= 0;
   return (
     <Key label={studs ? `Сдвиги: ${Math.max(0, filled)}` : 'Сдвиги'} onPress={onPress}>
-      <Svg width={22} height={22} viewBox="0 0 22 22" style={{ opacity: empty ? 0.3 : 1 }}>
-        <Path
-          d="M11 1.5 L14.6 5.2 L12.4 5.2 L12.4 9.6 L16.8 9.6 L16.8 7.4 L20.5 11 L16.8 14.6 L16.8 12.4 L12.4 12.4 L12.4 16.8 L14.6 16.8 L11 20.5 L7.4 16.8 L9.6 16.8 L9.6 12.4 L5.2 12.4 L5.2 14.6 L1.5 11 L5.2 7.4 L5.2 9.6 L9.6 9.6 L9.6 5.2 L7.4 5.2 Z"
-          fill={c.text}
-          stroke={c.text}
-          strokeWidth={1.2}
-          strokeLinejoin="round"
-        />
-      </Svg>
+      <View style={{ opacity: empty ? 0.3 : 1 }}>
+        <Icon name="sweep" color={c.text} />
+      </View>
       {studs > 0 ? (
         <View style={{ flexDirection: 'row', gap: 5 }}>
           {Array.from({ length: studs }, (_, k) => (

@@ -57,7 +57,7 @@ function Tiles({ vs, cell, gap, empty }: { vs: number[]; cell: number; gap: numb
     a red cross, an arrow, the two-way swipe. */
 function Sign({ kind, s, color }: { kind: Exclude<Term, number | number[]>; s: number; t?: number; color: string }) {
   const w = kind === 'swipe' ? s * 2 : s;
-  const sw = Math.max(2.5, s * 0.17);
+  const sw = Math.max(2.4, s * 0.12);
   const m = sw / 2 + 1;
   const h = s / 2;
   const a = s * 0.28; // arrowhead arm
