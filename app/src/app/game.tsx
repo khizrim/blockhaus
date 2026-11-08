@@ -21,7 +21,7 @@ import { POSTERS } from '@/game/meta';
 import { WallPoster } from '@/components/WallPoster';
 import { fx } from '@/sound/sfx';
 import { TileNum } from '@/components/TileNum';
-import { Block, Socket } from '@/components/Block';
+import { Block, plateStyle, Socket } from '@/components/Block';
 import Svg, { Path } from 'react-native-svg';
 import { Formula } from '@/components/Formula';
 import { INTRO_STEP, MedalTrack, TaskSquares, Track, milestonesFor } from '@/components/Track';
@@ -1069,32 +1069,28 @@ export default function Game() {
                 {incoming ? <Incoming key={incoming.id} {...incoming} cell={cell} gap={gap} /> : null}
                 {scatter ? <Scatter key={scatter.id} board={scatter.board} cell={cell} gap={gap} /> : null}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
-                {echoes.map((e) => (
-                  <Echo key={e.id} at={e.at} v={e.v} n={e.n} cell={cell} gap={gap} />
-                ))}
-                {floats.map((f) => (
-                  <Float key={f.id} at={f.at} v={f.v} times={f.times} cell={cell} gap={gap} />
-                ))}
               </View>
               {/* After a proved step: the board dims and a card says what
                   happened and why. Nothing moves on until «Понятно». */}
               {lesson && explain === store.lesson ? (
-                <View style={StyleSheet.absoluteFill}>
-                  <Overlay>
-                    <Panel>
+                <View style={[StyleSheet.absoluteFill, { justifyContent: 'center' }]}>
+                  {/* A solid plate over the board, no scrim: the board is never seen through a page. */}
+                  <View style={[StyleSheet.absoluteFill, { left: -Math.max(0, Math.round(cell * 0.14) - gap / 2), right: -Math.max(0, Math.round(cell * 0.14) - gap / 2), top: -Math.max(0, Math.round(cell * 0.14) - gap / 2), bottom: -Math.max(0, Math.round(cell * 0.14) - gap / 2) }, plateStyle(c, Math.round(cell * 0.26))]} />
+                  <View style={{ padding: space.xl }}>
+                    <View>
                       {/* The proved formula and the related rows, all at the
                           tray's size, so the card reads as one table. */}
                       <View style={{ gap: space.md }}>
                         {[lesson.formula, ...(lesson.also ?? [])].map((row, k) => (
-                          <Formula key={k} terms={row} cell={trayCell} gap={gap} fit={Math.min(col, 360) - space.lg * 2 - space.xl * 2 - 2} />
+                          <Formula key={k} terms={row} cell={trayCell} gap={gap} fit={col - space.xl * 2} />
                         ))}
                       </View>
                       <Body style={{ marginTop: space.lg }}>{(counted && lesson.ruleCascade) || lesson.rule}</Body>
                       <View style={{ marginTop: space.lg }}>
                         <Button kind="primary" size="lg" label="Понятно" onPress={nextLesson} />
                       </View>
-                    </Panel>
-                  </Overlay>
+                    </View>
+                  </View>
                 </View>
               ) : null}
             </View>
@@ -1160,9 +1156,7 @@ export default function Game() {
               <View style={{ flexDirection: 'row', gap: space.xl, marginTop: space.lg }}>
                 {MEDALS.map((m) => (
                   <View key={m.rank} style={{ gap: space.xs, alignItems: 'flex-start' }}>
-                    <View style={{ width: 28, height: 28, padding: 3, backgroundColor: c.line }}>
-                      <View style={{ flex: 1, backgroundColor: m.tile ? c.tile[m.tile] : c.faint }} />
-                    </View>
+                    <Block v={1} size={28} numbers={false} fill={m.tile ? c.tile[m.tile] : c.faint} />
                     <Text style={[type.secondary, { color: c.muted }]}>{m.at}</Text>
                   </View>
                 ))}
@@ -1185,9 +1179,7 @@ export default function Game() {
               <View style={{ flexDirection: 'row', gap: space.xl, marginTop: space.lg }}>
                 {MEDALS.map((m) => (
                   <View key={m.rank} style={{ gap: space.xs, alignItems: 'flex-start' }}>
-                    <View style={{ width: 28, height: 28, padding: 3, backgroundColor: c.line }}>
-                      <View style={{ flex: 1, backgroundColor: m.tile ? c.tile[m.tile] : c.faint }} />
-                    </View>
+                    <Block v={1} size={28} numbers={false} fill={m.tile ? c.tile[m.tile] : c.faint} />
                     <Text style={[type.secondary, { color: c.muted }]}>{m.at}</Text>
                   </View>
                 ))}
@@ -1720,15 +1712,17 @@ function Demo({ piece, from, to, cell, gap }: { piece: Piece; from: { x: number;
 /** For the sweep lesson: a finger square that crosses the board, the gesture
     to copy. */
 function Finger({ board }: { board: { x: number; y: number; w: number } }) {
-  const { c } = useTheme();
-  const size = 44;
+  // A fingertip of white plastic presses down, drags across the board and lifts.
+  const size = 48;
   const k = useSharedValue(0);
   const o = useSharedValue(0);
+  const p = useSharedValue(0);
   useEffect(() => {
     const loop = () => {
       k.value = 0;
-      o.value = withSequence(withTiming(0.8, { duration: 200 }), withDelay(600, withTiming(0, { duration: 250 })));
-      k.value = withDelay(200, withTiming(1, { duration: 600, easing: Easing.inOut(Easing.quad) }));
+      o.value = withSequence(withTiming(1, { duration: 150 }), withDelay(750, withTiming(0, { duration: 200 })));
+      p.value = withSequence(withDelay(150, withTiming(1, { duration: 100 })), withDelay(600, withTiming(0, { duration: 100 })));
+      k.value = withDelay(250, withTiming(1, { duration: 600, easing: Easing.inOut(Easing.quad) }));
     };
     loop();
     const id = setInterval(loop, 1800);
@@ -1738,12 +1732,22 @@ function Finger({ board }: { board: { x: number; y: number; w: number } }) {
   const x0 = board.x + board.w * 0.75 - size / 2;
   const x1 = board.x + board.w * 0.25 - size / 2;
   const y = board.y + board.w / 2 - size / 2;
-  const st = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateX: x0 + (x1 - x0) * k.value }, { translateY: y }] }));
+  const st = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateX: x0 + (x1 - x0) * k.value }, { translateY: y }, { scale: 1.1 - p.value * 0.1 }] }));
+  const shade = useAnimatedStyle(() => ({ opacity: 0.18 + p.value * 0.12, transform: [{ scale: 1 - p.value * 0.15 }] }));
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[{ position: 'absolute', left: 0, top: 0, width: size, height: size, borderWidth: 4, borderColor: c.line, backgroundColor: c.canvas }, st]}
-    />
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: size, height: size }, st]}>
+      <Animated.View style={[{ position: 'absolute', left: 4, top: 8, width: size - 8, height: size - 8, borderRadius: size, backgroundColor: '#000000' }, shade]} />
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: '#FFFFFF',
+          backgroundImage: 'linear-gradient(180deg, #FFFFFF, #ECEAE4)',
+          boxShadow: '0 3px 0 #CFCDC6, inset 0 2px 0 #FFFFFF',
+        }}
+      />
+    </Animated.View>
   );
 }
 
@@ -1776,7 +1780,7 @@ function NewsCard({ news, onDone }: { news: News; onDone: () => void }) {
       pointerEvents="none"
       accessibilityLiveRegion="polite"
       style={{ position: 'absolute', top: ins.top + space.sm, left: space.lg, right: space.lg, alignItems: 'center' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, backgroundColor: c.surface, borderWidth: 1, borderColor: c.hair, maxWidth: 400 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: 16, backgroundColor: c.plate, boxShadow: `0 4px 0 ${c.plateEdge}, 0 10px 20px rgba(0,0,0,0.08)`, maxWidth: 400 }}>
         {news.kind === 'poster' && p ? <WallPoster p={p} width={40} /> : <TaskSquares done={[true]} size={28} />}
         <View style={{ flexShrink: 1 }}>
           <Text style={[type.meta, { color: c.muted }]}>{news.kind === 'poster' ? 'Новый плакат' : 'Задание дня'}</Text>

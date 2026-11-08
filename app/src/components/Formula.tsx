@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Field } from '@/components/Field';
@@ -12,7 +13,7 @@ export type Term = number | number[] | '+' | '=' | '→' | 'no' | 'swipe';
 /* A rule written in tiles instead of words: [1] + [2] = [3]. The tiles are
    drawn as tray pieces, at the tray's cell and line, so a formula is made of
    the same things the player holds, at the same size everywhere. Signs are
-   bars of the board's line weight, half a cell tall. The last term is what
+   rounded strokes, half a cell tall. The last term is what
    the move makes; while the move is still to do it waits as an empty cell,
    and pops in its colour when the board proves it. */
 export function Formula({ terms, cell: want, gap, open = false, fit }: { terms: Term[]; cell: number; gap: number; open?: boolean; fit?: number }) {
@@ -52,57 +53,23 @@ function Tiles({ vs, cell, gap, empty }: { vs: number[]; cell: number; gap: numb
   );
 }
 
-/** Signs as bars: plus, equals, a red cross, an arrow, the two-way swipe. */
-function Sign({ kind, s, t, color }: { kind: Exclude<Term, number | number[]>; s: number; t: number; color: string }) {
-  const bar = (st: object) => <View style={[{ position: 'absolute', backgroundColor: color }, st]} />;
-  const mid = (s - t) / 2;
-  // An arrowhead: a square's two sides, turned 45°, its corner at x.
-  const hs = Math.round(s * 0.42);
-  const head = (x: number, dir: 1 | -1) => (
-    <View
-      style={{
-        position: 'absolute',
-        left: x - hs / 2 - (dir * hs) / 2 + (dir * t) / 2,
-        top: (s - hs) / 2,
-        width: hs,
-        height: hs,
-        borderColor: color,
-        borderTopWidth: t,
-        borderRightWidth: t,
-        transform: [{ rotate: dir === 1 ? '45deg' : '-135deg' }],
-      }}
-    />
-  );
+/** Signs drawn with one rounded stroke, like moulded plastic: plus, equals,
+    a red cross, an arrow, the two-way swipe. */
+function Sign({ kind, s, color }: { kind: Exclude<Term, number | number[]>; s: number; t?: number; color: string }) {
   const w = kind === 'swipe' ? s * 2 : s;
+  const sw = Math.max(2.5, s * 0.17);
+  const m = sw / 2 + 1;
+  const h = s / 2;
+  const a = s * 0.28; // arrowhead arm
+  let d = '';
+  if (kind === '+') d = `M${m} ${h}H${s - m}M${h} ${m}V${s - m}`;
+  else if (kind === '=') d = `M${m} ${s * 0.32}H${s - m}M${m} ${s * 0.68}H${s - m}`;
+  else if (kind === 'no') d = `M${m + 1} ${m + 1}L${s - m - 1} ${s - m - 1}M${s - m - 1} ${m + 1}L${m + 1} ${s - m - 1}`;
+  else if (kind === '→') d = `M${m} ${h}H${s - m}M${s - m - a} ${h - a}L${s - m} ${h}L${s - m - a} ${h + a}`;
+  else d = `M${m} ${h}H${w - m}M${m + a} ${h - a}L${m} ${h}L${m + a} ${h + a}M${w - m - a} ${h - a}L${w - m} ${h}L${w - m - a} ${h + a}`;
   return (
-    <View style={{ width: w, height: s }}>
-      {kind === '+' ? (
-        <>
-          {bar({ left: 0, top: mid, width: s, height: t })}
-          {bar({ left: mid, top: 0, width: t, height: s })}
-        </>
-      ) : kind === '=' ? (
-        <>
-          {bar({ left: 0, top: s * 0.28 - t / 2, width: s, height: t })}
-          {bar({ left: 0, top: s * 0.72 - t / 2, width: s, height: t })}
-        </>
-      ) : kind === 'no' ? (
-        <>
-          {bar({ left: -s * 0.1, top: mid, width: s * 1.2, height: t, transform: [{ rotate: '45deg' }] })}
-          {bar({ left: -s * 0.1, top: mid, width: s * 1.2, height: t, transform: [{ rotate: '-45deg' }] })}
-        </>
-      ) : kind === '→' ? (
-        <>
-          {bar({ left: 0, top: mid, width: s - t, height: t })}
-          {head(s, 1)}
-        </>
-      ) : (
-        <>
-          {bar({ left: t, top: mid, width: w - t * 2, height: t })}
-          {head(0, -1)}
-          {head(w, 1)}
-        </>
-      )}
-    </View>
+    <Svg width={w} height={s}>
+      <Path d={d} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
   );
 }

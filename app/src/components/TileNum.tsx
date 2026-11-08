@@ -13,12 +13,14 @@ export function TileNum({ v, size, color, style }: { v: number | string; size: n
   return (
     <Text
       allowFontScaling={false}
+      selectable={false}
       style={[
         {
           fontFamily: font.tile,
           fontSize: size,
           color,
           includeFontPadding: false,
+          userSelect: 'none',
           letterSpacing: track * size,
           paddingRight: -track * size,
         },

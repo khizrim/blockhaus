@@ -166,7 +166,7 @@ const Cell = memo(function Cell({ v, left, top, size, board, numbers, look, c }:
 
   return (
     <>
-      {board ? <Socket size={size} style={box} /> : null}
+      {board || v === 0 ? <Socket size={size} style={box} /> : null}
       {look?.ghost ? (
         <View pointerEvents="none" style={[box, { borderRadius: r, backgroundColor: c.tile[rank(look.ghost)], opacity: 0.32 }]} />
       ) : null}
