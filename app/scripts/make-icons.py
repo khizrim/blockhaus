@@ -1,103 +1,220 @@
-"""App icon, Android adaptive icon, splash and favicon: the menu poster
-reduced to four fields and thick lines. Run from app/:
+"""App icon, iOS dark/tinted variants, Android adaptive icon, splash and
+favicon, drawn with the game's own plastic block (src/components/Block.tsx)
+and palette (src/design/tokens.ts). Run from app/ after `npm ci`:
 
-    python3 scripts/make-icons.py
+    python3 scripts/make-icons.py            # the chosen icon (magnet)
+    python3 scripts/make-icons.py three      # another scene: magnet | three | plate
 
-The composition is laid out in "window" units: the part of the canvas a
-launcher actually shows. On iOS that is the whole square; on Android it is
-the central 72dp of the 108dp adaptive layer, and the lines simply run on
-to the edge so any mask shape (circle, squircle, square) looks complete.
+Scenes are laid out in unit coordinates of the visible window: the whole
+square on iOS (the system rounds it), the central 72dp of the 108dp layer on
+Android, shrunk further so a circle mask never cuts a block.
 """
-from PIL import Image, ImageDraw
+import sys
 
-PAPER = (243, 239, 228, 255)
-LINE = (17, 18, 21, 255)
-WHITE = (255, 255, 255, 255)
-CLEAR = (0, 0, 0, 0)
-RED, YELLOW, BLUE = (217, 52, 43, 255), (244, 194, 28, 255), (31, 79, 178, 255)
-CANVAS_DARK = (56, 58, 66, 255)  # empty field in the dark theme
+import numpy as np
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
 OUT = 'assets/images'
-ADAPTIVE = (18 / 108, 18 / 108, 72 / 108)  # window inside the 108dp layer
+FONT = 'node_modules/@expo-google-fonts/rubik/700Bold/Rubik_700Bold.ttf'
+
+LIGHT = dict(bg='#ECEBE7', plate='#FFFFFF', edge='#D3D1CA', canvas='#ECEAE4', sock=0.10)
+DARK = dict(bg='#18191C', plate='#2F3238', edge='#141518', canvas='#23252A', sock=0.40)
+TILE = {1: '#356BFF', 2: '#FF4733', 3: '#FFD43B'}
+INK = {1: '#FFFFFF', 2: '#FFFFFF', 3: '#2A2A2A'}
+MONO = dict(mono=True)  # single-tone glyph: white shapes, numerals cut out
+
+
+def rgba(h, a=255):
+    if not isinstance(h, str):
+        return h
+    h = h.lstrip('#')
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)) + (a,)
 
 
 def mix(a, b, t):
+    a, b = rgba(a), rgba(b)
     return tuple(round(x * t + y * (1 - t)) for x, y in zip(a[:3], b[:3])) + (255,)
 
 
-def enamel(d, box, c, sides, e):
-    """Enamel edges inside a colour field, as in src/design/depth.tsx: light
-    on top and left, dark on bottom and right, only on sides facing a line."""
-    l, t, r, b = box
-    hi, lo = mix((255, 255, 255), c, 0.34), mix((0, 0, 0), c, 0.24)
-    if 'b' in sides: d.rectangle([l, b - e, r, b], fill=lo)
-    if 'r' in sides: d.rectangle([r - e, t, r, b], fill=lo)
-    if 't' in sides: d.rectangle([l, t, r, t + e], fill=hi)
-    if 'l' in sides: d.rectangle([l, t, l + e, b], fill=hi)
+class Canvas:
+    """Draws at 2x and scales down. `k` shrinks the scene about the centre."""
+
+    def __init__(self, S, bg=None, k=1.0, ss=2):
+        self.S, self.ss, self.k = S, ss, k
+        self.N = S * ss
+        self.im = Image.new('RGBA', (self.N, self.N), rgba(bg) if bg else (0, 0, 0, 0))
+
+    def u(self, v):  # a length
+        return v * self.k * self.N
+
+    def p(self, v):  # a coordinate
+        return (0.5 + (v - 0.5) * self.k) * self.N
+
+    def mask(self, box, r):
+        m = Image.new('L', (self.N, self.N), 0)
+        l, t, rr, b = box
+        ImageDraw.Draw(m).rounded_rectangle([self.p(l), self.p(t), self.p(rr), self.p(b)], radius=self.u(r), fill=255)
+        return m
+
+    def put(self, color, alpha_mask):
+        layer = Image.new('RGBA', (self.N, self.N), rgba(color))
+        layer.putalpha(alpha_mask)
+        self.im.alpha_composite(layer)
+
+    def grad(self, m, box, top, bot):
+        t, b = self.p(box[1]), self.p(box[3])
+        k = np.clip((np.arange(self.N, dtype=np.float32) - t) / max(1, b - t), 0, 1)[:, None, None]
+        arr = np.array(rgba(top), np.float32) * (1 - k) + np.array(rgba(bot), np.float32) * k
+        layer = Image.fromarray((arr * np.ones((1, self.N, 1), np.float32)).astype(np.uint8), 'RGBA')
+        layer.putalpha(m)
+        self.im.alpha_composite(layer)
+
+    def shadow(self, box, r, dy, blur, alpha):
+        l, t, rr, b = box
+        m = self.mask((l, t + dy, rr, b + dy), r).filter(ImageFilter.GaussianBlur(self.u(blur)))
+        self.put((0, 0, 0, 0), m.point(lambda v: round(v * alpha)))
+
+    def inner(self, m, box, r, dy, blur, alpha, color):
+        """A shade inside mask m along its top edge (an inset shadow)."""
+        l, t, rr, b = box
+        sh = self.mask((l, t + dy, rr, b + dy), r).filter(ImageFilter.GaussianBlur(self.u(blur))) if blur else \
+            self.mask((l, t + dy, rr, b + dy), r)
+        a = (255 - np.asarray(sh, np.float32)) * np.asarray(m, np.float32) / 255 * alpha
+        self.put(color, Image.fromarray(a.astype(np.uint8)))
+
+    def plate(self, box, r, th, edge=0.012):
+        """The white plate: a face with a faint gradient on a bottom edge."""
+        l, t, rr, b = box
+        self.shadow((l, t, rr, b + edge), r, edge + 0.01, 0.022, 0.10)
+        self.put(th['edge'], self.mask((l, t + edge, rr, b + edge), r))
+        self.grad(self.mask(box, r), box, th['plate'], mix('#000000', th['plate'], 0.03))
+
+    def socket(self, box, th):
+        r = (box[3] - box[1]) * 0.18
+        m = self.mask(box, r)
+        self.put(th['canvas'], m)
+        size = box[3] - box[1]
+        self.inner(m, box, r, size * 0.035, size * 0.04, th['sock'], (0, 0, 0, 0))
+
+    def block(self, box, v, rot=0, mono=False):
+        """A glossy plastic block: a face lighter at the top on a ledge of its
+        own colour darkened, a thin highlight along the top edge, the numeral
+        at 0.42 of the block. mono: a flat white block, numeral cut out."""
+        if rot:
+            sub = Canvas(self.S, k=self.k, ss=self.ss)
+            sub.block(box, v, 0, mono)
+            c = (self.p((box[0] + box[2]) / 2), self.p((box[1] + box[3]) / 2))
+            self.im.alpha_composite(sub.im.rotate(rot, Image.BICUBIC, center=c))
+            return
+        l, t, rr, b = box
+        size = min(rr - l, b - t)
+        r = size * 0.18
+        if mono:
+            self.put('#FFFFFF', self.mask(box, r))
+            self.text(str(v), ((l + rr) / 2, (t + b) / 2), size * 0.42, (0, 0, 0, 0), cut=True)
+            return
+        f = TILE[v]
+        ledge = size * 0.06
+        self.shadow(box, r, size * 0.05, size * 0.05, 0.16)
+        self.put(mix('#000000', f, 0.28), self.mask(box, r))
+        face = (l, t, rr, b - ledge)
+        m = self.mask(face, r)
+        self.grad(m, face, mix('#FFFFFF', f, 0.22), f)
+        self.inner(m, face, r, size * 0.03, 0, 0.35, (255, 255, 255, 0))
+        self.text(str(v), ((l + rr) / 2, (t + b - ledge) / 2), size * 0.42, INK[v])
+
+    def text(self, s, centre, h, color, cut=False):
+        fnt = ImageFont.truetype(FONT, round(self.u(h)))
+        cx, cy = self.p(centre[0]), self.p(centre[1])
+        m = Image.new('L', (self.N, self.N), 0)
+        d = ImageDraw.Draw(m)
+        bb = d.textbbox((0, 0), s, font=fnt)  # centre the digit's ink, not the font box
+        d.text((cx - (bb[0] + bb[2]) / 2, cy - (bb[1] + bb[3]) / 2), s, font=fnt, fill=255)
+        if cut:
+            a = np.asarray(self.im.getchannel('A'), np.float32) * (1 - np.asarray(m, np.float32) / 255)
+            self.im.putalpha(Image.fromarray(a.astype(np.uint8)))
+        else:
+            self.put(color, m)
+
+    def out(self, size=None):
+        return self.im.resize((size or self.S,) * 2, Image.LANCZOS)
 
 
-def poster(S, win=(0, 0, 1), mono=False, frame=False, paper=PAPER):
-    """Three colour fields and one paper field split by thick lines.
+# ---------- scenes ----------
 
-    win = (left, top, size) of the visible window as fractions of S.
-    mono: white fields on transparent, lines cut out (Android themed icon).
-    frame: an outer line round the whole square (splash, favicon)."""
-    x0, y0, w = (v * S for v in win)
-    X = lambda u: x0 + u * w
-    Y = lambda v: y0 + v * w
-    L = round(w * 0.09)
-    im = Image.new('RGBA', (S, S), CLEAR if mono else LINE)
-    d = ImageDraw.Draw(im)
-    fill = lambda c: WHITE if mono else c
-    o = L if frame else 0
-    vx, hy, hr = X(0.6), Y(0.58), Y(0.36)
-    e = max(1, round(w * 0.022))
-    edge = 'tlrb' if frame else ''  # sides closed by the outer line
-    fields = [
-        ([o, o, vx - L / 2, hy - L / 2], RED, 'rb'),
-        ([vx + L / 2, o, S - 1 - o, hr - L / 2], paper, None),
-        ([vx + L / 2, hr + L / 2, S - 1 - o, S - 1 - o], BLUE, 'lt'),
-        ([o, hy + L / 2, vx - L / 2, S - 1 - o], YELLOW, 'tr'),
-    ]
-    for box, c, sides in fields:
-        d.rectangle(box, fill=fill(c))
-        # Paper is an empty field: it sits level, no enamel.
-        if not mono and sides is not None:
-            enamel(d, box, c, sides + edge, e)
-    return im
+def magnet(c, th, mono=False):
+    """1 and 2 lean toward each other, the moment before they snap into a 3
+    (the splash, frozen)."""
+    s, y = 0.40, 0.31
+    c.block((0.09, y, 0.09 + s, y + s), 1, rot=-6, mono=mono)
+    c.block((0.51, y, 0.51 + s, y + s), 2, rot=6, mono=mono)
 
 
-def glyph(S, inset=0.17):
-    """Single-tone mark for the iOS tinted and clear appearances."""
-    im = Image.new('RGBA', (S, S), (0, 0, 0, 255))
-    d = ImageDraw.Draw(im)
-    x0 = inset * S
-    w = S - 2 * x0
-    L = w * 0.09
-    r = round(S * 0.035)
-    vx, hy, hr, e = x0 + w * 0.6, x0 + w * 0.58, x0 + w * 0.36, x0 + w
-    d.rounded_rectangle([x0, x0, vx - L / 2, hy - L / 2], r, fill=WHITE)
-    d.rounded_rectangle([vx + L / 2, x0, e, hr - L / 2], r, outline=WHITE, width=round(S * 0.034))
-    d.rounded_rectangle([vx + L / 2, hr + L / 2, e, e], r, fill=WHITE)
-    d.rounded_rectangle([x0, hy + L / 2, vx - L / 2, e], r, fill=WHITE)
-    return im
+def three(c, th, mono=False):
+    """One big yellow 3, the first thing two blocks make together."""
+    s = 0.62
+    o = (1 - s) / 2
+    c.block((o, o - 0.02, o + s, o + s - 0.02), 3, mono=mono)
 
 
-# iOS / store icon: full bleed; the system rounds the corners.
-poster(1024).convert('RGB').save(f'{OUT}/icon.png')
-# iOS dark appearance: the paper field turns into the dark theme's canvas,
-# so no bright patch glows on a dark home screen.
-poster(1024, paper=CANVAS_DARK).convert('RGB').save(f'{OUT}/ios-icon-dark.png')
-# iOS tinted / clear (glass): the system turns luminance into one glass tone,
-# so the full poster came out as four mismatched greys. Give it a single-tone
-# glyph instead: the poster in miniature, three solid fields and the paper
-# field left empty as an outline, white on black.
-glyph(1024).convert('RGB').save(f'{OUT}/ios-icon-tinted.png')
-# Android adaptive: the whole drawing lives in the foreground (full bleed, so
-# the mask never shows a gap); the background is plain ink behind it.
-Image.new('RGBA', (432, 432), LINE).save(f'{OUT}/android-icon-background.png')
-poster(432, ADAPTIVE).save(f'{OUT}/android-icon-foreground.png')
-poster(432, ADAPTIVE, mono=True).save(f'{OUT}/android-icon-monochrome.png')
-# Splash and favicon: the same poster inside an outer line.
-poster(456, frame=True).save(f'{OUT}/splash-icon.png')
-poster(192, frame=True).resize((48, 48), Image.LANCZOS).save(f'{OUT}/favicon.png')
-print('icons written')
+def plate(c, th, mono=False):
+    """A 2×2 corner of the board: 1, 2, 3 and an empty socket."""
+    s, g = 0.30, 0.04
+    x0, y0 = 0.5 - s - g / 2, 0.495 - s - g / 2
+    cells = [(x0, y0, 1), (x0 + s + g, y0, 2), (x0, y0 + s + g, 3), (x0 + s + g, y0 + s + g, 0)]
+    if mono:
+        for x, y, v in cells:
+            if v:
+                c.block((x, y, x + s, y + s), v, mono=True)
+            else:
+                m = c.mask((x, y, x + s, y + s), s * 0.18)
+                c.inner(m, (x + 0.02, y + 0.02, x + s - 0.02, y + s - 0.02), s * 0.12, 0, 0, 1.0, '#FFFFFF')
+        return
+    c.plate((0.14, 0.135, 0.86, 0.855), 0.09, th)
+    for x, y, v in cells:
+        c.socket((x, y, x + s, y + s), th)
+    for x, y, v in cells:
+        if v:
+            c.block((x + 0.004, y - 0.012, x + s - 0.004, y + s - 0.012), v)
+
+
+SCENES = dict(magnet=magnet, three=three, plate=plate)
+
+
+def render(scene, S, bg=None, th=LIGHT, k=1.0, mono=False):
+    c = Canvas(S, bg, k)
+    scene(c, th, mono)
+    return c.out()
+
+
+def main(name):
+    scene = SCENES[name]
+    # iOS / store icon: full bleed on the page colour; the system rounds it.
+    render(scene, 1024, LIGHT['bg']).convert('RGB').save(f'{OUT}/icon.png')
+    # iOS dark appearance: the dark theme's table and plate.
+    render(scene, 1024, DARK['bg'], DARK).convert('RGB').save(f'{OUT}/ios-icon-dark.png')
+    # iOS tinted / clear (glass): the system maps luminance to one glass tone,
+    # so give it one: white blocks with their numerals cut out, on black.
+    render(scene, 1024, '#000000', k=0.86, mono=True).convert('RGB').save(f'{OUT}/ios-icon-tinted.png')
+    # Android adaptive: blocks in the foreground, kept inside the 66dp circle
+    # (window 72/108, scene shrunk again so the tilted corners clear it); the
+    # background is the plain page colour.
+    win = 72 / 108 * 0.84
+    Image.new('RGBA', (432, 432), rgba(LIGHT['bg'])).save(f'{OUT}/android-icon-background.png')
+    render(scene, 432, k=win).save(f'{OUT}/android-icon-foreground.png')
+    render(scene, 432, k=win, mono=True).save(f'{OUT}/android-icon-monochrome.png')
+    # Native splash: empty. The splash in the app starts on a bare page and
+    # sets the 2 down 200ms later, so the native one is just that page
+    # (colours in app.json) and the hand-over is seamless.
+    Image.new('RGBA', (16, 16), (0, 0, 0, 0)).save(f'{OUT}/splash-icon.png')
+    # Favicon: the same scene, small; a browser tab has no mask, so round it.
+    fav = render(scene, 192, LIGHT['bg'])
+    m = Image.new('L', (192, 192), 0)
+    ImageDraw.Draw(m).rounded_rectangle([0, 0, 191, 191], radius=40, fill=255)
+    fav.putalpha(m)
+    fav.resize((48, 48), Image.LANCZOS).save(f'{OUT}/favicon.png')
+    print(f'icons written ({name})')
+
+
+if __name__ == '__main__':
+    main(sys.argv[1] if len(sys.argv) > 1 else 'magnet')
