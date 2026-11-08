@@ -21,6 +21,7 @@ import { POSTERS } from '@/game/meta';
 import { WallPoster } from '@/components/WallPoster';
 import { fx } from '@/sound/sfx';
 import { TileNum } from '@/components/TileNum';
+import { Block, Socket } from '@/components/Block';
 import { Formula } from '@/components/Formula';
 import { INTRO_STEP, MedalTrack, TaskSquares, Track, milestonesFor } from '@/components/Track';
 
@@ -1221,7 +1222,6 @@ export default function Game() {
     board (its own fill inside the thick line), moving from its old cell to its
     new one. */
 function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap: number; ms?: number }) {
-  const { c, isDark } = useTheme();
   const pad = gap / 2;
   const at = (i: number) => ({ x: pad + (i % N) * cell, y: pad + ((i / N) | 0) * cell });
   const a = at(m.from);
@@ -1234,17 +1234,13 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
   const st = useAnimatedStyle(() => ({
     transform: [{ translateX: a.x + (b.x - a.x) * k.value }, { translateY: a.y + (b.y - a.y) * k.value }],
   }));
-  const rk = rank(m.value);
   return (
     <Animated.View
       style={[
-        { position: 'absolute', left: 0, top: 0, width: cell, height: cell, padding: pad, backgroundColor: c.line },
+        { position: 'absolute', left: 0, top: 0, width: cell, height: cell, padding: pad },
         st,
       ]}>
-      <View style={{ flex: 1, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center' }}>
-        <Enamel fill={c.tile[rk]} size={cell} dark={isDark} />
-        <TileNum v={m.value} color={c.ink[rk]} size={Math.max(12, Math.round(cell * (m.value >= 100 ? 0.28 : m.value >= 10 ? 0.34 : 0.4)))} />
-      </View>
+      <Block v={m.value} size={cell - gap} />
     </Animated.View>
   );
 }
@@ -1252,9 +1248,7 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
 
 /** The best tile, drawn as a tile of the board: its fill inside the line. */
 /** Drawn the way a lone tile sits on the board: one cell, framed by one gap. */
-function BestTile({ v, size, frame }: { v: number; size: number; frame: number }) {
-  const { c, isDark } = useTheme();
-  const rk = rank(v);
+function BestTile({ v, size }: { v: number; size: number; frame?: number }) {
   const k = useSharedValue(1);
   const first = useRef(true);
   useEffect(() => {
@@ -1266,13 +1260,8 @@ function BestTile({ v, size, frame }: { v: number; size: number; frame: number }
   return (
     <Animated.View
       accessibilityLabel={v ? `Лучшая плитка ${v}` : 'Лучшей плитки пока нет'}
-      style={[{ width: size, height: size, padding: frame, backgroundColor: c.line, opacity: v ? 1 : 0 }, st]}>
-      <View style={{ flex: 1, backgroundColor: v ? c.tile[rk] : c.canvas, alignItems: 'center', justifyContent: 'center' }}>
-        <Enamel fill={v ? c.tile[rk] : c.canvas} size={size} empty={!v} dark={isDark} />
-        {v ? (
-          <TileNum v={v} color={c.ink[rk]} size={Math.max(12, Math.round(size * (v >= 100 ? 0.28 : v >= 10 ? 0.34 : 0.4)))} />
-        ) : null}
-      </View>
+      style={[{ width: size, height: size, opacity: v ? 1 : 0 }, st]}>
+      {v ? <Block v={v} size={size} /> : null}
     </Animated.View>
   );
 }
@@ -1315,23 +1304,22 @@ function Ripple({ at, v, board, cell, gap, home, primaries }: { at: number; v: n
   );
 }
 
-function FloorFlash({ d, color, style }: { d: number; color: string; style: object }) {
+function FloorFlash({ d, color, style }: { d: number; color: string; style: { width: number; left: number; top: number; height: number } }) {
   const o = useSharedValue(0);
   useEffect(() => {
     o.value = withDelay(d * WAVE, withSequence(withTiming(0.75, { duration: 90 }), withTiming(0, { duration: 460, easing: Easing.out(Easing.quad) })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const st = useAnimatedStyle(() => ({ opacity: o.value }));
-  return <Animated.View style={[{ position: 'absolute', backgroundColor: color }, style, st]} />;
+  return <Animated.View style={[{ position: 'absolute', backgroundColor: color, borderRadius: style.width * 0.18 }, style, st]} />;
 }
 
 /** One tile lifting out of its socket: an empty socket shows under it, a
     shadow falls on the board, and a glint crosses its face. The hero tile
     rises higher, turns over, and then flies home to the track. */
 function LiftTile({ v, d, at, cell, gap, hero, home }: { v: number; d: number; at: { x: number; y: number }; cell: number; gap: number; hero?: boolean; home?: { x: number; y: number; w: number; h: number } | null }) {
-  const { c, isDark } = useTheme();
+  const { isDark } = useTheme();
   const pad = gap / 2;
-  const rk = rank(v);
   const lift = useSharedValue(0); // 0 on the board, 1 at the top of the lift
   const turn = useSharedValue(0); // one full turn for the hero
   const shine = useSharedValue(0); // glint position across the face
@@ -1389,27 +1377,23 @@ function LiftTile({ v, d, at, cell, gap, hero, home }: { v: number; d: number; a
     };
   });
   const face = (
-    <View style={{ flex: 1, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-      <Enamel fill={c.tile[rk]} size={cell} dark={isDark} />
-      <TileNum v={v} color={c.ink[rk]} size={Math.max(12, Math.round(cell * (v >= 100 ? 0.28 : v >= 10 ? 0.34 : 0.4)))} />
+    <Block v={v} size={cell - gap}>
       <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: -cell * 0.3, bottom: -cell * 0.3, width: cell * 0.28, backgroundColor: '#FFFFFF' }, glintSt]} />
-    </View>
+    </Block>
   );
   const box = { position: 'absolute' as const, left: at.x, top: at.y, width: cell, height: cell };
   return (
     <>
-      <Animated.View pointerEvents="none" style={[box, { padding: pad, backgroundColor: c.line }, socketSt]}>
-        <View style={{ flex: 1, backgroundColor: c.canvas }}>
-          <Enamel fill={c.canvas} size={cell} empty dark={isDark} />
-        </View>
+      <Animated.View pointerEvents="none" style={[box, { padding: pad }, socketSt]}>
+        <Socket size={cell - gap} />
       </Animated.View>
-      <Animated.View pointerEvents="none" style={[box, { left: at.x + pad, top: at.y + pad, width: cell - gap, height: cell - gap, backgroundColor: '#000000' }, shadowSt]} />
-      <Animated.View pointerEvents="none" style={[box, { padding: pad, backgroundColor: c.line }, tileSt]}>
+      <Animated.View pointerEvents="none" style={[box, { left: at.x + pad, top: at.y + pad, width: cell - gap, height: cell - gap, borderRadius: (cell - gap) * 0.18, backgroundColor: '#000000' }, shadowSt]} />
+      <Animated.View pointerEvents="none" style={[box, { padding: pad }, tileSt]}>
         {face}
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000000' }, dimSt]} />
+        <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: pad, top: pad, right: pad, bottom: pad, borderRadius: (cell - gap) * 0.18, backgroundColor: '#000000' }, dimSt]} />
       </Animated.View>
       {hero && home ? (
-        <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: cell, height: cell, padding: pad, backgroundColor: c.line }, flySt]}>
+        <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: cell, height: cell, padding: pad }, flySt]}>
           {face}
         </Animated.View>
       ) : null}
@@ -1451,9 +1435,7 @@ function Scatter({ board, cell, gap }: { board: number[]; cell: number; gap: num
 }
 
 function ScatterTile({ v, d, side, at, cell, gap }: { v: number; d: number; side: number; at: { x: number; y: number }; cell: number; gap: number }) {
-  const { c, isDark } = useTheme();
   const pad = gap / 2;
-  const rk = rank(v);
   const k = useSharedValue(0);
   useEffect(() => {
     k.value = withDelay(d * 60, withTiming(1, { duration: 420, easing: Easing.in(Easing.quad) }));
@@ -1472,11 +1454,8 @@ function ScatterTile({ v, d, side, at, cell, gap }: { v: number; d: number; side
     };
   });
   return (
-    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: at.x, top: at.y, width: cell, height: cell, padding: pad, backgroundColor: c.line }, st]}>
-      <View style={{ flex: 1, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center' }}>
-        <Enamel fill={c.tile[rk]} size={cell} dark={isDark} />
-        <TileNum v={v} color={c.ink[rk]} size={Math.max(12, Math.round(cell * (v >= 100 ? 0.28 : v >= 10 ? 0.34 : 0.4)))} />
-      </View>
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: at.x, top: at.y, width: cell, height: cell, padding: pad }, st]}>
+      <Block v={v} size={cell - gap} />
     </Animated.View>
   );
 }

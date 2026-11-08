@@ -1,5 +1,6 @@
 import { DelaGothicOne_400Regular } from '@expo-google-fonts/dela-gothic-one';
 import { Onest_400Regular, Onest_500Medium, Onest_600SemiBold } from '@expo-google-fonts/onest';
+import { Rubik_400Regular, Rubik_500Medium, Rubik_600SemiBold, Rubik_700Bold } from '@expo-google-fonts/rubik';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -20,6 +21,10 @@ export default function RootLayout() {
     Onest_500Medium,
     Onest_600SemiBold,
     DelaGothicOne_400Regular,
+    Rubik_400Regular,
+    Rubik_500Medium,
+    Rubik_600SemiBold,
+    Rubik_700Bold,
   });
 
   useEffect(() => {

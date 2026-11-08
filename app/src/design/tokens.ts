@@ -25,49 +25,55 @@ export type Palette = {
   hair: string;
   /** Soft shadow colour for L2 (cards over a scrim). */
   shadow: string;
+  /** The white plastic plate the board is moulded in, and its bottom edge. */
+  plate: string;
+  plateEdge: string;
   /** Tile fill and number colour per rung, index 1..11. */
   tile: string[];
   ink: string[];
 };
 
 export const light: Palette = {
-  bg: '#F3EFE4', // the poster's paper
-  canvas: '#FFFDF7',
-  line: '#111215',
-  stroke: '#111215',
-  fold: 'rgba(17,18,21,0.2)',
-  text: '#111215',
-  muted: '#5D5F66',
-  faint: '#9A9BA0',
-  scrim: 'rgba(243,239,228,0.88)',
-  surface: '#FFFDF7',
-  hair: 'rgba(17,18,21,0.14)',
-  shadow: 'rgba(17,18,21,0.06)',
-  // 192 is umber. 384, the goal, is the theme's own ink: a black tile with a
-  // yellow number here. 768, past the goal, is indigo.
-  tile: ['', '#1F4FB2', '#D9342B', '#F4C21C', '#EC7A1F', '#1D8657', '#6B3DA3', '#D9468C', '#0E8C97', '#8A5A2B', '#111215', '#2E3192'],
-  ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#F4C21C', '#FFFFFF'],
+  // Plastic building tiles on a white plate (2026-11-08 redesign): the board
+  // is a moulded plate with sunken sockets, every tile a glossy block.
+  bg: '#ECEBE7',
+  canvas: '#ECEAE4',
+  line: '#2A2A2A',
+  stroke: '#2A2A2A',
+  fold: 'rgba(0,0,0,0.12)',
+  text: '#2A2A2A',
+  muted: '#77766F',
+  faint: '#A3A29C',
+  scrim: 'rgba(236,235,231,0.94)',
+  surface: '#FFFFFF',
+  hair: 'rgba(0,0,0,0.10)',
+  shadow: 'rgba(0,0,0,0.08)',
+  plate: '#FFFFFF',
+  plateEdge: '#D3D1CA',
+  // "Конструктор": 1 blue and 2 red are the magnet's poles; from 3 each rung
+  // has its own toy colour, 384 is black with a yellow number, 768 gold.
+  tile: ['', '#356BFF', '#FF4733', '#FFD43B', '#2FBF71', '#FF9F1C', '#FF5FA2', '#8F5BFF', '#17B5B0', '#22337F', '#1A1A1A', '#E8B923'],
+  ink: ['', '#FFFFFF', '#FFFFFF', '#2A2A2A', '#2A2A2A', '#2A2A2A', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFD43B', '#2A2A2A'],
 };
 
 export const dark: Palette = {
-  // Dark keeps the lines pure black and lifts the fields, so the thick gaps
-  // between fields still read: the board's whole look depends on them.
-  bg: '#1B1C20',
-  canvas: '#383A42',
-  line: '#000000',
-  stroke: '#EEEDEA',
-  fold: 'rgba(0,0,0,0.45)',
-  text: '#EEEDEA',
-  muted: '#A2A3A8',
-  faint: '#66686E',
-  scrim: 'rgba(27,28,32,0.9)',
-  surface: '#26272C',
-  hair: 'rgba(238,237,234,0.14)',
+  // Dark: a charcoal plate on a near-black table, the same plastic tiles.
+  bg: '#18191C',
+  canvas: '#23252A',
+  line: '#EDEDEA',
+  stroke: '#EDEDEA',
+  fold: 'rgba(0,0,0,0.4)',
+  text: '#EDEDEA',
+  muted: '#9C9B96',
+  faint: '#5E5F63',
+  scrim: 'rgba(24,25,28,0.94)',
+  surface: '#2B2D33',
+  hair: 'rgba(255,255,255,0.10)',
   shadow: 'rgba(0,0,0,0.3)',
-  // 192 is umber. 384, the goal, is the theme's own ink: a paper tile with a
-  // black number here. 768, past the goal, is indigo.
-  tile: ['', '#3466D6', '#E5463C', '#F2C230', '#F08A33', '#26A06A', '#8455C4', '#E25C9C', '#18A3AE', '#A8713F', '#F3EFE4', '#4F55C9'],
-  ink: ['', '#FFFFFF', '#FFFFFF', '#111215', '#111215', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#111215', '#FFFFFF'],
+  plate: '#2F3238',
+  plateEdge: '#141518',
+  tile: ['', '#356BFF', '#FF4733', '#FFD43B', '#2FBF71', '#FF9F1C', '#FF5FA2', '#8F5BFF', '#17B5B0', '#3A4FAF', '#0E0E0E', '#E8B923'],
+  ink: ['', '#FFFFFF', '#FFFFFF', '#2A2A2A', '#2A2A2A', '#2A2A2A', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFD43B', '#2A2A2A'],
 };
 
 /* Palettes of the masters: other tile colours for rungs 1 to 9 and 11.
@@ -120,17 +126,15 @@ export function pairs(a: number, b: number): boolean {
 }
 
 export const font = {
-  /** Dela Gothic One: the wordmark, and the score on the game-over card, the one
-      number that is a poster rather than a reading. Nowhere else. */
-  wide: 'DelaGothicOne_400Regular',
-  /** Onest for everything else, in three weights: 400, 500, 600. */
-  body: 'Onest_400Regular',
-  bodyMedium: 'Onest_500Medium',
-  bodySemi: 'Onest_600SemiBold',
-  /** Numbers: tiles, the score. Onest 600; tiles use proportional figures so "12" stays tight. */
-  tile: 'Onest_600SemiBold',
-  black: 'Onest_600SemiBold',
-  narrow: 'Onest_600SemiBold',
+  /** Rubik everywhere (2026-11-08): 700 for numbers and the wordmark, 400/500/600 for text. */
+  wide: 'Rubik_700Bold',
+  body: 'Rubik_400Regular',
+  bodyMedium: 'Rubik_500Medium',
+  bodySemi: 'Rubik_600SemiBold',
+  /** Numbers: tiles, the score. One size in every tile, never shrunk for more digits. */
+  tile: 'Rubik_700Bold',
+  black: 'Rubik_700Bold',
+  narrow: 'Rubik_600SemiBold',
 };
 
 /** Mix colour `a` into `b` by `t` (0..1). Hex only. */
