@@ -377,15 +377,15 @@ export default function Game() {
     /* A merge that a merge made: the tile sends out one square wave per
        merge of the chain so far, in its new colour, so a double reads as
        two rings and a triple as three. */
-    /* From the second merge of a cascade on, the merge throws plastic
-       crumbs in the new tile's colour, more and further with every step, and
-       the score jumps with it. A new best tile throws the most. */
-    if (step > 0 || milestone) {
+    /* Every merge throws plastic crumbs in the new tile's colour: a few for
+       a lone merge, more and further with every step of a cascade, and the
+       score jumps with it. A new best tile throws the most. */
+    {
       const id = `${at}-${Date.now()}-${step}`;
-      const power = milestone ? 5 : Math.min(4, step);
-      setBursts((e) => [...e, { id, at, v: level, n: 4 + power * 3, power }]);
+      const power = milestone ? 5 : Math.min(4, step + 1);
+      setBursts((e) => [...e, { id, at, v: level, n: 1 + power * 3, power }]);
       later(BURST_MS + 80, () => setBursts((e) => e.filter((x) => x.id !== id)));
-      if (!milestone) scoreKick.value = withSequence(withTiming(1 + 0.05 * power, { duration: 60 }), withTiming(1, back(260, 2.4)));
+      if (!milestone) scoreKick.value = withSequence(withTiming(1 + 0.04 * power, { duration: 60 }), withTiming(1, back(260, 2.4)));
     }
     float(at, pts, Math.round(pts / level));
     thump(milestone ? Math.max(level, 192) : level, step);
