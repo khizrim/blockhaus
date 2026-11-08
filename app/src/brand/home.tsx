@@ -23,7 +23,7 @@ let splashed = false;
 
 export function Home() {
   const { c, sound, setSound } = useTheme();
-  const { game, stats, inProgress, newGame, learned, daily } = useGame();
+  const { game, stats, inProgress, newGame, learned } = useGame();
   const [confirm, setConfirm] = useState(false);
   const [splash, setSplash] = useState(!splashed);
   const score = game.score.toLocaleString('ru-RU');
@@ -33,7 +33,6 @@ export function Home() {
     newGame();
     play();
   };
-  const openDaily = () => router.push({ pathname: '/game', params: { daily: '1' } });
   const done = () => {
     splashed = true;
     setSplash(false);
@@ -67,7 +66,6 @@ export function Home() {
           ) : (
             <Button kind="primary" size="lg" label="Играть" onPress={fresh} />
           )}
-          {learned && !daily.done ? <Button size="lg" label={daily.started ? 'Продолжить игру дня' : 'Игра дня'} onPress={openDaily} /> : null}
         </View>
       </Page>
 

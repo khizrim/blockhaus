@@ -12,7 +12,6 @@ import { dur, enter, exit, HIT, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Game as EngineGame, type Piece, type Step } from '@/game/engine';
-import { DAILY } from '@/game/daily';
 import { LESSONS } from '@/game/lessons';
 import { slideMoves, type Move } from '@/game/slide';
 import { useGame } from '@/game/store';
@@ -113,10 +112,7 @@ export default function Game() {
   const store = useGame();
   const g = store.game;
   const { width, height } = useWindowDimensions();
-  const { learn, daily } = useLocalSearchParams<{ learn?: string; daily?: string }>();
-  const isDaily = store.mode === 'daily';
-  /* The daily's rules stay in sight: pieces left and the next medal. */
-  const piecesLeft = Math.max(0, DAILY.pieceLimit - g.moves);
+  const { learn } = useLocalSearchParams<{ learn?: string }>();
   // A medal reached mid-game rings once, on the move that reached it.
   const counted = !g.cfg.freeSweeps && g.cfg.sweepsMax > 0;
   const showTrack = false;
@@ -127,16 +123,6 @@ export default function Game() {
   // The lesson on the board now, for timers that outlive a render (skip from pause).
   const lessonNow = useRef(store.lesson);
   lessonNow.current = store.lesson;
-
-  // Opened for the game of the day: put it on the board; leaving the screen
-  // puts the free game back.
-  useEffect(() => {
-    if (store.ready && daily) store.startDaily();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store.ready, daily]);
-  const leaveDaily = useRef(store.leaveDaily);
-  leaveDaily.current = store.leaveDaily;
-  useEffect(() => () => leaveDaily.current(), []);
 
   // Opened to learn: start the first lesson once the save has loaded.
   useEffect(() => {
@@ -255,7 +241,7 @@ export default function Game() {
      paddings around them. Never wider than the screen, never under 240. */
   // The line above the board: a lesson's formula, its tiles at the tray's cell.
   const LESSON_H = trayMax;
-  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || isDaily ? LESSON_H + space.lg : 0) + (isDaily ? 44 : 12) + trayMax * 3 + 32 + 48;
+  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null ? LESSON_H + space.lg : 0) + 12 + trayMax * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
   /* One column for the whole screen: the header, the lesson, the board and
@@ -1016,12 +1002,6 @@ export default function Game() {
                 <Formula terms={lesson.formula} cell={trayCell} gap={gap} open={coach === 'task'} fit={col} />
               </Animated.View>
             </View>
-          ) : isDaily ? (
-            /* The game of the day counts its pieces on a strip, not in words:
-               one cell per piece, the spent ones go out from the right. */
-            <View style={{ width: col, height: LESSON_H, marginBottom: step, justifyContent: 'center' }}>
-              <PieceStrip total={DAILY.pieceLimit} left={piecesLeft} width={col} />
-            </View>
           ) : null}
           <Animated.View style={boardStyle} {...swipe.panHandlers}>
             <View
@@ -1390,24 +1370,6 @@ function ScatterTile({ v, d, side, at, cell, gap }: { v: number; d: number; side
     </Animated.View>
   );
 }
-
-/** The game of the day's pieces as a strip of cells, framed like the board.
-    A cell per piece; spent ones go back to paper, the last few turn red. */
-function PieceStrip({ total, left, width }: { total: number; left: number; width: number }) {
-  // A socket per piece; the ones still to play are blue blocks, the last few turn red.
-  const { c } = useTheme();
-  const g = 3;
-  const cw = (width - g * (total - 1)) / total;
-  const low = left <= 5;
-  return (
-    <View accessible accessibilityLabel={`Осталось фигур: ${left} из ${total}`} style={{ width, height: 18, flexDirection: 'row', gap: g }}>
-      {Array.from({ length: total }, (_, k) => k < left).map((on, k) =>
-        on ? <Block key={k} v={1} size={18} width={cw} fill={low ? c.tile[2] : c.tile[1]} numbers={false} /> : <Socket key={k} size={18} width={cw} />,
-      )}
-    </View>
-  );
-}
-
 
 /** The shape of the piece coming next into a tray slot, in the slot's corner. */
 function NextShape({ cells, cell, gap }: { cells: [number, number][]; cell: number; gap: number }) {

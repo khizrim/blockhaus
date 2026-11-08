@@ -14,7 +14,7 @@ import { fx } from '@/sound/sfx';
    is the news. */
 const GOAL = engine.DEFAULTS.goal;
 export default function Win() {
-  const { game, markWinSeen, mode } = useGame();
+  const { game, markWinSeen } = useGame();
   const { width } = useWindowDimensions();
   const goal = Math.max(GOAL, game.bestTile);
   const size = Math.min(180, Math.round((Math.min(width, 440) - 32) * 0.5));
@@ -44,9 +44,7 @@ export default function Win() {
       </View>
       <View style={{ gap: 12 }}>
         <Button kind="primary" size="lg" label="Играть дальше" onPress={() => router.back()} />
-        {mode === 'daily' ? null : (
-          <Button size="lg" label="В меню" onPress={() => router.dismissTo('/')} />
-        )}
+        <Button size="lg" label="В меню" onPress={() => router.dismissTo('/')} />
       </View>
     </Page>
   );

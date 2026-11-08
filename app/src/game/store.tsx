@@ -2,7 +2,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import engine, { type Dir, type Game, type Piece, type PlaceResult, type SweepResult } from './engine';
-import { dailyConfig, dayKey, dayStream, newDailyGame } from './daily';
 import { LESSONS } from './lessons';
 
 /* The one running game and the player's record, shared by every screen and
@@ -19,18 +18,13 @@ const EMPTY: Stats = { best: 0, bestTile: 0, played: 0, wins: 0, total: 0 };
 const FIELDS = ['board', 'tray', 'next', 'sweeps', 'score', 'merges', 'bestTile', 'moves', 'won', 'over', 'used'] as const;
 
 type GameFields = Pick<Game, (typeof FIELDS)[number]>;
-export type DailyResult = { score: number; bestTile: number; board: number[] };
-type SavedDaily = { key: string; draws: number; game: GameFields; winSeen: boolean; result: DailyResult | null };
 type Saved = {
-  game: GameFields; stats: Stats; winSeen: boolean; learned?: boolean; daily?: SavedDaily;
+  game: GameFields; stats: Stats; winSeen: boolean; learned?: boolean;
   /** Rules of the free game on the board, and the ones the next free game starts with. */
   gameRules?: Rules; rules?: Rules;
   /** The player chose the rules in the settings (before 2026-11-02 `rules` was always written, as 'free'). */
   rulesPicked?: boolean;
 };
-
-/** Today's game of the day, as screens see it. */
-export type Daily = { key: string; started: boolean; done: boolean; result: DailyResult | null };
 
 type Store = {
   ready: boolean;
@@ -54,13 +48,6 @@ type Store = {
   newGame: () => void;
   markWinSeen: () => void;
   resetProgress: () => void;
-  /** Which game is on the board: the free one or the game of the day. */
-  mode: 'classic' | 'daily';
-  daily: Daily;
-  /** Put today's game of the day on the board, starting it if needed. */
-  startDaily: () => void;
-  /** Back to the free game; the daily run waits where it was. */
-  leaveDaily: () => void;
   /** Rules of the game on the board. */
   rules: Rules;
   /** Prototype only: put a still position on the board. */
@@ -69,12 +56,9 @@ type Store = {
 
 const Ctx = createContext<Store | null>(null);
 
-function restore(s: GameFields, rng?: () => number, cfg?: Record<string, unknown>): Game {
-  // Built on a throwaway stream (newGame deals a tray), then handed the real
-  // one, so a replayed daily stream is not advanced by the restore itself.
+function restore(s: GameFields, cfg?: Record<string, unknown>): Game {
   const g = engine.newGame(cfg);
   for (const f of FIELDS) if (s[f] !== undefined) (g as Record<string, unknown>)[f] = s[f];
-  if (rng) g.rng = rng;
   return g;
 }
 
@@ -87,10 +71,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [learned, setLearned] = useState(false);
   const [lesson, setLesson] = useState<number | null>(null);
   const saved = useRef<Game | null>(null);
-  const [mode, setMode] = useState<'classic' | 'daily'>('classic');
-  /** The free game, put aside while the daily is on the board. */
-  const classic = useRef<{ game: Game; winSeen: boolean } | null>(null);
-  const dailyRef = useRef<{ key: string; game: Game; stream: ReturnType<typeof dayStream>; winSeen: boolean; result: DailyResult | null } | null>(null);
   // Sweeps earned by cascades: the one rule set since the plastic redesign
   // (2026-11-08); the free-sweeps option was dropped with the other extras.
   const nextRules: Rules = 'cascade';
@@ -101,15 +81,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
       .then((raw) => {
         if (!raw) return;
         const s = JSON.parse(raw) as Saved;
-        gRef.current = restore(s.game, undefined, rulesConfig(s.gameRules ?? 'free'));
+        gRef.current = restore(s.game, rulesConfig(s.gameRules ?? 'free'));
         setStats({ ...EMPTY, ...s.stats });
         setWinSeen(!!s.winSeen);
         setLearned(!!s.learned || (s.stats?.played ?? 0) > 0);
-        if (s.daily) {
-          // Replay the day's stream to where the run left off.
-          const stream = dayStream(s.daily.key, s.daily.draws);
-          dailyRef.current = { key: s.daily.key, game: restore(s.daily.game, stream.next, dailyConfig(s.daily.key)), stream, winSeen: s.daily.winSeen, result: s.daily.result };
-        }
       })
       .catch(() => {})
       .finally(() => {
@@ -121,19 +96,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
   // Save after every change once loaded.
   useEffect(() => {
     if (!ready) return;
-    // During the lesson or the daily, the free game is the one put aside.
-    const g = mode === 'daily' ? classic.current!.game : lesson === null ? gRef.current : (saved.current ?? engine.newGame());
+    // During the lesson, the free game is the one put aside.
+    const g = lesson === null ? gRef.current : (saved.current ?? engine.newGame());
     const fields = (x: Game) => Object.fromEntries(FIELDS.map((f) => [f, x[f]])) as GameFields;
-    const d = dailyRef.current;
-    if (d && mode === 'daily') d.winSeen = winSeen;
-    const daily = d ? { key: d.key, draws: d.stream.draws, game: fields(d.game), winSeen: d.winSeen, result: d.result } : undefined;
-    const ws = mode === 'daily' ? classic.current!.winSeen : winSeen;
     AsyncStorage.setItem(
       KEY,
-      JSON.stringify({ game: fields(g), stats, winSeen: ws, learned, daily, gameRules: rulesOf(g) } satisfies Saved),
+      JSON.stringify({ game: fields(g), stats, winSeen, learned, gameRules: rulesOf(g) } satisfies Saved),
     ).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, version, stats, winSeen, learned, lesson, mode]);
+  }, [ready, version, stats, winSeen, learned, lesson]);
 
   const bump = () => setVersion((v) => v + 1);
 
@@ -149,20 +120,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  /** The daily run ended: keep its result. */
-  const finishDaily = useCallback((g: Game) => {
-    const d = dailyRef.current;
-    if (!d || d.result) return;
-    d.result = { score: g.score, bestTile: g.bestTile, board: g.board.slice() };
-  }, []);
-
   const afterMove = useCallback(
     (g: Game) => {
       if (!g.over || lesson !== null) return;
       record(g);
-      if (mode === 'daily') finishDaily(g);
     },
-    [record, lesson, mode, finishDaily],
+    [record, lesson],
   );
 
   const place = useCallback(
@@ -192,33 +155,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [afterMove],
   );
 
-  const startDaily = useCallback(() => {
-    if (mode === 'daily' || lesson !== null) return;
-    const key = dayKey();
-    if (!dailyRef.current || dailyRef.current.key !== key) {
-      const { game, stream } = newDailyGame(key);
-      dailyRef.current = { key, game, stream, winSeen: false, result: null };
-    }
-    classic.current = { game: gRef.current, winSeen };
-    gRef.current = dailyRef.current.game;
-    setWinSeen(dailyRef.current.winSeen);
-    setMode('daily');
-    bump();
-  }, [mode, lesson, winSeen]);
-
-  const leaveDaily = useCallback(() => {
-    if (mode !== 'daily' || !classic.current) return;
-    if (dailyRef.current) dailyRef.current.winSeen = winSeen;
-    gRef.current = classic.current.game;
-    setWinSeen(classic.current.winSeen);
-    classic.current = null;
-    setMode('classic');
-    bump();
-  }, [mode, winSeen]);
-
   const newGame = useCallback(() => {
-    // The daily is one run a day: it never restarts.
-    if (mode === 'daily') return;
     const g = gRef.current;
     if (!g.over && lesson === null) record(g);
     setLesson(null);
@@ -226,7 +163,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     gRef.current = engine.newGame(rulesConfig(nextRules));
     setWinSeen(false);
     bump();
-  }, [record, lesson, mode, nextRules]);
+  }, [record, lesson, nextRules]);
 
   const startLesson = useCallback(
     (k: number) => {
@@ -261,14 +198,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Store>(() => {
     const g = gRef.current;
-    const today = dayKey();
-    const d = dailyRef.current?.key === today ? dailyRef.current : null;
     return {
       ready,
-      mode,
-      daily: { key: today, started: !!d && d.game.moves > 0, done: !!d?.result, result: d?.result ?? null },
-      startDaily,
-      leaveDaily,
       rules: rulesOf(g),
       game: g,
       version,
@@ -279,7 +210,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         bestTile: Math.max(stats.bestTile, g.bestTile),
       },
       winSeen,
-      inProgress: mode === 'classic' && lesson === null && g.moves > 0 && !g.over,
+      inProgress: lesson === null && g.moves > 0 && !g.over,
       learned,
       lesson,
       startLesson,
@@ -312,7 +243,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, version, stats, winSeen, place, sweep, newGame, learned, lesson, startLesson, finishLessons, mode, startDaily, leaveDaily]);
+  }, [ready, version, stats, winSeen, place, sweep, newGame, learned, lesson, startLesson, finishLessons]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
