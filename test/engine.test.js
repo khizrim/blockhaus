@@ -311,6 +311,18 @@ test('the touch dealer deals the value that has open sides waiting for it', () =
   assert.equal(E.chanceOfOnes(cfg, empty()), 0.5);
 });
 
+test('with peek the next tray is the shapes shown one tray ahead', () => {
+  const g = E.newGame({ ...E.CASCADE, peek: 'shape' }, E.seeded(11));
+  for (let round = 0; round < 3; round++) {
+    const shown = JSON.stringify(g.next);
+    // Put the tray away on an empty board, slot by slot.
+    g.board.fill(0);
+    g.tray.forEach((p, slot) => { g.board.fill(0); E.place(g, slot, 0, 0); });
+    assert.equal(JSON.stringify(g.tray.map(p => p.cells.map(([x, y]) => [x, y]))), shown);
+    assert.equal(g.next.length, 3);
+  }
+});
+
 test('balanced trays keep 1-cells and 2-cells within the slack', () => {
   const rng = E.seeded(6);
   const cfg = { ...E.ORIGINAL, balancedTray: 1 };

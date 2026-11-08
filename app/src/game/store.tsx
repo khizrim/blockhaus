@@ -17,7 +17,7 @@ const rulesConfig = (r: Rules) => (r === 'cascade' ? engine.CASCADE : undefined)
 const KEY = 'blockhaus:v1';
 const EMPTY: Stats = { best: 0, bestTile: 0, played: 0, wins: 0, total: 0 };
 // `used`: sweeps made in this game, for the tasks and posters that ask for none.
-const FIELDS = ['board', 'tray', 'sweeps', 'score', 'merges', 'bestTile', 'moves', 'won', 'over', 'used'] as const;
+const FIELDS = ['board', 'tray', 'next', 'sweeps', 'score', 'merges', 'bestTile', 'moves', 'won', 'over', 'used'] as const;
 
 type GameFields = Pick<Game, (typeof FIELDS)[number]>;
 export type DailyResult = { score: number; bestTile: number; board: number[] };

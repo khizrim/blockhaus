@@ -191,3 +191,23 @@ tiles; the blurred player stays within noise (57% vs 48% at 192 over 60
 games) and the swiper at zero. So it rewards looking at the board, which is
 the point. Under free sweeps it changes nothing measurable, and the daily medal lines move within noise
 (`node sim/daily.js 300 weekdays`), so they stay. It becomes the dealer.
+
+## Seeing the next tray (2026-11-08)
+
+`peek: 'shape'` deals the next tray's shapes one tray ahead and shows them
+in the corners of the tray slots; their values are still dealt when the
+tray arrives, from the board as it is then, so the touch dealer stays
+reactive. Dealing shapes before values keeps the random stream in the same
+order either way, so the deal itself is unchanged.
+
+A one-move-ahead player that also scores how well the coming shapes would
+fit (more weight on the last piece of a tray), cascade rules, 60 games:
+
+| player | moves | 96 / 192 / 384 | median score |
+|---|---|---|---|
+| careful, ignores the next tray | 237 | 93 / 68 / 22% | 3525 |
+| careful, plans for it | 282 | 100 / 82 / 33% | 3681 |
+| blurred, ignores it | 193 | 83 / 48 / 8% | 2634 |
+| blurred, plans for it | 234 | 90 / 65 / 20% | 3678 |
+
+Looking ahead pays for both players, so it becomes the default.

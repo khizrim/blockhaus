@@ -87,6 +87,10 @@
     // Where a placed merge stays: 'new' in the laid cell, 'big' in the
     // bigger tile (see applyPlacement).
     absorb: 'new',
+    // Deal the shapes of the next tray one tray ahead (g.next), so the
+    // player can see what is coming and leave room for it. Values are still
+    // picked when that tray arrives, from the board as it is then.
+    peek: false,
     goal: 192,
   };
 
@@ -261,8 +265,7 @@
     return Math.min(1 - lo, Math.max(lo, p));
   }
 
-  function deal(cfg, board, rng) {
-    const shape = pickShape(cfg, rng);
+  function deal(cfg, board, rng, shape = pickShape(cfg, rng)) {
     if (shape.length === 1 && cfg.threeChance && rng() < cfg.threeChance) {
       return { cells: [[0, 0, 3]], used: false };
     }
@@ -280,8 +283,13 @@
   /** A uniform value for a piece, or null if it mixes values. */
   const pieceValue = p => (p.cells.every(c => c[2] === p.cells[0][2]) ? p.cells[0][2] : null);
 
-  function dealTray(cfg, board, rng) {
-    const tray = [deal(cfg, board, rng), deal(cfg, board, rng), deal(cfg, board, rng)];
+  /** Three shapes for a tray to come, before any value is chosen. */
+  const dealShapes = (cfg, rng) => [pickShape(cfg, rng), pickShape(cfg, rng), pickShape(cfg, rng)];
+
+  /** A tray: given shapes (from dealShapes) or fresh ones, with values read
+      off the board as it is now. */
+  function dealTray(cfg, board, rng, shapes = dealShapes(cfg, rng)) {
+    const tray = shapes.map(sh => deal(cfg, board, rng, sh));
     if (cfg.mixedTray) {
       const vals = tray.map(pieceValue);
       if (vals.every(v => v !== null && (v === 1 || v === 2) && v === vals[0])) {
@@ -330,6 +338,7 @@
     for (const i of cfg.stones || []) g.board[i] = STONE;
     if (cfg.startTiles) setStart(g.board, cfg.startTiles, rng, cfg.startPool);
     g.tray = dealTray(cfg, g.board, rng);
+    if (cfg.peek) g.next = dealShapes(cfg, rng);
     g.bestTile = Math.max(0, ...g.board);
     return g;
   }
@@ -403,7 +412,8 @@
     if (res.bonus) g.sweeps++;
     res.refilled = false;
     if (g.tray.every(t => t.used)) {
-      g.tray = dealTray(g.cfg, g.board, g.rng);
+      g.tray = dealTray(g.cfg, g.board, g.rng, g.next);
+      if (g.cfg.peek) g.next = dealShapes(g.cfg, g.rng);
       g.sweeps = Math.max(g.sweeps, g.cfg.sweepsPerTray);
       res.refilled = true;
     }
@@ -509,6 +519,10 @@
     // The dealer reads open sides, not tile counts (2026-11-07,
     // sim/RESULTS.md): fewer 1s and 2s end up walled in.
     dealer: 'touch',
+    // The next tray's shapes show beside the tray (2026-11-08,
+    // sim/RESULTS.md): a careful player reaches 192 in 82% of games instead
+    // of 68%.
+    peek: 'shape',
     // A cascade from a placed piece pays ×2 for its third and fourth merge
     // and ×3 from the fifth (sim/RESULTS.md). The short chains that happen on
     // their own (1+2=3, then 3+3) score plain, so the bonus marks a long
@@ -546,7 +560,7 @@
   return {
     N, SHAPES: S, ORIGINAL, DEFAULTS, LIMITED, CASCADE, DAILY, WEEKDAY, ORIGINAL_SHAPES, STONE,
     pairs, merged, rank, idx, neighbours, size, fits, pieceValue,
-    applyPlacement, applySweep, collapse, lanes, laneRuns, chanceOfOnes, deal, dealTray,
+    applyPlacement, applySweep, collapse, lanes, laneRuns, chanceOfOnes, deal, dealTray, dealShapes,
     newGame, place, sweep, anyMove, canSweep, canPlaceAnywhere, seeded,
   };
 });
