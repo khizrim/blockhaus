@@ -97,7 +97,7 @@ export default function Sounds() {
         {GROUPS.map((g) => (
           <View key={g.title} style={{ gap: space.sm }}>
             <Label>{g.title}</Label>
-            <View style={{ backgroundColor: c.surface, borderWidth: 1, borderColor: c.hair, paddingHorizontal: space.lg }}>
+            <View style={{ backgroundColor: c.plate, borderRadius: 16, boxShadow: `0 4px 0 ${c.plateEdge}`, paddingHorizontal: space.lg }}>
               {g.items.map((it, k) => (
                 <View key={it.name}>
                   {k ? <Rule /> : null}

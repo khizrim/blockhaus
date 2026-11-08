@@ -55,7 +55,7 @@ export default function Kit() {
               ] as const
             ).map(([n, v]) => (
               <View key={n} style={{ flex: 1, gap: 4 }}>
-                <View style={{ height: 44, backgroundColor: v, borderWidth: 2, borderColor: c.line }} />
+                <View style={{ height: 44, borderRadius: 10, backgroundColor: v, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)' }} />
                 <Text style={{ fontFamily: font.body, fontSize: 11, color: c.muted }}>{n}</Text>
               </View>
             ))}

@@ -5,7 +5,7 @@ import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 
 import { Overlay } from '@/components/Overlay';
 import { PosterFrame } from '@/components/WallPoster';
-import { Enamel, panelEnamel } from '@/design/depth';
+import { Block, plateStyle } from '@/components/Block';
 import { font } from '@/design/tokens';
 import { Body, Button, Heading, Screen, TopBar } from '@/components/ui';
 import { space, type } from '@/design/system';
@@ -15,14 +15,13 @@ import { POSTERS, WALL, type PosterDef } from '@/game/meta';
 import { shareImage } from '@/game/shareImage';
 import { useGame } from '@/game/store';
 
-/* The wall is one composition, as the menu's poster is: a black ground
-   whose gaps are the board's lines, twelve frames of different sizes set
+/* The wall is one composition: a white plastic plate, twelve frames of different sizes set
    into it and a yellow block with the count. An earned poster fills its
    frame with its own composition and its number; an empty frame is paper
    with the number faint in its corner (a secret one shows nothing). Tap an
    empty frame to read what it wants; tap a poster to open it and send it. */
 export default function Posters() {
-  const { c, isDark } = useTheme();
+  const { c } = useTheme();
   const { width } = useWindowDimensions();
   const { posters } = useGame();
   const [open, setOpen] = useState<PosterDef | null>(null);
@@ -48,17 +47,20 @@ export default function Posters() {
       <Screen>
         <TopBar title="Плакаты" onBack={() => router.back()} />
         <ScrollView contentContainerStyle={{ paddingBottom: space.xl, alignItems: 'center' }} showsVerticalScrollIndicator={false}>
-          <View style={[{ width: wallW, height: wallH, backgroundColor: c.line }, panelEnamel(c.bg, isDark)]}>
+          <View style={[{ width: wallW, height: wallH }, plateStyle(c, 18)]}>
             {/* the count: how many of the twelve are up */}
             <View
               accessible
               accessibilityLabel={`Плакатов на стене: ${have} из ${POSTERS.length}`}
-              style={{ position: 'absolute', ...cnt, backgroundColor: c.tile[3], padding: space.sm, justifyContent: 'flex-end', overflow: 'hidden' }}>
-              <Enamel fill={c.tile[3]} size={u} dark={isDark} />
-              <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: Math.round(cnt.height * 0.5), lineHeight: Math.round(cnt.height * 0.58), color: c.ink[3] }}>
-                {have}
-              </Text>
-              <Text allowFontScaling={false} style={[type.secondaryStrong, { color: c.ink[3] }]}>{`из ${POSTERS.length}`}</Text>
+              style={{ position: 'absolute', ...cnt }}>
+              <Block v={1} size={cnt.height} width={cnt.width} fill={c.tile[3]} numbers={false}>
+                <View style={{ position: 'absolute', left: space.sm, bottom: space.sm }}>
+                  <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: Math.round(cnt.height * 0.5), lineHeight: Math.round(cnt.height * 0.58), color: c.ink[3] }}>
+                    {have}
+                  </Text>
+                  <Text allowFontScaling={false} style={[type.secondaryStrong, { color: c.ink[3] }]}>{`из ${POSTERS.length}`}</Text>
+                </View>
+              </Block>
             </View>
             {POSTERS.map((p, k) => {
               const on = !!posters[p.id];
@@ -105,7 +107,7 @@ export default function Posters() {
                   const fw = Math.min(r.w >= r.h ? 280 : 200, width - space.xl * 4);
                   const fh = Math.min(fw * (r.h / r.w), 320);
                   return (
-                    <View style={{ width: fw, height: fh, padding: L, backgroundColor: c.line }}>
+                    <View style={[{ width: fw, height: fh, padding: L }, plateStyle(c, 16)]}>
                       <PosterFrame p={open} on w={fw - L * 2} h={fh - L * 2} cols={r.w * 2} rows={r.h * 2} picked={false} />
                     </View>
                   );

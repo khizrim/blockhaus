@@ -6,6 +6,7 @@ import { Overlay } from "@/components/Overlay";
 import {
   Body,
   Button,
+  Card,
   Heading,
   Label,
   Panel,
@@ -22,13 +23,13 @@ import { useTheme, type ThemeMode } from "@/design/theme";
 import { useGame, type Rules } from "@/game/store";
 import { PALETTES, RANKS } from "@/game/meta";
 import { dark, light, swatches } from "@/design/tokens";
-import { Enamel } from "@/design/depth";
+import { Block } from "@/components/Block";
 import engine from "@/game/engine";
 import { Track, milestonesFor } from "@/components/Track";
 import { canRemind, useReminder } from "@/game/remind";
 
-/* Settings: a plain list. Sections are labelled, rows are 56 tall and split by
-   hairlines, controls sit on the right. */
+/* Settings: labelled sections of white plastic cards; rows are 56 tall and
+   split by hairlines, plastic switches and keys sit on the right. */
 export default function Settings() {
   const t = useTheme();
   const { c } = t;
@@ -67,7 +68,7 @@ export default function Settings() {
 
           <Section title="Палитра">
             {/* The masters' palettes open with the workshop rank. */}
-            <View style={{ flexDirection: "row", gap: space.sm }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
               {PALETTES.map((p) => {
                 const open = rank.level >= p.rank;
                 const on = t.palette === p.id;
@@ -79,20 +80,18 @@ export default function Settings() {
                     accessibilityLabel={open ? `Палитра ${p.name}` : `Палитра ${p.name}, откроется на ранге ${RANKS[p.rank]}`}
                     disabled={!open}
                     onPress={() => t.setPalette(p.id)}
-                    style={{ flex: 1, padding: 3, backgroundColor: on ? c.line : c.hair, opacity: open ? 1 : 0.45 }}
+                    style={{ width: "48%", flexGrow: 1, opacity: open ? 1 : 0.45 }}
                   >
-                    <View style={{ backgroundColor: c.surface, padding: space.sm, gap: space.sm }}>
-                      <View style={{ flexDirection: "row", gap: 3 }}>
+                    <View style={{ backgroundColor: c.plate, borderRadius: 16, padding: space.sm, gap: space.sm, borderWidth: 2, borderColor: on ? "#356BFF" : "transparent", boxShadow: `0 4px 0 ${c.plateEdge}` }}>
+                      <View style={{ flexDirection: "row", gap: 3, justifyContent: "center" }}>
                         {swatches(p.id, t.isDark ? dark : light).map((f, k) => (
-                          <View key={k} style={{ flex: 1, aspectRatio: 1, backgroundColor: f, overflow: "hidden" }}>
-                            <Enamel fill={f} size={24} dark={t.isDark} />
-                          </View>
+                          <Block key={k} v={1} size={22} fill={f} numbers={false} />
                         ))}
                       </View>
                       <Text numberOfLines={1} adjustsFontSizeToFit style={[type.secondaryStrong, { color: c.text }]}>
                         {p.name}
                       </Text>
-                      <Text numberOfLines={1} adjustsFontSizeToFit style={[type.secondary, { color: c.muted }]}>
+                      <Text numberOfLines={1} adjustsFontSizeToFit style={[type.secondary, { color: on ? "#356BFF" : c.muted }]}>
                         {open ? (on ? "Выбрана" : " ") : RANKS[p.rank]}
                       </Text>
                     </View>
@@ -266,27 +265,4 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** Rows on an L1 surface, split by hairlines. */
-function List({ children }: { children: ReactNode }) {
-  const { c } = useTheme();
-  const items = (Array.isArray(children) ? children.flat() : [children]).filter(
-    Boolean,
-  );
-  return (
-    <View
-      style={{
-        backgroundColor: c.surface,
-        borderWidth: 1,
-        borderColor: c.hair,
-        paddingHorizontal: space.lg,
-      }}
-    >
-      {items.map((child, k) => (
-        <View key={k}>
-          {k ? <Rule /> : null}
-          {child}
-        </View>
-      ))}
-    </View>
-  );
-}
+const List = Card;

@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 
 import { TileNum } from '@/components/TileNum';
-import { Enamel } from '@/design/depth';
+import { Block, Socket } from '@/components/Block';
 import { useTheme } from '@/design/theme';
 import { type } from '@/design/system';
 import { rank } from '@/design/tokens';
@@ -66,18 +66,41 @@ function TrackStep({ v, on, next, goal, w, h, frame, intro, delay, progress }: {
     p.value = withTiming(progress, { duration: 300, easing: Easing.out(Easing.cubic) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress]);
-  const bar = useAnimatedStyle(() => ({ width: `${p.value * 100}%` }));
   return (
-    <Animated.View style={[{ width: w, height: h, padding: frame, backgroundColor: on || next ? c.line : c.hair }, st]}>
-      <View style={{ flex: 1, backgroundColor: on ? c.tile[rk] : c.canvas, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        <Enamel fill={on ? c.tile[rk] : c.canvas} size={h} empty={!on} dark={isDark} />
-        {!on && next && progress > 0 ? <Animated.View style={[{ position: 'absolute', left: 0, bottom: 0, height: Math.max(4, Math.round(h * 0.22)), backgroundColor: c.tile[rk] }, bar]} /> : null}
-        <TileNum v={v} color={on ? c.ink[rk] : next ? c.text : goal ? c.muted : c.faint} size={Math.max(11, Math.round(h * 0.36))} />
-      </View>
+    <Animated.View style={st}>
+      <Slab w={w} h={h} fill={on ? c.tile[rk] : undefined} progress={!on && next ? progress : 0} tint={c.tile[rk]}>
+        <TileNum v={v} color={on ? c.ink[rk] : next ? c.text : goal ? c.muted : c.faint} size={Math.max(11, Math.round(h * 0.4))} />
+      </Slab>
     </Animated.View>
   );
 }
 
+/** One step of a track: a plastic block in its colour once lit, else an
+    empty socket; the one being played for fills along its floor. */
+function Slab({ w, h, fill, progress = 0, tint, children }: { w: number; h: number; fill?: string; progress?: number; tint?: string; children?: React.ReactNode }) {
+  const p = useSharedValue(progress);
+  useEffect(() => {
+    p.value = withTiming(progress, { duration: 300, easing: Easing.out(Easing.cubic) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progress]);
+  const bar = useAnimatedStyle(() => ({ width: `${p.value * 100}%` }));
+  if (fill) {
+    return (
+      <Block v={1} size={h} width={w} fill={fill} numbers={false}>
+        {children}
+      </Block>
+    );
+  }
+  return (
+    <View style={{ width: w, height: h }}>
+      <Socket size={h} width={w} />
+      <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', borderRadius: Math.round(h * 0.18), overflow: 'hidden' }}>
+        {progress > 0 && tint ? <Animated.View style={[{ position: 'absolute', left: 0, bottom: 0, height: Math.max(4, Math.round(h * 0.2)), backgroundColor: tint }, bar]} /> : null}
+        {children}
+      </View>
+    </View>
+  );
+}
 
 /** The game of the day's track: its three medals, each lit in its colour
     once the score reaches it. The next one to win wears the black frame. */
@@ -120,36 +143,24 @@ function MedalStep({ at, on, fill, ink, tint, progress, framed, w, h, frame, dar
   }, [progress]);
   const bar = useAnimatedStyle(() => ({ width: `${p.value * 100}%` }));
   return (
-    <Animated.View style={[{ width: w, height: h, padding: frame, backgroundColor: framed ? c.line : c.hair }, st]}>
-      <View style={{ flex: 1, backgroundColor: fill, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        <Enamel fill={fill} size={h} empty={!on} dark={dark} />
-        {!on && progress > 0 ? <Animated.View style={[{ position: 'absolute', left: 0, bottom: 0, height: Math.max(4, Math.round(h * 0.22)), backgroundColor: tint }, bar]} /> : null}
-        <TileNum v={at} color={ink} size={Math.max(11, Math.round(h * 0.36))} />
-      </View>
+    <Animated.View style={st}>
+      <Slab w={w} h={h} fill={on ? fill : undefined} progress={on ? 0 : progress} tint={tint}>
+        <TileNum v={at} color={ink} size={Math.max(11, Math.round(h * 0.4))} />
+      </Slab>
     </Animated.View>
   );
 }
 
 /** Days of the streak as squares: the last seven, lit yellow while the streak holds. */
 export function StreakDays({ count, size = 14, gap = 3, shield = 0 }: { count: number; size?: number; gap?: number; shield?: number }) {
-  const { c, isDark } = useTheme();
+  const { c } = useTheme();
   return (
     <View accessible accessibilityLabel={`Серия: ${count}${shield ? ', один пропуск в запасе' : ''}`} style={{ flexDirection: 'row', gap, alignItems: 'center' }}>
-      {Array.from({ length: 7 }, (_, k) => k < Math.min(count, 7)).map((on, k) => (
-        <View key={k} style={{ width: size, height: size, padding: 2, backgroundColor: on ? c.line : c.hair }}>
-          <View style={{ flex: 1, backgroundColor: on ? c.tile[3] : c.canvas }}>
-            <Enamel fill={on ? c.tile[3] : c.canvas} size={size} empty={!on} dark={isDark} />
-          </View>
-        </View>
-      ))}
+      {Array.from({ length: 7 }, (_, k) => k < Math.min(count, 7)).map((on, k) =>
+        on ? <Block key={k} v={1} size={size} fill={c.tile[3]} numbers={false} /> : <Socket key={k} size={size} />,
+      )}
       {/* A gold medal's shield: one missed day the streak survives. Blue, set apart. */}
-      {shield ? (
-        <View style={{ width: size, height: size, marginLeft: gap, padding: 2, backgroundColor: c.line }}>
-          <View style={{ flex: 1, backgroundColor: c.tile[1] }}>
-            <Enamel fill={c.tile[1]} size={size} dark={isDark} />
-          </View>
-        </View>
-      ) : null}
+      {shield ? <Block v={1} size={size} fill={c.tile[1]} numbers={false} style={{ marginLeft: gap }} /> : null}
     </View>
   );
 }
@@ -169,12 +180,8 @@ export function RankStrip({ name, into, need, level, width, top = 0 }: { name: s
       <Text numberOfLines={1} style={[type.secondaryStrong, { color: c.text, flexShrink: 1 }]}>
         {name}
       </Text>
-      <View style={{ flexDirection: 'row', gap: 2, padding: 2, backgroundColor: c.line, marginLeft: 'auto' }}>
-        {Array.from({ length: 10 }, (_, k) => k < lit).map((on, k) => (
-          <View key={k} style={{ width: sq, height: sq, backgroundColor: on ? tint : c.canvas, overflow: 'hidden' }}>
-            {on ? <Enamel fill={tint} size={sq} dark={isDark} /> : null}
-          </View>
-        ))}
+      <View style={{ flexDirection: 'row', gap: 2, marginLeft: 'auto' }}>
+        {Array.from({ length: 10 }, (_, k) => k < lit).map((on, k) => (on ? <Block key={k} v={1} size={sq} fill={tint} numbers={false} /> : <Socket key={k} size={sq} />))}
       </View>
     </View>
   );
@@ -182,17 +189,11 @@ export function RankStrip({ name, into, need, level, width, top = 0 }: { name: s
 
 /** The three tasks of the day as squares, lit when done. */
 export function TaskSquares({ done, size = 14, gap = 3, start = 0 }: { done: boolean[]; size?: number; gap?: number; start?: number }) {
-  const { c, isDark } = useTheme();
+  const { c } = useTheme();
   const fills = [c.tile[2], c.tile[3], c.tile[1]];
   return (
     <View accessible accessibilityLabel={`Задания дня: ${done.filter(Boolean).length} из 3`} style={{ flexDirection: 'row', gap, alignItems: 'center' }}>
-      {done.map((on, k) => (
-        <View key={k} style={{ width: size, height: size, padding: 2, backgroundColor: on ? c.line : c.hair }}>
-          <View style={{ flex: 1, backgroundColor: on ? fills[(k + start) % 3] : c.canvas }}>
-            <Enamel fill={on ? fills[(k + start) % 3] : c.canvas} size={size} empty={!on} dark={isDark} />
-          </View>
-        </View>
-      ))}
+      {done.map((on, k) => (on ? <Block key={k} v={1} size={size} fill={fills[(k + start) % 3]} numbers={false} /> : <Socket key={k} size={size} />))}
     </View>
   );
 }
@@ -218,12 +219,10 @@ export function DayClock({ width, top = 0 }: { width: number; top?: number }) {
       accessible
       accessibilityLabel={`Новая игра дня через ${Math.floor(mins / 60)} ч ${mins % 60} мин`}
       style={{ width, flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: top }}>
-      <View style={{ height: 12 + frame * 2, padding: frame, backgroundColor: c.line, flexDirection: 'row', gap: frame }}>
-        {Array.from({ length: 24 }, (_, k) => k >= 24 - left).map((on, k) => (
-          <View key={k} style={{ width: cw, backgroundColor: on ? c.tile[1] : c.canvas, overflow: 'hidden' }}>
-            {on ? <Enamel fill={c.tile[1]} size={12} dark={isDark} /> : null}
-          </View>
-        ))}
+      <View style={{ height: 14, flexDirection: 'row', gap: frame }}>
+        {Array.from({ length: 24 }, (_, k) => k >= 24 - left).map((on, k) =>
+          on ? <Block key={k} v={1} size={14} width={cw} fill={c.tile[1]} numbers={false} /> : <Socket key={k} size={14} width={cw} />,
+        )}
       </View>
       <Text allowFontScaling={false} style={[type.secondaryStrong, { width: label, color: c.text, fontVariant: ['tabular-nums'], textAlign: 'right' }]}>
         {clock}
@@ -235,15 +234,13 @@ export function DayClock({ width, top = 0 }: { width: number; top?: number }) {
 /** A medal as a tile: a square in the medal's colour, the score on it.
     Without a medal, an empty framed square with the score in ink. */
 export function MedalMark({ medal, score, size = 24 }: { medal: { tile: number } | null; score: number; size?: number }) {
-  const { c, isDark } = useTheme();
-  const fill = medal ? (medal.tile ? c.tile[medal.tile] : c.faint) : c.canvas;
-  const ink = medal ? (medal.tile ? c.ink[medal.tile] : c.line) : c.text;
+  const { c } = useTheme();
+  const w = Math.max(size * 1.6, String(score).length * size * 0.36 + 12);
+  const fill = medal ? (medal.tile ? c.tile[medal.tile] : c.faint) : undefined;
+  const ink = medal ? (medal.tile ? c.ink[medal.tile] : c.text) : c.text;
   return (
-    <View style={{ height: size, padding: 2, backgroundColor: medal ? c.line : c.hair }}>
-      <View style={{ flex: 1, minWidth: size * 1.6, paddingHorizontal: 6, backgroundColor: fill, alignItems: 'center', justifyContent: 'center' }}>
-        <Enamel fill={fill} size={size} empty={!medal} dark={isDark} />
-        <TileNum v={score} color={ink} size={Math.max(12, Math.round(size * 0.5))} />
-      </View>
-    </View>
+    <Slab w={w} h={size} fill={fill}>
+      <TileNum v={score} color={ink} size={Math.max(12, Math.round(size * 0.46))} />
+    </Slab>
   );
 }

@@ -147,7 +147,7 @@ export const WALL = {
    Only the look of the tiles. Each opens at a rank. */
 export type PaletteId = 'mondrian' | 'itten' | 'albers' | 'kandinsky';
 export const PALETTES: { id: PaletteId; name: string; rank: number }[] = [
-  { id: 'mondrian', name: 'Мондриан', rank: 0 },
+  { id: 'mondrian', name: 'Конструктор', rank: 0 },
   { id: 'itten', name: 'Иттен', rank: 1 },
   { id: 'albers', name: 'Альберс', rank: 2 },
   { id: 'kandinsky', name: 'Кандинский', rank: 3 },

@@ -5,10 +5,10 @@ import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { dur, enter, exit, HIT, space, type } from '@/design/system';
-import { Enamel } from '@/design/depth';
 import { useTheme } from '@/design/theme';
 import { font, LADDER, rank } from '@/design/tokens';
 import { fx } from '@/sound/sfx';
+import { Block, Socket } from './Block';
 import { TileNum } from './TileNum';
 
 /* ---------- screen shell ---------- */
@@ -55,43 +55,22 @@ export function Heading({ children, level = 'title', style }: { children: ReactN
 
 /* ---------- wordmark ---------- */
 
-/** The mark: the menu poster in miniature. */
+/** The mark: one red plastic block, the one that ends the wordmark. */
 export function Glyph({ size = 16 }: { size?: number }) {
-  const { c, isDark } = useTheme();
-  const S = size;
-  const L = Math.max(2, Math.round(S * 0.08));
-  const v1 = Math.round(S * 0.62);
-  const hl = Math.round(S * 0.6);
-  const hr = Math.round(S * 0.38);
-  const vs = Math.round(S * 0.22);
-  const hb = Math.round(S * 0.78);
-  const box = (l: number, t: number, w: number, h: number, bg: string, open?: { t?: boolean; r?: boolean; b?: boolean; l?: boolean }) => (
-    <View style={{ position: 'absolute', left: l, top: t, width: w, height: h, backgroundColor: bg, overflow: 'hidden' }}>
-      {open ? <Enamel fill={bg} open={open} size={S * 0.3} dark={isDark} /> : null}
-    </View>
-  );
-  return (
-    <View style={{ width: S, height: S, backgroundColor: c.bg, borderWidth: L, borderColor: c.line, overflow: 'hidden' }}>
-      {box(v1 + L, 0, S, hr, c.tile[2], { l: true, b: true })}
-      {box(0, hl + L, vs, S - hl - L * 3, c.tile[3], { t: true, r: true, b: true })}
-      {box(v1 + L, hb + L, S, S - hb - L * 3, c.tile[1], { t: true, l: true, b: true })}
-      {box(v1, 0, L, S, c.line)}
-      {box(0, hl, v1, L, c.line)}
-      {box(v1, hr, S, L, c.line)}
-      {box(vs, hl, L, S, c.line)}
-      {box(v1, hb, S, L, c.line)}
-    </View>
-  );
+  const { c } = useTheme();
+  return <Block v={2} size={size} numbers={false} fill={c.tile[2]} />;
 }
 
 export function Wordmark({ size = 18 }: { size?: number }) {
   const { c } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Math.round(size * 0.4) }}>
-      <Glyph size={Math.round(size * 1.1)} />
-      <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: size, color: c.text, includeFontPadding: false }}>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: Math.round(size * 0.12) }}>
+      <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: size, letterSpacing: -0.045 * size, color: c.text, includeFontPadding: false }}>
         blockhaus
       </Text>
+      <View style={{ marginBottom: Math.round(size * 0.16) }}>
+        <Glyph size={Math.round(size * 0.7)} />
+      </View>
     </View>
   );
 }
@@ -298,69 +277,34 @@ export function PauseIcon({ color, s = 14 }: { color: string; s?: number }) {
 }
 
 export function Arrow({ dir, color, s = 16 }: { dir: 'left' | 'right' | 'up' | 'down'; color: string; s?: number }) {
-  const rot = { right: '0deg', down: '90deg', left: '180deg', up: '270deg' }[dir];
-  const t = Math.max(2, Math.round(s * 0.14));
+  const rot = { right: 0, down: 90, left: 180, up: 270 }[dir];
+  const w = Math.max(2, s * 0.15);
   return (
-    <View style={{ width: s, height: s, transform: [{ rotate: rot }] }}>
-      <View style={{ position: 'absolute', left: 0, right: t * 0.6, top: (s - t) / 2, height: t, backgroundColor: color }} />
-      <View
-        style={{
-          position: 'absolute',
-          right: t * 0.35,
-          top: s * 0.5 - s * 0.32,
-          width: s * 0.45,
-          height: s * 0.45,
-          borderRightWidth: t,
-          borderTopWidth: t,
-          borderColor: color,
-          transform: [{ translateY: s * 0.09 }, { rotate: '45deg' }],
-        }}
-      />
-    </View>
+    <Svg width={s} height={s} viewBox="0 0 16 16" style={{ transform: [{ rotate: `${rot}deg` }] }}>
+      <Path d="M2.5 8H13M8.5 3.5L13 8L8.5 12.5" stroke={color} strokeWidth={(w * 16) / s} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
   );
 }
 
 export function CloseIcon({ color, s = 16 }: { color: string; s?: number }) {
-  const t = Math.max(2, Math.round(s * 0.14));
-  const bar = (r: string) => (
-    <View style={{ position: 'absolute', left: -s * 0.1, right: -s * 0.1, top: (s - t) / 2, height: t, backgroundColor: color, transform: [{ rotate: r }] }} />
-  );
+  const w = Math.max(2, s * 0.15);
   return (
-    <View style={{ width: s, height: s }}>
-      {bar('45deg')}
-      {bar('-45deg')}
-    </View>
+    <Svg width={s} height={s} viewBox="0 0 16 16">
+      <Path d="M3 3L13 13M13 3L3 13" stroke={color} strokeWidth={(w * 16) / s} strokeLinecap="round" fill="none" />
+    </Svg>
   );
 }
 
 /* ---------- ladder: the legend of rungs ---------- */
 
 export function Ladder({ best, size = 24, animate }: { best: number; size?: number; animate?: boolean }) {
-  const { c, isDark } = useTheme();
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: space.xs }} accessibilityLabel="Лесенка плиток">
-      {LADDER.map((v, k) => {
-        const on = v <= 2 || v <= best;
-        const rk = rank(v);
-        return (
-          <Rung key={v} delay={animate ? k * 50 : undefined}>
-            <View
-              style={{
-                minWidth: size,
-                height: size,
-                paddingHorizontal: space.xs,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: on ? c.tile[rk] : 'transparent',
-                borderWidth: on ? 0 : 1,
-                borderColor: c.hair,
-              }}>
-              {on ? <Enamel fill={c.tile[rk]} size={size} dark={isDark} /> : null}
-              <TileNum v={v} color={on ? c.ink[rk] : c.faint} size={Math.max(12, Math.round(size * 0.5))} />
-            </View>
-          </Rung>
-        );
-      })}
+      {LADDER.map((v, k) => (
+        <Rung key={v} delay={animate ? k * 50 : undefined}>
+          {v <= 2 || v <= best ? <Block v={v} size={size} /> : <Socket size={size} />}
+        </Rung>
+      ))}
     </View>
   );
 }
@@ -377,28 +321,23 @@ function Rung({ children, delay }: { children: ReactNode; delay?: number }) {
 
 /** A tile-coloured badge with a value, e.g. best tile. */
 export function TileBadge({ v, size = 24 }: { v: number; size?: number }) {
-  const { c, isDark } = useTheme();
+  const { c } = useTheme();
   if (!v) return <Text style={[type.bodyStrong, { color: c.text }]}>—</Text>;
-  const rk = rank(v);
-  return (
-    <View style={{ minWidth: size + space.sm, height: size, paddingHorizontal: space.xs, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center' }}>
-      <Enamel fill={c.tile[rk]} size={size} dark={isDark} />
-      <TileNum v={v} color={c.ink[rk]} size={Math.max(12, Math.round(size * 0.55))} />
-    </View>
-  );
+  return <Block v={v} size={size} />;
 }
 
 /* ---------- settings controls ---------- */
 
 /** A switch: ink track when on, hairline track when off. 44 tall hit area. */
 export function Toggle({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: string }) {
-  const { c } = useTheme();
+  const { c, isDark } = useTheme();
   const x = useSharedValue(value ? 1 : 0);
   useEffect(() => {
-    x.value = withTiming(value ? 1 : 0, enter(dur.fast));
+    x.value = withTiming(value ? 1 : 0, { duration: 150, easing: Easing.out(Easing.quad) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
-  const knob = useAnimatedStyle(() => ({ transform: [{ translateX: x.value * 20 }] }));
+  const knob = useAnimatedStyle(() => ({ transform: [{ translateX: x.value * 22 }] }));
+  /* A plastic switch: a sunken track, blue when on, and a white key that slides in it. */
   return (
     <Pressable
       accessibilityRole="switch"
@@ -410,15 +349,36 @@ export function Toggle({ value, onChange, label }: { value: boolean; onChange: (
         setTimeout(() => fx.toggle(!value), 50);
       }}
       style={{ height: HIT, justifyContent: 'center' }}>
-      <View style={{ width: 48, height: 28, backgroundColor: value ? c.text : c.surface, borderWidth: 1, borderColor: value ? c.text : c.hair }}>
+      <View
+        style={{
+          width: 52,
+          height: 30,
+          borderRadius: 15,
+          backgroundColor: value ? '#356BFF' : c.canvas,
+          boxShadow: `inset 0 2px 3px rgba(0,0,0,${isDark ? 0.4 : 0.14})`,
+        }}>
         <Animated.View
-          style={[{ position: 'absolute', left: 3, top: 3, width: 20, height: 20, backgroundColor: value ? c.bg : c.faint }, knob]}
+          style={[
+            {
+              position: 'absolute',
+              left: 3,
+              top: 2,
+              width: 24,
+              height: 24,
+              borderRadius: 12,
+              backgroundColor: '#FFFFFF',
+              backgroundImage: 'linear-gradient(180deg, #FFFFFF, #ECEAE4)',
+              boxShadow: '0 2px 0 rgba(0,0,0,0.18)',
+            },
+            knob,
+          ]}
         />
       </View>
     </Pressable>
   );
 }
 
+/** Choices as a row of keys sunk into a tray: the chosen one is a white key standing up. */
 export function Segmented<T extends string>({
   options,
   value,
@@ -428,9 +388,9 @@ export function Segmented<T extends string>({
   value: T;
   onChange: (v: T) => void;
 }) {
-  const { c } = useTheme();
+  const { c, isDark } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', borderWidth: 1, borderColor: c.hair, backgroundColor: c.surface, padding: space.xs, gap: space.xs }}>
+    <View style={{ flexDirection: 'row', borderRadius: 14, backgroundColor: c.canvas, padding: 4, gap: 4, boxShadow: `inset 0 2px 3px rgba(0,0,0,${isDark ? 0.4 : 0.1})` }}>
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -442,11 +402,30 @@ export function Segmented<T extends string>({
               fx.tap();
               onChange(o.value);
             }}
-            style={{ flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.text : 'transparent' }}>
-            <Text style={[type.secondaryStrong, { color: on ? c.bg : c.text }]}>{o.label}</Text>
+            style={[
+              { flex: 1, minHeight: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: on ? 3 : 0, marginTop: on ? 0 : 3 },
+              on ? { backgroundColor: c.plate, boxShadow: `0 3px 0 ${c.plateEdge}` } : null,
+            ]}>
+            <Text style={[type.secondaryStrong, { fontFamily: font.bodySemi, color: on ? c.text : c.muted }]}>{o.label}</Text>
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+/** Rows on a white plastic plate, split by hairlines. */
+export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
+  const { c } = useTheme();
+  const items = (Array.isArray(children) ? children.flat() : [children]).filter(Boolean);
+  return (
+    <View style={[{ backgroundColor: c.plate, borderRadius: 16, paddingHorizontal: space.lg, boxShadow: `0 4px 0 ${c.plateEdge}` }, style]}>
+      {items.map((child, k) => (
+        <View key={k}>
+          {k ? <Rule /> : null}
+          {child}
+        </View>
+      ))}
     </View>
   );
 }
@@ -537,17 +516,17 @@ export function CountUp({ to, size = 64, ms = 600 }: { to: number; size?: number
   return <TileNum v={v} size={size} color={c.text} style={{ lineHeight: Math.round(size * 1.1), fontVariant: ['tabular-nums'] }} />;
 }
 
-/** A gear drawn as a plastic cog: a ring with six teeth. */
+/** A gear: a toothed ring with a hole, one shape, so the key face shows through. */
 export function Gear({ color }: { color: string }) {
+  const teeth = Array.from({ length: 8 }, (_, k) => {
+    const a = (k * Math.PI) / 4;
+    const p = (r: number, d: number) => `${(11 + r * Math.cos(a + d)).toFixed(2)} ${(11 + r * Math.sin(a + d)).toFixed(2)}`;
+    return `M${p(7, -0.28)}L${p(10.2, -0.2)}L${p(10.2, 0.2)}L${p(7, 0.28)}Z`;
+  }).join('');
   return (
-    <View style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}>
-      {[0, 60, 120].map((r) => (
-        <View key={r} style={{ position: 'absolute', width: 6, height: 22, borderRadius: 2, backgroundColor: color, transform: [{ rotate: `${r}deg` }] }} />
-      ))}
-      <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}>
-        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#F3F2EF' }} />
-      </View>
-    </View>
+    <Svg width={22} height={22} viewBox="0 0 22 22">
+      <Path d={`${teeth}M11 3.6a7.4 7.4 0 1 0 0.01 0ZM11 8a3 3 0 1 1 -0.01 0Z`} fill={color} fillRule="evenodd" />
+    </Svg>
   );
 }
 
@@ -566,11 +545,11 @@ export function SoundIcon({ on, color }: { on: boolean; color: string }) {
 export function TopBar({ title, onBack, close }: { title: string; onBack: () => void; close?: boolean }) {
   const { c } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.lg, marginLeft: -space.md }}>
-      <IconButton plain label={close ? 'Закрыть' : 'Назад'} onPress={onBack}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.lg }}>
+      <IconButton label={close ? 'Закрыть' : 'Назад'} size={48} onPress={onBack}>
         {close ? <CloseIcon color={c.text} s={16} /> : <Arrow dir="left" color={c.text} s={18} />}
       </IconButton>
-      <Heading level="heading">{title}</Heading>
+      <Heading level="heading" style={{ marginBottom: 4 }}>{title}</Heading>
     </View>
   );
 }

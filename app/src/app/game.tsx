@@ -9,7 +9,6 @@ import { Body, Button, Heading, IconButton, Key, Label, Panel, PauseIcon, Screen
 import { pieceGrid } from '@/design/mock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dur, enter, exit, HIT, space, type } from '@/design/system';
-import { Enamel } from '@/design/depth';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Game as EngineGame, type Piece, type Step } from '@/game/engine';
@@ -1465,93 +1464,20 @@ function ScatterTile({ v, d, side, at, cell, gap }: { v: number; d: number; side
 /** The game of the day's pieces as a strip of cells, framed like the board.
     A cell per piece; spent ones go back to paper, the last few turn red. */
 function PieceStrip({ total, left, width }: { total: number; left: number; width: number }) {
-  const { c, isDark } = useTheme();
-  const frame = 3;
-  const inner = width - frame * 2;
-  const cw = (inner - frame * (total - 1)) / total;
-  const h = 18;
+  // A socket per piece; the ones still to play are blue blocks, the last few turn red.
+  const { c } = useTheme();
+  const g = 3;
+  const cw = (width - g * (total - 1)) / total;
   const low = left <= 5;
   return (
-    <View
-      accessible
-      accessibilityLabel={`Осталось фигур: ${left} из ${total}`}
-      style={{ width, height: h + frame * 2, padding: frame, backgroundColor: c.line, flexDirection: 'row', gap: frame }}>
-      {Array.from({ length: total }, (_, k) => k < left).map((on, k) => (
-        <StripCell key={k} on={on} fill={low ? c.tile[2] : c.tile[1]} w={cw} dark={isDark} />
-      ))}
+    <View accessible accessibilityLabel={`Осталось фигур: ${left} из ${total}`} style={{ width, height: 18, flexDirection: 'row', gap: g }}>
+      {Array.from({ length: total }, (_, k) => k < left).map((on, k) =>
+        on ? <Block key={k} v={1} size={18} width={cw} fill={low ? c.tile[2] : c.tile[1]} numbers={false} /> : <Socket key={k} size={18} width={cw} />,
+      )}
     </View>
   );
 }
 
-function StripCell({ on, fill, w, dark }: { on: boolean; fill: string; w: number; dark: boolean }) {
-  const { c } = useTheme();
-  const k = useSharedValue(1);
-  const was = useRef(on);
-  useEffect(() => {
-    // A spent piece: its cell drops out with a small press.
-    if (was.current && !on) k.value = withSequence(withTiming(0.6, { duration: 90 }), withTiming(1, back(260, 2.2)));
-    was.current = on;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [on]);
-  const st = useAnimatedStyle(() => ({ transform: [{ scaleY: k.value }] }));
-  return (
-    <Animated.View style={[{ width: w, height: '100%', backgroundColor: on ? fill : c.canvas, overflow: 'hidden' }, st]}>
-      {on ? <Enamel fill={fill} size={18} dark={dark} /> : null}
-    </Animated.View>
-  );
-}
-
-/** One sweep layer under the board. */
-function Plate({ on, k, dir, width }: { on: boolean; k: number; dir: Dir; width: number }) {
-  const { c } = useTheme();
-  const x = useSharedValue(0);
-  const y = useSharedValue(0);
-  const o = useSharedValue(on ? 1 : 0);
-  const first = useRef(true);
-  useEffect(() => {
-    if (first.current) return void (first.current = false);
-    if (on) {
-      x.value = 0;
-      y.value = -PLATE * 2;
-      y.value = withDelay(k * 80, withTiming(0, back(300, 2.2)));
-      o.value = withDelay(k * 80, withTiming(1, { duration: 120 }));
-    } else {
-      const [ux, uy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
-      x.value = withTiming(ux * 80, { duration: 220, easing: Easing.in(Easing.quad) });
-      y.value = withTiming(uy * 24, { duration: 220, easing: Easing.in(Easing.quad) });
-      o.value = withTiming(0, { duration: 220 });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [on]);
-  const st = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateX: x.value }, { translateY: y.value }] }));
-  return <Animated.View style={[{ width, height: PLATE, marginTop: k ? 2 : 4, backgroundColor: c.line }, st]} />;
-}
-
-/** The next empty sweep layer, cut into `n` segments: the merges a cascade
-    needs to earn it. `filled` of them are dark, the rest a hairline. */
-function ChainMeter({ n, filled, width, left, top }: { n: number; filled: number; width: number; left: number; top: number }) {
-  const { c } = useTheme();
-  return (
-    <View pointerEvents="none" accessibilityLabel={`Цепочка до сдвига: ${filled} из ${n}`} style={{ position: 'absolute', left, top, width, height: PLATE, flexDirection: 'row', gap: 2 }}>
-      {Array.from({ length: n }, (_, k) => (
-        <ChainSegment key={k} on={k < filled} line={c.line} hair={c.hair} />
-      ))}
-    </View>
-  );
-}
-function ChainSegment({ on, line, hair }: { on: boolean; line: string; hair: string }) {
-  const s = useSharedValue(on ? 1 : 0);
-  useEffect(() => {
-    s.value = on ? withSequence(withTiming(1.25, { duration: 80 }), withTiming(1, { duration: 140 })) : withTiming(0, { duration: 160 });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [on]);
-  const fill = useAnimatedStyle(() => ({ opacity: Math.min(1, s.value), transform: [{ scaleY: Math.max(1, s.value) }] }));
-  return (
-    <View style={{ flex: 1, borderWidth: 1, borderColor: hair }}>
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: line, margin: -1 }, fill]} />
-    </View>
-  );
-}
 
 /** The shape of the piece coming next into a tray slot, in the slot's corner. */
 function NextShape({ cells, cell, gap }: { cells: [number, number][]; cell: number; gap: number }) {

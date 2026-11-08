@@ -56,12 +56,12 @@ const PAGES: { title: string; text: string; art: () => ReactNode }[] = [
   },
   {
     title: 'Сдвиг',
-    text: 'Смахните доску, и всё съедет в одну сторону, а пары по пути сольются. Сдвиги лежат слоями под доской: один даётся на каждый лоток и ещё один за каскад из пяти слияний, больше двух не накопить. В настройках можно включить свободные сдвиги: их сколько угодно, но после каждого с дальнего края въезжает первая фигура из лотка.',
+    text: 'Смахните доску, и всё съедет в одну сторону, а пары по пути сольются. Сдвиги лежат жёлтыми фишками на клавише справа вверху: один даётся на каждый лоток и ещё один за каскад из пяти слияний, больше двух не накопить. В настройках можно включить свободные сдвиги: их сколько угодно, но после каждого с дальнего края въезжает первая фигура из лотка.',
     art: () => <Eq w={3} h={3} a={[1, 0, 2, 0, 12, 0, 6, 0, 0]} b={[3, 0, 0, 12, 0, 0, 6, 0, 0]} cell={34} />,
   },
   {
     title: `Соберите ${GOAL}`,
-    text: `Дойдите по лесенке до ${GOAL}, чтобы победить. Вехи на пути видны под доской: 24, 48, 96 и дальше. Игра кончается, когда ни одна фигура не встаёт на доску и ни один сдвиг ничего не сливает. После ${GOAL} можно играть дальше на очки.`,
+    text: `Дойдите по лесенке до ${GOAL}, чтобы победить. Игра кончается, когда ни одна фигура не встаёт на доску и ни один сдвиг ничего не сливает. После ${GOAL} можно играть дальше на очки.`,
     art: () => (
       <View style={{ alignItems: 'center' }}>
         <Ladder best={GOAL} size={28} animate />
@@ -94,7 +94,7 @@ export default function HowTo() {
         style={{ flexGrow: 0 }}>
         {PAGES.map((p, k) => (
           <View key={p.title} style={{ width: pageW, paddingTop: space.sm }}>
-            <View style={{ height: 208, alignItems: 'center', justifyContent: 'center', backgroundColor: c.surface, borderWidth: 1, borderColor: c.hair, marginBottom: space.xl }}>
+            <View style={{ height: 208, alignItems: 'center', justifyContent: 'center', backgroundColor: c.plate, borderRadius: 20, boxShadow: `0 6px 0 ${c.plateEdge}`, marginBottom: space.xl }}>
               {/* Only the visible card animates. */}
               {Math.abs(page - k) <= 0 ? p.art() : null}
             </View>
@@ -107,7 +107,7 @@ export default function HowTo() {
       <View style={{ marginTop: 'auto', gap: space.lg }}>
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.sm }} accessibilityLabel={`Шаг ${page + 1} из ${PAGES.length}`}>
           {PAGES.map((_, k) => (
-            <View key={k} style={{ width: k === page ? 24 : 8, height: 8, backgroundColor: k === page ? c.text : c.hair }} />
+            <View key={k} style={{ width: k === page ? 24 : 8, height: 8, borderRadius: 4, backgroundColor: k === page ? '#356BFF' : c.canvas, boxShadow: k === page ? 'none' : 'inset 0 1px 2px rgba(0,0,0,0.12)' }} />
           ))}
         </View>
         <Button
