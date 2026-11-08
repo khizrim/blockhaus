@@ -141,3 +141,73 @@ Lab run (copy of the engine, naive bot "новичок", sweeper bot "свайп
 A beginner sees no difference; a player who plans gets a good deal further, most of all in the cascade mode, whose goal may want raising later.
 
 Daily medals (`node sim/daily.js 300 weekdays`, new rule over old, each line scaled by its own ratio): plain 300/380/500 → 310/390/670, domino 330/400/530 → 350/410/670, stone 210/310/460 → 220/320/580, still 160/200/290 → 180/240/350, big 450/510/860 → 450/520/960.
+
+## Sweeps earned by cascades become the main mode (2026-11-02)
+
+Khizri swiped at random and the game never ended. A bot that only swipes in a random direction (placing a piece only when nothing slides), 150 games per row, against the naive placer and the sweeper bot:
+
+| | random swipes: median best tile | random: 96 | naive: 384 | sweeper: 384 |
+|---|---|---|---|---|
+| free sweeps, push (was main) | 96 | 55% | 3% | 69% |
+| free, merge-only | 96 | 62% | 5% | 25% |
+| free, spawn | 384 | 99% | 10% | 98% |
+| cascade, bonus at 4 | 12 | 0% | 5% | 77% |
+| cascade, bonus at 5 | 12 | 0% | 3% | 57% |
+
+With free sweeps swiping at random goes as far as placing with thought. With sweeps earned by cascades it dies in about 35 pieces on a 12. The bonus moves from four merges to five because the bigger tile now takes the smaller and cascades run longer: the sweeper is back near where free sweeps had it. The app starts new players, and players who never picked rules in the settings, on this mode; free sweeps stay in the settings. The daily keeps its own rules (thirty pieces end it anyway).
+
+## Thinking stops paying, and the board fills with 1s and 2s (2026-11-07)
+
+Khizri: mid-game he stops thinking and just swipes, and the board fills up
+with 1s and 2s. `node sim/thinking.js 60` (one-move-ahead thinker, the
+same with blurred judgement, and a random swiper):
+
+| rules | player | moves | sweeps | 96 / 192 / 384 | 1s and 2s on board | walled-in 1s/2s |
+|---|---|---|---|---|---|---|
+| free sweeps (shipped) | thinker | 577 | 48% | 100 / 98 / 85% | 33% | 4.2 |
+| free sweeps (shipped) | noisy | 513 | 41% | 100 / 98 / 85% | 34% | 4.1 |
+| free sweeps (shipped) | swiper | 101 | 99% | 42 / 12 / 0% | 58% | 6.9 |
+| cascade, need dealer | thinker | 203 | 20% | 87 / 55 / 15% | 32% | 2.8 |
+| cascade, need dealer | noisy | 183 | 19% | 85 / 57 / 5% | 34% | 2.5 |
+| cascade, touch dealer | thinker | 252 | 21% | 97 / 77 / 28% | 29% | 2.5 |
+| cascade, touch dealer | noisy | 189 | 19% | 88 / 48 / 7% | 33% | 2.4 |
+| cascade, either dealer | swiper | ~50 | 26% | 0 / 0 / 0% | 66% | 4.1 |
+
+Both complaints come from the free sweep. Every swipe shoves the next piece
+of 1s or 2s onto an edge the player didn't pick, so swiping without looking
+still makes progress (a 96 in about half the games) while it lays small
+tiles where nothing pairs with them: 58% of the board, seven of them walled
+in. A careful player, meanwhile, almost never loses (some 550 moves, 384 in
+85% of games), so the middle of the game has no pressure to think about.
+
+With sweeps earned by cascades the swiper reaches nothing, a game is about
+200 moves, and walled-in small tiles drop from four to two and a half.
+
+The 'touch' dealer counts open sides instead of tiles: an empty cell next
+to a 1 waits for a 2, next to a 2 for a 1, and the dealer leans to the value
+with more places waiting. With cascades it lifts the careful player from
+55% to 77% at 192 and from 15% to 28% at 384, and trims the share of small
+tiles; the blurred player stays within noise (57% vs 48% at 192 over 60
+games) and the swiper at zero. So it rewards looking at the board, which is
+the point. Under free sweeps it changes nothing measurable, and the daily medal lines move within noise
+(`node sim/daily.js 300 weekdays`), so they stay. It becomes the dealer.
+
+## Seeing the next tray (2026-11-08)
+
+`peek: 'shape'` deals the next tray's shapes one tray ahead and shows them
+in the corners of the tray slots; their values are still dealt when the
+tray arrives, from the board as it is then, so the touch dealer stays
+reactive. Dealing shapes before values keeps the random stream in the same
+order either way, so the deal itself is unchanged.
+
+A one-move-ahead player that also scores how well the coming shapes would
+fit (more weight on the last piece of a tray), cascade rules, 60 games:
+
+| player | moves | 96 / 192 / 384 | median score |
+|---|---|---|---|
+| careful, ignores the next tray | 237 | 93 / 68 / 22% | 3525 |
+| careful, plans for it | 282 | 100 / 82 / 33% | 3681 |
+| blurred, ignores it | 193 | 83 / 48 / 8% | 2634 |
+| blurred, plans for it | 234 | 90 / 65 / 20% | 3678 |
+
+Looking ahead pays for both players, so it becomes the default.

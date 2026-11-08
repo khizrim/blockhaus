@@ -297,6 +297,32 @@ test('the need dealer leans toward the value the board is short of', () => {
   assert.equal(E.chanceOfOnes(E.ORIGINAL, b), 0.5);
 });
 
+test('the touch dealer deals the value that has open sides waiting for it', () => {
+  const cfg = { ...E.DEFAULTS, dealer: 'touch' };
+  // A 2 alone in the middle: four open sides want a 1.
+  const b = empty();
+  b[idx(2, 2)] = 2;
+  assert.ok(E.chanceOfOnes(cfg, b) > 0.6);
+  // Ten 2s walled in by 3s count for nothing, while one open 1 wants a 2.
+  const w = empty().fill(3);
+  for (let i = 0; i < 10; i++) w[i] = 2;
+  w[idx(5, 5)] = 1; w[idx(4, 5)] = 0; w[idx(5, 4)] = 0;
+  assert.ok(E.chanceOfOnes(cfg, w) < 0.4);
+  assert.equal(E.chanceOfOnes(cfg, empty()), 0.5);
+});
+
+test('with peek the next tray is the shapes shown one tray ahead', () => {
+  const g = E.newGame({ ...E.CASCADE, peek: 'shape' }, E.seeded(11));
+  for (let round = 0; round < 3; round++) {
+    const shown = JSON.stringify(g.next);
+    // Put the tray away on an empty board, slot by slot.
+    g.board.fill(0);
+    g.tray.forEach((p, slot) => { g.board.fill(0); E.place(g, slot, 0, 0); });
+    assert.equal(JSON.stringify(g.tray.map(p => p.cells.map(([x, y]) => [x, y]))), shown);
+    assert.equal(g.next.length, 3);
+  }
+});
+
 test('balanced trays keep 1-cells and 2-cells within the slack', () => {
   const rng = E.seeded(6);
   const cfg = { ...E.ORIGINAL, balancedTray: 1 };
@@ -376,23 +402,30 @@ test('merges made by the slide of a sweep score their plain level', () => {
   assert.equal(g.score, 18 + res.pushed.steps.reduce((s, st) => s + st.pts, 0));
 });
 
-test('cascade mode: one sweep a tray, a cascade of four earns one more, two at most', () => {
+test('cascade mode: one sweep a tray, a cascade of five earns one more, two at most', () => {
   const g = E.newGame(E.CASCADE, E.seeded(5));
   assert.equal(g.sweeps, 1);
   assert.equal(g.cfg.freeSweeps, false);
-  // A 1 by a 2, then a 3, a 6 and a 12 in a walk: four merges.
+  // Four merges are not enough.
   g.board = empty();
   g.board[idx(1, 2)] = 2; g.board[idx(2, 2)] = 3; g.board[idx(2, 1)] = 6; g.board[idx(2, 0)] = 12;
   g.tray = [piece(1), piece(1), piece(2)];
-  const r = E.place(g, 0, 0, 2);
-  assert.equal(r.steps.length, 4);
+  const four = E.place(g, 0, 0, 2);
+  assert.equal(four.steps.length, 4);
+  assert.ok(!four.bonus);
+  assert.equal(g.sweeps, 1);
+  // A 1 by a 2, then a 3, a 6, a 12 and a 24 in a walk: five merges.
+  g.board = empty();
+  g.board[idx(1, 2)] = 2; g.board[idx(2, 2)] = 3; g.board[idx(2, 1)] = 6; g.board[idx(2, 0)] = 12; g.board[idx(3, 0)] = 24;
+  const r = E.place(g, 1, 0, 2);
+  assert.equal(r.steps.length, 5);
   assert.ok(r.bonus);
   assert.equal(g.sweeps, 2);
   // A sweep is a plain slide: no tray piece rides in.
   const s = E.sweep(g, 'left');
   assert.ok(s && !s.pushed);
   assert.equal(g.sweeps, 1);
-  assert.ok(!g.tray[1].used);
+  assert.ok(!g.tray[2].used);
 });
 
 test('a stone walls a sweep and never merges', () => {

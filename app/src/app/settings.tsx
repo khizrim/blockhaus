@@ -107,13 +107,13 @@ export default function Settings() {
               value={nextRules}
               onChange={setRules}
               options={[
-                { value: "free", label: "Свободные" },
                 { value: "cascade", label: "За каскады" },
+                { value: "free", label: "Свободные" },
               ]}
             />
             <Label meta>
               {nextRules === "cascade"
-                ? "Один сдвиг на каждые три фигуры и ещё один за каскад из четырёх слияний. Со следующей партии."
+                ? "Один сдвиг на каждые три фигуры и ещё один за каскад из пяти слияний. Со следующей партии."
                 : "Свайп всегда работает и вталкивает фигуру из лотка. Со следующей партии."}
             </Label>
           </Section>

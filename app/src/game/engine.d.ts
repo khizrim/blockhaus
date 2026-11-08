@@ -8,10 +8,12 @@ export type Step = { absorbed: number[]; anchor: number; level: number; /** Poin
 export type Config = Record<string, unknown>;
 
 export type Game = {
-  cfg: Config & { sweepChain?: boolean; freeSweeps?: boolean; sweepCost?: 'spawn' | 'merge' | 'push' | 'tilt' | 'none'; stones?: number[]; chainScore?: number[]; absorb?: 'big' | 'new'; goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
+  cfg: Config & { sweepChain?: boolean; freeSweeps?: boolean; sweepCost?: 'spawn' | 'merge' | 'push' | 'tilt' | 'none'; stones?: number[]; chainScore?: number[]; absorb?: 'big' | 'new'; peek?: false | 'shape'; goal: number; sweepsPerTray: number; sweepsMax: number; chainBonus: number; pieceLimit: number };
   rng: () => number;
   board: number[];
   tray: Piece[];
+  /** With cfg.peek: the shapes of the next tray, cells as [dx, dy]. Values come when it arrives. */
+  next?: [number, number][][];
   sweeps: number;
   score: number;
   merges: number;

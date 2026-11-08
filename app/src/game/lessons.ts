@@ -13,6 +13,8 @@ export type Lesson = {
   title: string;
   /** The mechanic in one short line, on the card after the move. */
   rule: string;
+  /** The rule as it reads with sweeps earned by cascades, if it differs. */
+  ruleCascade?: string;
   /** The step as a formula in tiles; the last term is what the move makes. */
   formula: Term[];
   /** More rows for the card: the same rule again, or pairs that do not merge. */
@@ -100,6 +102,7 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Смахните доску вбок',
     rule: 'Сдвиг стоит фигуры: она въезжает с другого края.',
+    ruleCascade: 'Сдвиги лежат под доской: один на каждый лоток и ещё один за каскад из пяти слияний.',
     formula: ['swipe', 1, '+', 2, '=', 3],
     card: true,
     result: 3,

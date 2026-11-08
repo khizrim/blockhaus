@@ -17,7 +17,7 @@ const rulesConfig = (r: Rules) => (r === 'cascade' ? engine.CASCADE : undefined)
 const KEY = 'blockhaus:v1';
 const EMPTY: Stats = { best: 0, bestTile: 0, played: 0, wins: 0, total: 0 };
 // `used`: sweeps made in this game, for the tasks and posters that ask for none.
-const FIELDS = ['board', 'tray', 'sweeps', 'score', 'merges', 'bestTile', 'moves', 'won', 'over', 'used'] as const;
+const FIELDS = ['board', 'tray', 'next', 'sweeps', 'score', 'merges', 'bestTile', 'moves', 'won', 'over', 'used'] as const;
 
 type GameFields = Pick<Game, (typeof FIELDS)[number]>;
 export type DailyResult = { score: number; bestTile: number; board: number[] };
@@ -28,6 +28,8 @@ type Saved = {
   game: GameFields; stats: Stats; winSeen: boolean; learned?: boolean; daily?: SavedDaily; streak?: Streak; dailyIntro?: boolean;
   /** Rules of the free game on the board, and the ones the next free game starts with. */
   gameRules?: Rules; rules?: Rules;
+  /** The player chose the rules in the settings (before 2026-11-02 `rules` was always written, as 'free'). */
+  rulesPicked?: boolean;
   tasks?: TaskState; posters?: Record<string, string>;
 };
 /** Something the player just earned, for the board to show. */
@@ -109,7 +111,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const dailyRef = useRef<{ key: string; game: Game; stream: ReturnType<typeof dayStream>; winSeen: boolean; result: DailyResult | null } | null>(null);
   const [streak, setStreak] = useState<Streak>({ last: '', count: 0, best: 0 });
   const [dailyIntro, setDailyIntro] = useState(false);
-  const [nextRules, setNextRules] = useState<Rules>('free');
+  // Sweeps earned by cascades are the main rules since 2026-11-02: with free
+  // sweeps, swiping at random went as far as thinking.
+  const [nextRules, setNextRules] = useState<Rules>('cascade');
+  const [rulesPicked, setRulesPicked] = useState(false);
   const [tasks, setTasks] = useState<TaskState>({ key: '', progress: [0, 0, 0] });
   const [posters, setPosters] = useState<Record<string, string>>({});
   const [news, setNews] = useState<News | null>(null);
@@ -127,7 +132,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (!raw) return;
         const s = JSON.parse(raw) as Saved;
         gRef.current = restore(s.game, undefined, rulesConfig(s.gameRules ?? 'free'));
-        if (s.rules) setNextRules(s.rules);
+        if (s.rules && s.rulesPicked) {
+          setNextRules(s.rules);
+          setRulesPicked(true);
+        }
         if (s.tasks) setTasks(s.tasks);
         if (s.posters) setPosters(s.posters);
         setStats({ ...EMPTY, ...s.stats });
@@ -160,10 +168,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const ws = mode === 'daily' ? classic.current!.winSeen : winSeen;
     AsyncStorage.setItem(
       KEY,
-      JSON.stringify({ game: fields(g), stats, winSeen: ws, learned, daily, streak, dailyIntro, gameRules: rulesOf(g), rules: nextRules, tasks, posters } satisfies Saved),
+      JSON.stringify({ game: fields(g), stats, winSeen: ws, learned, daily, streak, dailyIntro, gameRules: rulesOf(g), rules: nextRules, rulesPicked, tasks, posters } satisfies Saved),
     ).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, version, stats, winSeen, learned, lesson, mode, streak, dailyIntro, nextRules, tasks, posters]);
+  }, [ready, version, stats, winSeen, learned, lesson, mode, streak, dailyIntro, nextRules, rulesPicked, tasks, posters]);
 
   const bump = () => setVersion((v) => v + 1);
 
@@ -326,11 +334,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const L = LESSONS[k];
       if (!L) return;
       if (lesson === null) saved.current = gRef.current;
-      // The real rules: sweeps are free and each pushes the lesson's next
-      // tray piece in from the far edge; a lesson's tray holds only what it teaches.
+      // The real rules, the ones the next game is played by; a lesson's tray
+      // holds only what it teaches.
       // The score runs on through the lessons instead of starting over each step.
       const carry = lesson !== null ? gRef.current.score : 0;
-      const g = engine.newGame();
+      const g = engine.newGame(rulesConfig(nextRules));
       g.score = carry;
       g.board = L.board.slice();
       g.tray = L.tray.map((p) => ({ cells: p.cells.map((c) => [...c] as [number, number, number]), used: p.used }));
@@ -340,7 +348,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setLesson(k);
       bump();
     },
-    [lesson],
+    [lesson, nextRules],
   );
 
   const finishLessons = useCallback(() => {
@@ -372,7 +380,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
       markDailyIntro: () => setDailyIntro(true),
       rules: rulesOf(g),
       nextRules,
-      setRules: setNextRules,
+      setRules: (r: Rules) => {
+        setNextRules(r);
+        setRulesPicked(true);
+      },
       rank: rankOf(stats.total),
       tasks: { list, progress, done: list.map((t, i) => progress[i] >= t.goal) },
       posters,

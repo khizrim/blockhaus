@@ -208,9 +208,12 @@ export default function Game() {
      a piece flying home) is cleared here too, or it stays stuck on the board. */
   /** An earned sweep waits under the board until its chain has played out. */
   const [bonusHeld, setBonusHeld] = useState(false);
+  /** How far the cascade on the board has got toward an earned sweep. */
+  const [chain, setChain] = useState(0);
   const settle = () => {
     clearTimers();
     setBonusHeld(false);
+    setChain(0);
     setFlights([]);
     setIncoming(null);
     setFloats([]);
@@ -559,6 +562,14 @@ export default function Game() {
     if (res.refilled) later(done + 120, () => fx.tray());
     // A chain of two or more earns a sweep: its layer slides in under the
     // board as the last merge lands, with its own two rising ticks.
+    /* The empty layer under the board is cut into as many segments as a
+       cascade needs merges to earn it. Each merge of this chain fills one on
+       the frame it lands, so a chain of three shows how far it got: three of
+       five. A full layer becomes the earned sweep. */
+    if (counted && g.cfg.chainBonus && res.steps.length) {
+      res.steps.slice(0, g.cfg.chainBonus).forEach((_, k) => later(90 + k * STEP + FLY, () => setChain(k + 1)));
+      later(done + (res.bonus ? 0 : 700), () => setChain(0));
+    }
     if (res.bonus) {
       setBonusHeld(true);
       later(done, () => {
@@ -1028,7 +1039,7 @@ export default function Game() {
                           <Formula key={k} terms={row} cell={trayCell} gap={gap} fit={Math.min(col, 360) - space.lg * 2 - space.xl * 2 - 2} />
                         ))}
                       </View>
-                      <Body style={{ marginTop: space.lg }}>{lesson.rule}</Body>
+                      <Body style={{ marginTop: space.lg }}>{(counted && lesson.ruleCascade) || lesson.rule}</Body>
                       <View style={{ marginTop: space.lg }}>
                         <Button kind="primary" size="lg" label="Понятно" onPress={nextLesson} />
                       </View>
@@ -1054,6 +1065,12 @@ export default function Game() {
                   {Array.from({ length: g.cfg.sweepsMax }, (_, k) => k).map((k) => (
                     <Plate key={k} on={g.sweeps - (bonusHeld ? 1 : 0) > k} k={k} dir={lastDir.current} width={col - 2 * (k + 1) * space.sm} />
                   ))}
+                  {(() => {
+                    const k = g.sweeps - (bonusHeld ? 1 : 0);
+                    if (k >= g.cfg.sweepsMax || !g.cfg.chainBonus || store.lesson !== null) return null;
+                    const w = col - 2 * (k + 1) * space.sm;
+                    return <ChainMeter n={g.cfg.chainBonus} filled={chain} width={w} left={(col - w) / 2} top={4 + k * (PLATE + 2)} />;
+                  })()}
                 </View>
               ) : null}
               <Track
@@ -1099,6 +1116,12 @@ export default function Game() {
                 borderLeftWidth: slot ? 1 : 0,
                 borderColor: c.hair,
               }}>
+              {/* What comes into this slot with the next tray: its shape only,
+                  small and grey in the corner. The values are dealt when it
+                  arrives, from the board as it is then. */}
+              {g.next?.[slot] && store.lesson === null && !g.over ? (
+                <NextShape cells={g.next[slot]} cell={Math.max(5, Math.round(trayCell * 0.28))} />
+              ) : null}
               {p ? (
                 <Animated.View style={slot === stuckSlot ? stuckStyle : undefined}>
                 <TrayPiece
@@ -1521,6 +1544,46 @@ function Plate({ on, k, dir, width }: { on: boolean; k: number; dir: Dir; width:
   }, [on]);
   const st = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateX: x.value }, { translateY: y.value }] }));
   return <Animated.View style={[{ width, height: PLATE, marginTop: k ? 2 : 4, backgroundColor: c.line }, st]} />;
+}
+
+/** The next empty sweep layer, cut into `n` segments: the merges a cascade
+    needs to earn it. `filled` of them are dark, the rest a hairline. */
+function ChainMeter({ n, filled, width, left, top }: { n: number; filled: number; width: number; left: number; top: number }) {
+  const { c } = useTheme();
+  return (
+    <View pointerEvents="none" accessibilityLabel={`Цепочка до сдвига: ${filled} из ${n}`} style={{ position: 'absolute', left, top, width, height: PLATE, flexDirection: 'row', gap: 2 }}>
+      {Array.from({ length: n }, (_, k) => (
+        <ChainSegment key={k} on={k < filled} line={c.line} hair={c.hair} />
+      ))}
+    </View>
+  );
+}
+function ChainSegment({ on, line, hair }: { on: boolean; line: string; hair: string }) {
+  const s = useSharedValue(on ? 1 : 0);
+  useEffect(() => {
+    s.value = on ? withSequence(withTiming(1.25, { duration: 80 }), withTiming(1, { duration: 140 })) : withTiming(0, { duration: 160 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on]);
+  const fill = useAnimatedStyle(() => ({ opacity: Math.min(1, s.value), transform: [{ scaleY: Math.max(1, s.value) }] }));
+  return (
+    <View style={{ flex: 1, borderWidth: 1, borderColor: hair }}>
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: line, margin: -1 }, fill]} />
+    </View>
+  );
+}
+
+/** The shape of the piece coming next into a tray slot, in the slot's corner. */
+function NextShape({ cells, cell }: { cells: [number, number][]; cell: number }) {
+  const { c } = useTheme();
+  const w = Math.max(...cells.map(([x]) => x)) + 1;
+  const h = Math.max(...cells.map(([, y]) => y)) + 1;
+  return (
+    <View pointerEvents="none" accessibilityLabel="Следующая фигура" style={{ position: 'absolute', top: space.sm, right: space.sm, width: w * cell, height: h * cell }}>
+      {cells.map(([x, y], k) => (
+        <View key={k} style={{ position: 'absolute', left: x * cell, top: y * cell, width: cell - 1, height: cell - 1, backgroundColor: c.faint }} />
+      ))}
+    </View>
+  );
 }
 
 /** "+N" rising from the cell where a merge happened. A late merge of a

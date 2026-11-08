@@ -87,6 +87,10 @@
     // Where a placed merge stays: 'new' in the laid cell, 'big' in the
     // bigger tile (see applyPlacement).
     absorb: 'new',
+    // Deal the shapes of the next tray one tray ahead (g.next), so the
+    // player can see what is coming and leave room for it. Values are still
+    // picked when that tray arrives, from the board as it is then.
+    peek: false,
     goal: 192,
   };
 
@@ -238,6 +242,20 @@
       the bottom eats one 1 and one 2, so a board with ten 2s and two 1s wants
       1s, and dealing more 2s only buries it. */
   function chanceOfOnes(cfg, board) {
+    if (cfg.dealer === 'touch') {
+      // Counting tiles misses where they are: a 1 walled in by 2s is no use
+      // to a new 2. 'touch' counts the open sides instead. An empty cell next
+      // to a 1 is a place a 2 could pair, next to a 2 a place for a 1, so
+      // the value dealt is the one with more places waiting for it.
+      let for1 = 0, for2 = 0;
+      board.forEach((v, i) => {
+        if (v !== 1 && v !== 2) return;
+        for (const j of neighbours(i)) if (board[j] === 0) { if (v === 1) for2++; else for1++; }
+      });
+      const k = cfg.needSmoothing ?? 2;
+      const lo = cfg.needFloor ?? 0.15;
+      return Math.min(1 - lo, Math.max(lo, (for1 + k) / (for1 + for2 + 2 * k)));
+    }
     if (cfg.dealer !== 'need') return 0.5;
     let ones = 0, twos = 0;
     for (const v of board) { if (v === 1) ones++; else if (v === 2) twos++; }
@@ -247,8 +265,7 @@
     return Math.min(1 - lo, Math.max(lo, p));
   }
 
-  function deal(cfg, board, rng) {
-    const shape = pickShape(cfg, rng);
+  function deal(cfg, board, rng, shape = pickShape(cfg, rng)) {
     if (shape.length === 1 && cfg.threeChance && rng() < cfg.threeChance) {
       return { cells: [[0, 0, 3]], used: false };
     }
@@ -266,8 +283,13 @@
   /** A uniform value for a piece, or null if it mixes values. */
   const pieceValue = p => (p.cells.every(c => c[2] === p.cells[0][2]) ? p.cells[0][2] : null);
 
-  function dealTray(cfg, board, rng) {
-    const tray = [deal(cfg, board, rng), deal(cfg, board, rng), deal(cfg, board, rng)];
+  /** Three shapes for a tray to come, before any value is chosen. */
+  const dealShapes = (cfg, rng) => [pickShape(cfg, rng), pickShape(cfg, rng), pickShape(cfg, rng)];
+
+  /** A tray: given shapes (from dealShapes) or fresh ones, with values read
+      off the board as it is now. */
+  function dealTray(cfg, board, rng, shapes = dealShapes(cfg, rng)) {
+    const tray = shapes.map(sh => deal(cfg, board, rng, sh));
     if (cfg.mixedTray) {
       const vals = tray.map(pieceValue);
       if (vals.every(v => v !== null && (v === 1 || v === 2) && v === vals[0])) {
@@ -316,6 +338,7 @@
     for (const i of cfg.stones || []) g.board[i] = STONE;
     if (cfg.startTiles) setStart(g.board, cfg.startTiles, rng, cfg.startPool);
     g.tray = dealTray(cfg, g.board, rng);
+    if (cfg.peek) g.next = dealShapes(cfg, rng);
     g.bestTile = Math.max(0, ...g.board);
     return g;
   }
@@ -389,7 +412,8 @@
     if (res.bonus) g.sweeps++;
     res.refilled = false;
     if (g.tray.every(t => t.used)) {
-      g.tray = dealTray(g.cfg, g.board, g.rng);
+      g.tray = dealTray(g.cfg, g.board, g.rng, g.next);
+      if (g.cfg.peek) g.next = dealShapes(g.cfg, g.rng);
       g.sweeps = Math.max(g.sweeps, g.cfg.sweepsPerTray);
       res.refilled = true;
     }
@@ -492,6 +516,13 @@
     freeSweeps: true, sweepCost: 'push', goal: 384,
     // The bigger tile takes the smaller in (2026-11-02, sim/RESULTS.md).
     absorb: 'big',
+    // The dealer reads open sides, not tile counts (2026-11-07,
+    // sim/RESULTS.md): fewer 1s and 2s end up walled in.
+    dealer: 'touch',
+    // The next tray's shapes show beside the tray (2026-11-08,
+    // sim/RESULTS.md): a careful player reaches 192 in 82% of games instead
+    // of 68%.
+    peek: 'shape',
     // A cascade from a placed piece pays ×2 for its third and fourth merge
     // and ×3 from the fifth (sim/RESULTS.md). The short chains that happen on
     // their own (1+2=3, then 3+3) score plain, so the bonus marks a long
@@ -501,12 +532,15 @@
   // The balance before free sweeps (2026-11-01): two per tray, a chain earns
   // one more, up to three; goal 192.
   const LIMITED = { ...DEFAULTS, freeSweeps: false, sweepCost: 'none', goal: 192 };
-  // Sweeps earned by cascades (2026-11-01, a mode beside the free one): each
-  // tray brings one sweep, a placed piece whose cascade makes four merges or
-  // more earns another, two at most in hand. A sweep is a plain slide, no
-  // piece rides in. Placing well is what buys a sweep, so the swiping player
-  // no longer outplays the placing one by far (sim/RESULTS.md).
-  const CASCADE = { ...DEFAULTS, freeSweeps: false, sweepCost: 'none', sweepsPerTray: 1, chainBonus: 4, sweepsMax: 2 };
+  // Sweeps earned by cascades (2026-11-01; the app's main mode since
+  // 2026-11-02, free sweeps stay in the settings): each tray brings one
+  // sweep, a placed piece whose cascade makes five merges or more earns
+  // another, two at most in hand. A sweep is a plain slide, no piece rides
+  // in. Placing well is what buys a sweep: swiping at random dies in about
+  // 35 pieces on a 12, where free sweeps carried it to a 96 (sim/RESULTS.md).
+  // Five, not four, since the bigger tile takes the smaller in and cascades
+  // run longer.
+  const CASCADE = { ...DEFAULTS, freeSweeps: false, sweepCost: 'none', sweepsPerTray: 1, chainBonus: 5, sweepsMax: 2 };
 
   // The game of the day: thirty pieces on a board that starts with six
   // tiles. Some weekdays bend one rule, the same for everyone that day
@@ -526,7 +560,7 @@
   return {
     N, SHAPES: S, ORIGINAL, DEFAULTS, LIMITED, CASCADE, DAILY, WEEKDAY, ORIGINAL_SHAPES, STONE,
     pairs, merged, rank, idx, neighbours, size, fits, pieceValue,
-    applyPlacement, applySweep, collapse, lanes, laneRuns, chanceOfOnes, deal, dealTray,
+    applyPlacement, applySweep, collapse, lanes, laneRuns, chanceOfOnes, deal, dealTray, dealShapes,
     newGame, place, sweep, anyMove, canSweep, canPlaceAnywhere, seeded,
   };
 });
