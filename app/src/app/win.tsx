@@ -1,72 +1,51 @@
 import { router } from 'expo-router';
 import { useEffect } from 'react';
-import { View } from 'react-native';
-import Animated, { Easing, FadeIn, ZoomIn } from 'react-native-reanimated';
+import { useWindowDimensions, View } from 'react-native';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 
-import { Overlay } from '@/components/Overlay';
-import { Block, Poster, PosterBoard, ScoreBand, usePoster } from '@/components/Poster';
-import { TileNum } from '@/components/TileNum';
-import { Track, milestonesFor } from '@/components/Track';
-import { Body, Button } from '@/components/ui';
-import { dur, space } from '@/design/system';
-import { useTheme } from '@/design/theme';
-import { rank } from '@/design/tokens';
+import { Block } from '@/components/Block';
+import { Button, CountUp, Page } from '@/components/ui';
 import engine from '@/game/engine';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
 
-/* The win, as the same poster as game over. The board as it stands; beside
-   it one tall block, the goal tile itself, in its own colour, the whole
-   height of the board. The score, the track lit to the end. No sentence:
-   the block is the news. */
+/* The win (2026-11-08): the goal block itself drops onto the page, squashes
+   and settles, a chord climbs, the score counts up. No sentence: the block
+   is the news. */
 const GOAL = engine.DEFAULTS.goal;
 export default function Win() {
-  const { c } = useTheme();
-  const { game, markWinSeen, newGame, mode } = useGame();
-  const { L, inner, board, side } = usePoster();
+  const { game, markWinSeen } = useGame();
+  const { width } = useWindowDimensions();
   const goal = Math.max(GOAL, game.bestTile);
-  const rk = rank(goal);
-  const steps = milestonesFor(game.cfg.goal);
+  const size = Math.min(180, Math.round((Math.min(width, 440) - 32) * 0.5));
+  const y = useSharedValue(-120);
+  const o = useSharedValue(0);
+  const sx = useSharedValue(1);
+  const sy = useSharedValue(1);
   useEffect(() => {
-    fx.win();
     markWinSeen();
+    const fall = { duration: 290, easing: Easing.bezier(0.5, 0, 0.7, 1) };
+    o.value = withTiming(1, { duration: 150 });
+    y.value = withSequence(withTiming(0, fall), withTiming(-6, { duration: 110, easing: Easing.out(Easing.quad) }), withTiming(0, { duration: 120, easing: Easing.in(Easing.quad) }));
+    sx.value = withDelay(290, withSequence(withTiming(1.06, { duration: 60 }), withTiming(0.98, { duration: 110 }), withTiming(1, { duration: 120 })));
+    sy.value = withDelay(290, withSequence(withTiming(0.9, { duration: 60 }), withTiming(1.03, { duration: 110 }), withTiming(1, { duration: 120 })));
+    const id = setTimeout(() => fx.win(), 250);
+    return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const st = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateY: y.value }, { scaleX: sx.value }, { scaleY: sy.value }], transformOrigin: 'bottom' }));
   return (
-    <Overlay>
-      <Poster label={`Вы собрали ${goal}. ${game.score} очков.`}>
-        <View style={{ flexDirection: 'row', gap: L }}>
-          <PosterBoard values={game.board} />
-          <Animated.View entering={ZoomIn.delay(dur.base).duration(dur.slow).easing(Easing.out(Easing.back(1.6)))}>
-            <Block fill={c.tile[rk]} style={{ width: side, height: board, alignItems: 'center', justifyContent: 'center' }}>
-              <TileNum v={goal} color={c.ink[rk]} size={Math.round(side * 0.34)} />
-            </Block>
-          </Animated.View>
-        </View>
-        <ScoreBand value={game.score} />
-        <Animated.View entering={FadeIn.delay(dur.slow).duration(dur.base)}>
-          <Block style={{ padding: space.md }}>
-            <Track steps={steps} best={game.bestTile} next={null} width={inner - space.md * 2} gap={4} top={0} />
-          </Block>
+    <Page>
+      <View accessible accessibilityLabel={`Вы собрали ${goal}. ${game.score} очков.`} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24 }}>
+        <Animated.View style={st}>
+          <Block v={goal} size={size} />
         </Animated.View>
-      </Poster>
-      <View style={{ width: '100%', gap: space.md, marginTop: space.lg }}>
-        {game.score >= 1919 ? (
-          // The score milestone, named once, where there is room to read it.
-          <Body muted small style={{ textAlign: 'center' }}>1919 очков: в этом году открылся Баухаус</Body>
-        ) : null}
-        {mode === 'daily' ? <Body muted small style={{ textAlign: 'center' }}>Доиграйте до конца, чтобы записать результат</Body> : null}
-        <Button kind="primary" size="lg" label="Играть дальше" onPress={() => router.back()} />
-        {mode === 'daily' ? null : (
-          <Button
-            label="Новая игра"
-            onPress={() => {
-              newGame();
-              router.back();
-            }}
-          />
-        )}
+        <CountUp to={game.score} />
       </View>
-    </Overlay>
+      <View style={{ gap: 12 }}>
+        <Button kind="primary" size="lg" label="Играть дальше" onPress={() => router.back()} />
+        <Button size="lg" label="В меню" onPress={() => router.dismissTo('/')} />
+      </View>
+    </Page>
   );
 }

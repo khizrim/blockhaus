@@ -1,5 +1,6 @@
 import { DelaGothicOne_400Regular } from '@expo-google-fonts/dela-gothic-one';
 import { Onest_400Regular, Onest_500Medium, Onest_600SemiBold } from '@expo-google-fonts/onest';
+import { Rubik_400Regular, Rubik_500Medium, Rubik_600SemiBold, Rubik_700Bold } from '@expo-google-fonts/rubik';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -20,6 +21,10 @@ export default function RootLayout() {
     Onest_500Medium,
     Onest_600SemiBold,
     DelaGothicOne_400Regular,
+    Rubik_400Regular,
+    Rubik_500Medium,
+    Rubik_600SemiBold,
+    Rubik_700Bold,
   });
 
   useEffect(() => {
@@ -53,9 +58,6 @@ function Navigator() {
         <Stack.Screen name="game" options={{ gestureEnabled: false, fullScreenGestureEnabled: false }} />
         <Stack.Screen name="settings" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="howto" options={{ animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="kit" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="posters" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="sounds" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="pause" options={overlay} />
         <Stack.Screen name="win" options={overlay} />
         <Stack.Screen name="over" options={overlay} />

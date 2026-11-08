@@ -1,5 +1,5 @@
-import { memo, useEffect, useId } from 'react';
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { memo, useEffect } from 'react';
+import { View, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -8,71 +8,61 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Defs, Pattern, Rect } from 'react-native-svg';
 
-import { Enamel, panelEnamel } from '@/design/depth';
-import { dur, enter } from '@/design/system';
+import { enter } from '@/design/system';
 import { useTheme } from '@/design/theme';
-import { font, mix, rank } from '@/design/tokens';
-import { TileNum } from './TileNum';
+import { mix, rank } from '@/design/tokens';
+import { Block, plateStyle, RADIUS, Socket } from './Block';
 
-/* The one drawing used everywhere: the board, pieces in the tray, the logo,
-   tutorial diagrams. Tiles of one value that touch read as one field. Each
-   cell is drawn inset from its own square on the sides that face another
-   field, and flush on sides that continue its own, where a thin fold is drawn
-   instead. */
+/* The one drawing used everywhere: the board, pieces in the tray, the held
+   piece. Plastic blocks (2026-11-08): the board is a white plate with a
+   sunken socket in every cell; a tile is a glossy block sitting in its
+   socket. A piece is the same blocks with no plate. Every block is one size,
+   the cell minus the gap. */
 
 export type CellLook = {
-  /** Faded into the canvas: not a partner of the held piece. */
+  /** Not a partner of the held piece: faded toward the socket. */
   dim?: boolean;
-  /** Where a held piece would land, hatched in its colour. */
+  /** Where a held piece would land: its silhouette in the socket. */
   ghost?: number;
-  /** About to be absorbed by a merge: canvas frame inside. */
+  /** About to be absorbed by a merge. */
   absorb?: boolean;
-  /** Bumped to replay the merge pop on this cell. */
+  /** Bumped to replay the merge squash on this cell. */
   pop?: number;
   /** Bumped to replay the landing drop on this cell. */
   land?: number;
-  /** Draw as a flat silhouette in the line colour (drop shadows). */
+  /** Draw as a flat dark silhouette (drop shadows). */
   shadow?: boolean;
   /** Delay for the first appearance, for staggered intros. */
   enterDelay?: number;
+  /** Leaning toward (or away from) a held piece, in parts of a cell. */
+  lean?: [number, number];
 };
 
 type Props = {
   w: number;
   h: number;
-  /** Row-major. null: no cell (transparent), 0: empty canvas, >0: a tile. */
+  /** Row-major. null: no cell (transparent), 0: empty socket, >0: a tile, <0: a stone. */
   values: (number | null)[];
   cell: number;
   gap: number;
-  /** 'board': framed panel, half gaps between fields. 'piece': each cell carries
-      the full line on its outer edges, no frame. */
+  /** 'board': on the plate, every cell a socket. 'piece': blocks only. */
   variant?: 'board' | 'piece';
   numbers?: boolean;
   look?: (i: number) => CellLook | undefined;
-  /** Group fields by this instead of the value, e.g. to treat every tile as its own field. */
+  /** Kept for callers; blocks are always drawn one by one. */
   sameKey?: (i: number) => number | null;
   style?: ViewStyle;
 };
 
-export const Field = memo(function Field({
-  w,
-  h,
-  values,
-  cell,
-  gap,
-  variant = 'board',
-  numbers = true,
-  look,
-  sameKey,
-  style,
-}: Props) {
-  const { c, isDark } = useTheme();
+export const Field = memo(function Field({ w, h, values, cell, gap, variant = 'board', numbers = true, look, style }: Props) {
+  const { c } = useTheme();
   const board = variant === 'board';
-  const hg = board ? gap / 2 : gap;
+  const hg = gap / 2;
   const pad = board ? hg : 0;
-  const key = sameKey ?? ((i: number) => values[i]);
+  const size = cell - gap;
+  // The plate reaches past the outer sockets by a rim wider than half a gap.
+  const rim = board ? Math.max(0, Math.round(cell * 0.14) - hg) : 0;
 
   const cells = [];
   for (let i = 0; i < w * h; i++) {
@@ -80,51 +70,19 @@ export const Field = memo(function Field({
     if (v === null || v === undefined) continue;
     const x = i % w;
     const y = (i / w) | 0;
-    const same = (dx: number, dy: number) => {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx < 0 || ny < 0 || nx >= w || ny >= h) return false;
-      const k = key(ny * w + nx);
-      return k !== null && k !== undefined && k === key(i);
-    };
     cells.push(
-      <Cell
-        key={i}
-        v={v}
-        x={x}
-        y={y}
-        cell={cell}
-        hg={hg}
-        pad={pad}
-        board={board}
-        numbers={numbers}
-        t={same(0, -1)}
-        r={same(1, 0)}
-        b={same(0, 1)}
-        l={same(-1, 0)}
-        tl={same(-1, -1)}
-        tr={same(1, -1)}
-        bl={same(-1, 1)}
-        br={same(1, 1)}
-        look={look?.(i)}
-        gap={gap}
-        palette={c}
-        dark={isDark}
-      />,
+      <Cell key={i} v={v} left={pad + x * cell + hg} top={pad + y * cell + hg} size={size} board={board} numbers={numbers} look={look?.(i)} c={c} />,
     );
   }
 
   return (
-    <View
-      style={[
-        {
-          width: w * cell + pad * 2,
-          height: h * cell + pad * 2,
-          backgroundColor: board ? c.line : 'transparent',
-        },
-        board ? panelEnamel(c.bg, isDark) : null,
-        style,
-      ]}>
+    <View style={[{ width: w * cell + pad * 2, height: h * cell + pad * 2 }, style]}>
+      {board ? (
+        <View
+          pointerEvents="none"
+          style={[{ position: 'absolute', left: -rim, top: -rim, right: -rim, bottom: -rim }, plateStyle(c, Math.round(cell * 0.26))]}
+        />
+      ) : null}
       {cells}
     </View>
   );
@@ -132,165 +90,91 @@ export const Field = memo(function Field({
 
 type CellProps = {
   v: number;
-  x: number;
-  y: number;
-  cell: number;
-  hg: number;
-  pad: number;
-  gap: number;
+  left: number;
+  top: number;
+  size: number;
   board: boolean;
   numbers: boolean;
-  t: boolean;
-  r: boolean;
-  b: boolean;
-  l: boolean;
-  tl: boolean;
-  tr: boolean;
-  bl: boolean;
-  br: boolean;
   look?: CellLook;
-  palette: ReturnType<typeof useTheme>['c'];
-  dark: boolean;
+  c: ReturnType<typeof useTheme>['c'];
 };
 
-const Cell = memo(function Cell(p: CellProps) {
-  const { v, cell, hg, palette: c, look } = p;
+const Cell = memo(function Cell({ v, left, top, size, board, numbers, look, c }: CellProps) {
   const rk = rank(v);
-  const scale = useSharedValue(look?.enterDelay !== undefined ? 0 : 1);
-  const opacity = useSharedValue(1);
+  const appear = useSharedValue(look?.enterDelay !== undefined ? 0 : 1);
+  const sx = useSharedValue(1);
+  const sy = useSharedValue(1);
+  const dy = useSharedValue(0);
+  const lx = useSharedValue(0);
+  const ly = useSharedValue(0);
+  const leanX = look?.lean?.[0] ?? 0;
+  const leanY = look?.lean?.[1] ?? 0;
+  useEffect(() => {
+    lx.value = withTiming(leanX * size, { duration: 120, easing: Easing.out(Easing.quad) });
+    ly.value = withTiming(leanY * size, { duration: 120, easing: Easing.out(Easing.quad) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leanX, leanY]);
 
   useEffect(() => {
-    if (look?.enterDelay !== undefined) {
-      scale.value = withDelay(look.enterDelay, withTiming(1, enter()));
-    }
+    if (look?.enterDelay !== undefined) appear.value = withDelay(look.enterDelay, withTiming(1, enter()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Feedback without shrinking the tile: the fill never moves, so the board's
-     lines never show through. A merge flashes the tile and kicks its number
-     up; a landing flashes softer and drops the number into place. Timed to
-     land with the sound and the haptic of the same event. */
-  const flash = useSharedValue(0);
-  const num = useSharedValue(1);
-  const drop = useSharedValue(0);
-  const kick = { duration: 280, easing: Easing.out(Easing.back(2.2)) };
-
+  /* A merge: the block that stays takes the hit, squashes 8% and overshoots
+     3% on the way back. Timed with the note and the haptic. */
   useEffect(() => {
     if (!look?.pop) return;
-    flash.value = withSequence(withTiming(0.6, { duration: 0 }), withTiming(0, { duration: 320, easing: Easing.out(Easing.quad) }));
-    num.value = withSequence(withTiming(1.55, { duration: 0 }), withTiming(1, kick));
+    const out = { duration: 70, easing: Easing.out(Easing.quad) };
+    const back = { duration: 150, easing: Easing.out(Easing.cubic) };
+    sx.value = withSequence(withTiming(1.08, out), withTiming(0.98, back), withTiming(1, back));
+    sy.value = withSequence(withTiming(0.92, out), withTiming(1.03, back), withTiming(1, back));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [look?.pop]);
 
+  /* A landing: a short fall, then a 6% squash against the socket. */
   useEffect(() => {
     if (!look?.land) return;
-    flash.value = withSequence(withTiming(0.35, { duration: 0 }), withTiming(0, { duration: 240, easing: Easing.out(Easing.quad) }));
-    drop.value = withSequence(withTiming(-0.18, { duration: 0 }), withTiming(0, kick));
+    dy.value = withSequence(withTiming(-size * 0.12, { duration: 0 }), withTiming(0, { duration: 60, easing: Easing.in(Easing.quad) }));
+    sx.value = withSequence(withTiming(1, { duration: 60 }), withTiming(1.06, { duration: 50 }), withTiming(1, { duration: 140, easing: Easing.out(Easing.cubic) }));
+    sy.value = withSequence(withTiming(1, { duration: 60 }), withTiming(0.94, { duration: 50 }), withTiming(1, { duration: 140, easing: Easing.out(Easing.cubic) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [look?.land]);
 
-  const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }], opacity: opacity.value }));
-  const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
-  const numStyle = useAnimatedStyle(() => ({ transform: [{ translateY: drop.value * cell }, { scale: num.value }] }));
+  const anim = useAnimatedStyle(() => ({
+    opacity: Math.min(1, appear.value * 1.5),
+    transform: [{ translateX: lx.value }, { translateY: dy.value + ly.value + (1 - appear.value) * size * 0.3 }, { scaleX: sx.value }, { scaleY: sy.value * (0.6 + appear.value * 0.4) }],
+  }));
 
-  let fill = v > 0 ? c.tile[rk] : c.canvas;
-  let ink = v > 0 ? c.ink[rk] : 'transparent';
-  // A stone: a block of the line colour, a piece of the board's frame.
-  if (v < 0) {
-    fill = c.line;
-    ink = 'transparent';
-  }
+  const box: ViewStyle = { position: 'absolute', left, top, width: size, height: size };
+  const r = Math.round(size * RADIUS);
+  let block: React.ReactNode = null;
   if (look?.shadow) {
-    fill = c.line;
-    ink = 'transparent';
+    block = <View style={{ width: size, height: size, borderRadius: r, backgroundColor: 'rgba(0,0,0,0.16)' }} />;
+  } else if (v !== 0) {
+    const dim = look?.dim && v > 0;
+    block = (
+      <Block
+        v={v}
+        size={size}
+        numbers={numbers}
+        fill={dim ? mix(c.tile[rk], c.canvas, 0.3) : undefined}
+        ink={dim ? c.faint : undefined}
+        style={look?.absorb ? { opacity: 0.85 } : undefined}
+      />
+    );
   }
-  if (look?.dim && v > 0) {
-    fill = mix(c.tile[rk], c.canvas, 0.22);
-    ink = c.faint;
-  }
-
-  const inset = (same: boolean) => (same ? 0 : hg);
-  const long = v >= 100;
-  const corner = (pos: ViewStyle) => (
-    <View pointerEvents="none" style={[{ position: 'absolute', width: hg, height: hg, backgroundColor: c.line }, pos]} />
-  );
 
   return (
-    <View
-      style={{
-        position: 'absolute',
-        left: p.pad + p.x * cell,
-        top: p.pad + p.y * cell,
-        width: cell,
-        height: cell,
-        backgroundColor: p.board ? undefined : c.line,
-      }}>
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            top: inset(p.t),
-            right: inset(p.r),
-            bottom: inset(p.b),
-            left: inset(p.l),
-            backgroundColor: fill,
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden',
-          },
-          anim,
-        ]}>
-        {look?.ghost ? <Hatch color={c.tile[rank(look.ghost)]} base={c.canvas} /> : null}
-        {/* Folds on the left and top edge only, so two cells never double one up. */}
-        <View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              borderLeftWidth: p.l ? 1 : 0,
-              borderTopWidth: p.t ? 1 : 0,
-              borderColor: c.fold,
-            },
-          ]}
-        />
-        {!look?.shadow && !look?.ghost && v >= 0 ? (
-          <Enamel fill={fill} open={{ t: !p.t, r: !p.r, b: !p.b, l: !p.l }} size={cell} empty={v <= 0} dark={p.dark} />
-        ) : null}
-        {look?.absorb ? (
-          <View
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFill, { borderWidth: p.gap, borderColor: c.canvas }]}>
-            <View style={[StyleSheet.absoluteFill, { borderWidth: 2, borderColor: c.line }]} />
-          </View>
-        ) : null}
-        {v > 0 ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF' }, flashStyle]} /> : null}
-        {p.numbers && v > 0 ? (
-          <Animated.View style={numStyle}>
-            <TileNum v={v} color={ink} size={Math.max(12, Math.round(cell * (long ? 0.28 : v >= 10 ? 0.34 : 0.4)))} />
-          </Animated.View>
-        ) : null}
-        {/* Where two lines meet at an inside corner of a field, the joint square
-            belongs to the line, or the line steps sideways there. */}
-        {p.t && p.l && !p.tl ? corner({ left: 0, top: 0 }) : null}
-        {p.t && p.r && !p.tr ? corner({ right: 0, top: 0 }) : null}
-        {p.b && p.l && !p.bl ? corner({ left: 0, bottom: 0 }) : null}
-        {p.b && p.r && !p.br ? corner({ right: 0, bottom: 0 }) : null}
-      </Animated.View>
-    </View>
+    <>
+      {board || v === 0 ? <Socket size={size} style={box} /> : null}
+      {look?.ghost ? (
+        <View pointerEvents="none" style={[box, { borderRadius: r, backgroundColor: c.tile[rank(look.ghost)], opacity: 0.32 }]} />
+      ) : null}
+      {block ? (
+        <Animated.View pointerEvents="none" style={[box, { transformOrigin: 'bottom' }, anim]}>
+          {block}
+        </Animated.View>
+      ) : null}
+    </>
   );
 });
-
-function Hatch({ color, base }: { color: string; base: string }) {
-  const id = 'h' + useId().replace(/[^a-zA-Z0-9]/g, '');
-  return (
-    <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Defs>
-        <Pattern id={id} width={10} height={10} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <Rect width={10} height={10} fill={mix(color, base, 0.45)} />
-          <Rect width={5} height={10} fill={color} />
-        </Pattern>
-      </Defs>
-      <Rect width="100%" height="100%" fill={`url(#${id})`} />
-    </Svg>
-  );
-}

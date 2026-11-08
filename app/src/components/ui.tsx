@@ -1,13 +1,14 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, Text, View, type TextStyle, type ViewStyle } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { dur, enter, exit, HIT, space, type } from '@/design/system';
-import { Enamel } from '@/design/depth';
 import { useTheme } from '@/design/theme';
 import { font, LADDER, rank } from '@/design/tokens';
 import { fx } from '@/sound/sfx';
+import { Block, Socket } from './Block';
+import { Icon } from './icons';
 import { TileNum } from './TileNum';
 
 /* ---------- screen shell ---------- */
@@ -54,43 +55,22 @@ export function Heading({ children, level = 'title', style }: { children: ReactN
 
 /* ---------- wordmark ---------- */
 
-/** The mark: the menu poster in miniature. */
+/** The mark: one red plastic block, the one that ends the wordmark. */
 export function Glyph({ size = 16 }: { size?: number }) {
-  const { c, isDark } = useTheme();
-  const S = size;
-  const L = Math.max(2, Math.round(S * 0.08));
-  const v1 = Math.round(S * 0.62);
-  const hl = Math.round(S * 0.6);
-  const hr = Math.round(S * 0.38);
-  const vs = Math.round(S * 0.22);
-  const hb = Math.round(S * 0.78);
-  const box = (l: number, t: number, w: number, h: number, bg: string, open?: { t?: boolean; r?: boolean; b?: boolean; l?: boolean }) => (
-    <View style={{ position: 'absolute', left: l, top: t, width: w, height: h, backgroundColor: bg, overflow: 'hidden' }}>
-      {open ? <Enamel fill={bg} open={open} size={S * 0.3} dark={isDark} /> : null}
-    </View>
-  );
-  return (
-    <View style={{ width: S, height: S, backgroundColor: c.bg, borderWidth: L, borderColor: c.line, overflow: 'hidden' }}>
-      {box(v1 + L, 0, S, hr, c.tile[2], { l: true, b: true })}
-      {box(0, hl + L, vs, S - hl - L * 3, c.tile[3], { t: true, r: true, b: true })}
-      {box(v1 + L, hb + L, S, S - hb - L * 3, c.tile[1], { t: true, l: true, b: true })}
-      {box(v1, 0, L, S, c.line)}
-      {box(0, hl, v1, L, c.line)}
-      {box(v1, hr, S, L, c.line)}
-      {box(vs, hl, L, S, c.line)}
-      {box(v1, hb, S, L, c.line)}
-    </View>
-  );
+  const { c } = useTheme();
+  return <Block v={2} size={size} numbers={false} fill={c.tile[2]} />;
 }
 
 export function Wordmark({ size = 18 }: { size?: number }) {
   const { c } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Math.round(size * 0.4) }}>
-      <Glyph size={Math.round(size * 1.1)} />
-      <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: size, color: c.text, includeFontPadding: false }}>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: Math.round(size * 0.12) }}>
+      <Text allowFontScaling={false} style={{ fontFamily: font.wide, fontSize: size, letterSpacing: -0.045 * size, color: c.text, includeFontPadding: false }}>
         blockhaus
       </Text>
+      <View style={{ marginBottom: Math.round(size * 0.16) }}>
+        <Glyph size={Math.round(size * 0.7)} />
+      </View>
     </View>
   );
 }
@@ -111,46 +91,116 @@ type BtnProps = {
   accessibilityLabel?: string;
 };
 
-export function Button({ label, onPress, kind = 'secondary', size = 'md', disabled, trailing, style, accessibilityLabel }: BtnProps) {
+/* A plastic key (2026-11-08): a rounded face standing on its own darker
+   ledge. Pressed, the face goes down 3px onto the ledge. White for most
+   keys, blue for the one step a page leads to. */
+export function Key({
+  children,
+  onPress,
+  blue,
+  height = 48,
+  width,
+  disabled,
+  quiet,
+  label,
+  style,
+  faceStyle,
+}: {
+  children: ReactNode;
+  onPress?: () => void;
+  blue?: boolean;
+  height?: number;
+  width?: number | `${number}%`;
+  disabled?: boolean;
+  quiet?: boolean;
+  label: string;
+  style?: ViewStyle;
+  faceStyle?: ViewStyle;
+}) {
   const { c, isDark } = useTheme();
-  const k = kind === 'outline' ? 'secondary' : kind;
   const press = useSharedValue(0);
-  const face = useAnimatedStyle(() => ({ opacity: 1 - press.value * 0.25 }));
-  const primary = k === 'primary';
-  const bg = primary ? (isDark ? c.text : c.line) : k === 'ghost' ? 'transparent' : c.surface;
-  const fg = primary ? c.bg : k === 'danger' ? c.tile[2] : c.text;
+  const face = useAnimatedStyle(() => ({ transform: [{ translateY: press.value * 3 }] }));
+  const LEDGE_H = 4;
+  const r = 12;
+  const top = blue ? '#5A86FF' : isDark ? '#3A3D44' : '#FFFFFF';
+  const base = blue ? '#356BFF' : isDark ? '#30333A' : '#F3F2EF';
+  const ledge = blue ? '#1F48C2' : isDark ? '#16171A' : '#CFCDC6';
+  const hi = blue ? 'rgba(255,255,255,0.45)' : isDark ? 'rgba(255,255,255,0.10)' : '#FFFFFF';
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityLabel={label}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={() => {
-        fx.tap();
+        if (!quiet) fx.tap();
         onPress?.();
       }}
-      onPressIn={() => (press.value = withTiming(1, enter(dur.fast)))}
-      onPressOut={() => (press.value = withTiming(0, exit(dur.fast)))}
-      style={[{ opacity: disabled ? 0.4 : 1 }, style]}>
+      onPressIn={() => (press.value = withTiming(1, { duration: 80 }))}
+      onPressOut={() => (press.value = withTiming(0, { duration: 100 }))}
+      style={[{ width, minWidth: height, height: height + LEDGE_H, opacity: disabled ? 0.4 : 1 }, style]}>
+      <View style={{ position: 'absolute', left: 0, right: 0, top: LEDGE_H, bottom: 0, borderRadius: r, backgroundColor: ledge }} />
       <Animated.View
         style={[
           {
-            minHeight: size === 'lg' ? 56 : 48,
-            paddingHorizontal: space.lg,
-            borderWidth: k === 'ghost' || primary ? 0 : 1,
-            borderColor: c.hair,
-            backgroundColor: bg,
+            height,
+            borderRadius: r,
+            backgroundColor: base,
+            backgroundImage: `linear-gradient(180deg, ${top}, ${base})`,
+            boxShadow: `inset 0 2px 0 ${hi}`,
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: trailing ? 'space-between' : 'center',
+            justifyContent: 'center',
+            gap: 10,
+            paddingHorizontal: 12,
           },
+          faceStyle,
           face,
         ]}>
-        {primary ? <Enamel fill={bg} size={44} dark={isDark} /> : null}
-        <Text style={[type.bodyStrong, { color: fg }]}>{label}</Text>
-        {typeof trailing === 'string' ? <Text style={[type.bodyStrong, { color: fg, opacity: 0.7, fontVariant: ['tabular-nums'] }]}>{trailing}</Text> : trailing}
+        {children}
       </Animated.View>
     </Pressable>
+  );
+}
+
+export function Button({ label, onPress, kind = 'secondary', size = 'md', disabled, trailing, style, accessibilityLabel }: BtnProps) {
+  const { c } = useTheme();
+  const k = kind === 'outline' ? 'secondary' : kind;
+  const primary = k === 'primary';
+  const fg = primary ? '#FFFFFF' : k === 'danger' ? c.tile[2] : c.text;
+  const text = (
+    <>
+      <Text style={[type.bodyStrong, { color: fg, fontFamily: font.bodySemi }]}>{label}</Text>
+      {typeof trailing === 'string' ? <Text style={[type.bodyStrong, { color: fg, opacity: 0.7, fontVariant: ['tabular-nums'] }]}>{trailing}</Text> : trailing}
+    </>
+  );
+  if (k === 'ghost') {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel ?? label}
+        accessibilityState={{ disabled }}
+        disabled={disabled}
+        onPress={() => {
+          fx.tap();
+          onPress?.();
+        }}
+        style={({ pressed }) => [{ minHeight: size === 'lg' ? 56 : 48, paddingHorizontal: space.lg, flexDirection: 'row', alignItems: 'center', justifyContent: trailing ? 'space-between' : 'center', opacity: disabled ? 0.4 : pressed ? 0.6 : 1 }, style]}>
+        {text}
+      </Pressable>
+    );
+  }
+  return (
+    <Key
+      label={accessibilityLabel ?? label}
+      onPress={onPress}
+      disabled={disabled}
+      blue={primary}
+      height={size === 'lg' ? 56 : 48}
+      style={style}
+      faceStyle={{ paddingHorizontal: space.lg, justifyContent: trailing ? 'space-between' : 'center' }}>
+      {text}
+    </Key>
   );
 }
 
@@ -186,112 +236,59 @@ export function IconButton({
   disabled?: boolean;
   /** No tap sound: the action plays its own. */
   quiet?: boolean;
-  /** No surface: for top bars. */
+  /** No key: a bare glyph, for top bars. */
   plain?: boolean;
-  /** Side of the square; never under HIT. */
+  /** Side of the key; never under HIT. */
   size?: number;
 }) {
-  const { c } = useTheme();
+  const s = Math.max(HIT, size);
+  if (plain) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ disabled }}
+        onPress={() => {
+          if (!quiet) fx.tap();
+          onPress?.();
+        }}
+        disabled={disabled}
+        style={({ pressed }) => ({ width: s, height: s, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.35 : pressed ? 0.6 : 1 })}>
+        {children}
+      </Pressable>
+    );
+  }
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      onPress={() => {
-        if (!quiet) fx.tap();
-        onPress?.();
-      }}
-      disabled={disabled}
-      style={({ pressed }) => ({
-        width: Math.max(HIT, size),
-        height: Math.max(HIT, size),
-        borderWidth: plain ? 0 : 1,
-        borderColor: c.hair,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: plain ? 'transparent' : c.surface,
-        opacity: disabled ? 0.35 : pressed ? 0.6 : 1,
-      })}>
+    <Key label={label} onPress={onPress} disabled={disabled} quiet={quiet} height={s} width={s} faceStyle={{ paddingHorizontal: 0 }}>
       {children}
-    </Pressable>
+    </Key>
   );
 }
 
 /* ---------- icons, drawn from blocks ---------- */
 
-export function PauseIcon({ color, s = 14 }: { color: string; s?: number }) {
-  return (
-    <View style={{ flexDirection: 'row', gap: s * 0.28 }}>
-      <View style={{ width: s * 0.3, height: s, backgroundColor: color }} />
-      <View style={{ width: s * 0.3, height: s, backgroundColor: color }} />
-    </View>
-  );
+export function PauseIcon({ color, s = 24 }: { color: string; s?: number }) {
+  return <Icon name="pause" color={color} size={Math.max(24, s)} />;
 }
 
-export function Arrow({ dir, color, s = 16 }: { dir: 'left' | 'right' | 'up' | 'down'; color: string; s?: number }) {
-  const rot = { right: '0deg', down: '90deg', left: '180deg', up: '270deg' }[dir];
-  const t = Math.max(2, Math.round(s * 0.14));
-  return (
-    <View style={{ width: s, height: s, transform: [{ rotate: rot }] }}>
-      <View style={{ position: 'absolute', left: 0, right: t * 0.6, top: (s - t) / 2, height: t, backgroundColor: color }} />
-      <View
-        style={{
-          position: 'absolute',
-          right: t * 0.35,
-          top: s * 0.5 - s * 0.32,
-          width: s * 0.45,
-          height: s * 0.45,
-          borderRightWidth: t,
-          borderTopWidth: t,
-          borderColor: color,
-          transform: [{ translateY: s * 0.09 }, { rotate: '45deg' }],
-        }}
-      />
-    </View>
-  );
+export function Arrow({ dir, color, s = 24 }: { dir: 'left' | 'right' | 'up' | 'down'; color: string; s?: number }) {
+  return <Icon name={dir === 'left' ? 'back' : dir === 'right' ? 'chevron' : dir} color={color} size={Math.max(20, s)} />;
 }
 
-export function CloseIcon({ color, s = 16 }: { color: string; s?: number }) {
-  const t = Math.max(2, Math.round(s * 0.14));
-  const bar = (r: string) => (
-    <View style={{ position: 'absolute', left: -s * 0.1, right: -s * 0.1, top: (s - t) / 2, height: t, backgroundColor: color, transform: [{ rotate: r }] }} />
-  );
-  return (
-    <View style={{ width: s, height: s }}>
-      {bar('45deg')}
-      {bar('-45deg')}
-    </View>
-  );
+export function CloseIcon({ color, s = 24 }: { color: string; s?: number }) {
+  return <Icon name="close" color={color} size={Math.max(20, s)} />;
 }
 
 /* ---------- ladder: the legend of rungs ---------- */
 
 export function Ladder({ best, size = 24, animate }: { best: number; size?: number; animate?: boolean }) {
-  const { c, isDark } = useTheme();
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: space.xs }} accessibilityLabel="Лесенка плиток">
-      {LADDER.map((v, k) => {
-        const on = v <= 2 || v <= best;
-        const rk = rank(v);
-        return (
-          <Rung key={v} delay={animate ? k * 50 : undefined}>
-            <View
-              style={{
-                minWidth: size,
-                height: size,
-                paddingHorizontal: space.xs,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: on ? c.tile[rk] : 'transparent',
-                borderWidth: on ? 0 : 1,
-                borderColor: c.hair,
-              }}>
-              {on ? <Enamel fill={c.tile[rk]} size={size} dark={isDark} /> : null}
-              <TileNum v={v} color={on ? c.ink[rk] : c.faint} size={Math.max(12, Math.round(size * 0.5))} />
-            </View>
-          </Rung>
-        );
-      })}
+      {LADDER.map((v, k) => (
+        <Rung key={v} delay={animate ? k * 50 : undefined}>
+          {v <= 2 || v <= best ? <Block v={v} size={size} /> : <Socket size={size} />}
+        </Rung>
+      ))}
     </View>
   );
 }
@@ -308,28 +305,23 @@ function Rung({ children, delay }: { children: ReactNode; delay?: number }) {
 
 /** A tile-coloured badge with a value, e.g. best tile. */
 export function TileBadge({ v, size = 24 }: { v: number; size?: number }) {
-  const { c, isDark } = useTheme();
+  const { c } = useTheme();
   if (!v) return <Text style={[type.bodyStrong, { color: c.text }]}>—</Text>;
-  const rk = rank(v);
-  return (
-    <View style={{ minWidth: size + space.sm, height: size, paddingHorizontal: space.xs, backgroundColor: c.tile[rk], alignItems: 'center', justifyContent: 'center' }}>
-      <Enamel fill={c.tile[rk]} size={size} dark={isDark} />
-      <TileNum v={v} color={c.ink[rk]} size={Math.max(12, Math.round(size * 0.55))} />
-    </View>
-  );
+  return <Block v={v} size={size} />;
 }
 
 /* ---------- settings controls ---------- */
 
 /** A switch: ink track when on, hairline track when off. 44 tall hit area. */
 export function Toggle({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: string }) {
-  const { c } = useTheme();
+  const { c, isDark } = useTheme();
   const x = useSharedValue(value ? 1 : 0);
   useEffect(() => {
-    x.value = withTiming(value ? 1 : 0, enter(dur.fast));
+    x.value = withTiming(value ? 1 : 0, { duration: 150, easing: Easing.out(Easing.quad) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
-  const knob = useAnimatedStyle(() => ({ transform: [{ translateX: x.value * 20 }] }));
+  const knob = useAnimatedStyle(() => ({ transform: [{ translateX: x.value * 22 }] }));
+  /* A plastic switch: a sunken track, blue when on, and a white key that slides in it. */
   return (
     <Pressable
       accessibilityRole="switch"
@@ -341,15 +333,36 @@ export function Toggle({ value, onChange, label }: { value: boolean; onChange: (
         setTimeout(() => fx.toggle(!value), 50);
       }}
       style={{ height: HIT, justifyContent: 'center' }}>
-      <View style={{ width: 48, height: 28, backgroundColor: value ? c.text : c.surface, borderWidth: 1, borderColor: value ? c.text : c.hair }}>
+      <View
+        style={{
+          width: 52,
+          height: 30,
+          borderRadius: 15,
+          backgroundColor: value ? '#356BFF' : c.canvas,
+          boxShadow: `inset 0 2px 3px rgba(0,0,0,${isDark ? 0.4 : 0.14})`,
+        }}>
         <Animated.View
-          style={[{ position: 'absolute', left: 3, top: 3, width: 20, height: 20, backgroundColor: value ? c.bg : c.faint }, knob]}
+          style={[
+            {
+              position: 'absolute',
+              left: 3,
+              top: 2,
+              width: 24,
+              height: 24,
+              borderRadius: 12,
+              backgroundColor: '#FFFFFF',
+              backgroundImage: 'linear-gradient(180deg, #FFFFFF, #ECEAE4)',
+              boxShadow: '0 2px 0 rgba(0,0,0,0.18)',
+            },
+            knob,
+          ]}
         />
       </View>
     </Pressable>
   );
 }
 
+/** Choices as a row of keys sunk into a tray: the chosen one is a white key standing up. */
 export function Segmented<T extends string>({
   options,
   value,
@@ -359,9 +372,9 @@ export function Segmented<T extends string>({
   value: T;
   onChange: (v: T) => void;
 }) {
-  const { c } = useTheme();
+  const { c, isDark } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', borderWidth: 1, borderColor: c.hair, backgroundColor: c.surface, padding: space.xs, gap: space.xs }}>
+    <View style={{ flexDirection: 'row', borderRadius: 14, backgroundColor: c.canvas, padding: 4, gap: 4, boxShadow: `inset 0 2px 3px rgba(0,0,0,${isDark ? 0.4 : 0.1})` }}>
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -373,8 +386,11 @@ export function Segmented<T extends string>({
               fx.tap();
               onChange(o.value);
             }}
-            style={{ flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.text : 'transparent' }}>
-            <Text style={[type.secondaryStrong, { color: on ? c.bg : c.text }]}>{o.label}</Text>
+            style={[
+              { flex: 1, minHeight: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: on ? 3 : 0, marginTop: on ? 0 : 3 },
+              on ? { backgroundColor: c.plate, boxShadow: `0 3px 0 ${c.plateEdge}` } : null,
+            ]}>
+            <Text style={[type.secondaryStrong, { fontFamily: font.bodySemi, color: on ? c.text : c.muted }]}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -382,23 +398,35 @@ export function Segmented<T extends string>({
   );
 }
 
+/** Rows on a white plastic plate, split by hairlines. */
+export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
+  const { c } = useTheme();
+  const items = (Array.isArray(children) ? children.flat() : [children]).filter(Boolean);
+  return (
+    <View style={[{ backgroundColor: c.plate, borderRadius: 16, paddingHorizontal: space.lg, boxShadow: `0 4px 0 ${c.plateEdge}` }, style]}>
+      {items.map((child, k) => (
+        <View key={k}>
+          {k ? <Rule /> : null}
+          {child}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 /* ---------- a dialog card: L2, hairline plus a soft shadow ---------- */
 
+/** A card of white plastic: a rounded plate on its own ledge, like the board. */
 export function Panel({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   const { c } = useTheme();
   return (
     <View
       style={[
         {
-          backgroundColor: c.surface,
-          borderWidth: 1,
-          borderColor: c.hair,
+          backgroundColor: c.plate,
+          borderRadius: 20,
           padding: space.xl,
-          shadowColor: c.shadow,
-          shadowOpacity: 1,
-          shadowRadius: 24,
-          shadowOffset: { width: 0, height: 8 },
-          elevation: 4,
+          boxShadow: `0 6px 0 ${c.plateEdge}, 0 14px 24px rgba(0,0,0,0.08)`,
         },
         style,
       ]}>
@@ -407,16 +435,89 @@ export function Panel({ children, style }: { children: ReactNode; style?: ViewSt
   );
 }
 
+/** A whole-screen page in the table colour (pause, game over, win): no
+    scrim, the content rises 24pt as it fades in. */
+export function Page({ children, top }: { children: ReactNode; top?: ReactNode }) {
+  const { c } = useTheme();
+  const ins = useSafeAreaInsets();
+  const k = useSharedValue(0);
+  useEffect(() => {
+    k.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const st = useAnimatedStyle(() => ({ opacity: k.value, transform: [{ translateY: (1 - k.value) * 24 }] }));
+  return (
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <Animated.View
+        accessibilityViewIsModal
+        style={[
+          {
+            flex: 1,
+            width: '100%',
+            maxWidth: 440,
+            alignSelf: 'center',
+            paddingTop: ins.top + 12,
+            paddingBottom: ins.bottom + 24,
+            paddingHorizontal: 16,
+          },
+          st,
+        ]}>
+        {top}
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
+/** A small plastic chip: grey text on the table, or yellow for news (a record). */
+export function Chip({ children, yellow, style }: { children: ReactNode; yellow?: boolean; style?: ViewStyle }) {
+  const { c } = useTheme();
+  return (
+    <View
+      style={[
+        { height: 32, paddingHorizontal: 12, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+        yellow ? { backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 3px 0 #C9A21F' } : null,
+        style,
+      ]}>
+      {typeof children === 'string' ? <Text style={{ fontFamily: font.bodySemi, fontSize: 15, color: yellow ? '#2A2A2A' : c.muted }}>{children}</Text> : children}
+    </View>
+  );
+}
+
+/** A big score, Rubik 700, counting up from zero once. */
+export function CountUp({ to, size = 64, ms = 600 }: { to: number; size?: number; ms?: number }) {
+  const { c } = useTheme();
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    const t0 = Date.now();
+    const id = setInterval(() => {
+      const k = Math.min(1, (Date.now() - t0) / ms);
+      setV(Math.round(to * (1 - Math.pow(1 - k, 3))));
+      if (k >= 1) clearInterval(id);
+    }, 16);
+    return () => clearInterval(id);
+  }, [to, ms]);
+  return <TileNum v={v} size={size} color={c.text} style={{ lineHeight: Math.round(size * 1.1), fontVariant: ['tabular-nums'] }} />;
+}
+
+export function Gear({ color }: { color: string }) {
+  return <Icon name="gear" color={color} />;
+}
+
+export function SoundIcon({ on, color }: { on: boolean; color: string }) {
+  return <Icon name={on ? 'sound' : 'mute'} color={color} />;
+}
+
 /* ---------- top bar for pushed screens ---------- */
 
 export function TopBar({ title, onBack, close }: { title: string; onBack: () => void; close?: boolean }) {
   const { c } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.lg, marginLeft: -space.md }}>
-      <IconButton plain label={close ? 'Закрыть' : 'Назад'} onPress={onBack}>
-        {close ? <CloseIcon color={c.text} s={16} /> : <Arrow dir="left" color={c.text} s={18} />}
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.lg }}>
+      <IconButton label={close ? 'Закрыть' : 'Назад'} size={48} onPress={onBack}>
+        <Icon name={close ? 'close' : 'back'} color={c.text} />
       </IconButton>
-      <Heading level="heading">{title}</Heading>
+      <Heading level="heading" style={{ marginBottom: 4 }}>{title}</Heading>
     </View>
   );
 }
@@ -430,7 +531,7 @@ export function Row({ label, note, children, onPress }: { label: string; note?: 
         <Text style={[type.body, { color: c.text }]}>{label}</Text>
         {note ? <Text style={[type.secondary, { color: c.muted }]}>{note}</Text> : null}
       </View>
-      {children ?? (onPress ? <Arrow dir="right" color={c.muted} s={14} /> : null)}
+      {children ?? (onPress ? <Icon name="chevron" color={c.muted} size={20} /> : null)}
     </View>
   );
   if (!onPress) return inner();

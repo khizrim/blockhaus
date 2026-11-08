@@ -32,7 +32,11 @@ const SRC = {
   'milestone-9': require('../../assets/sounds/milestone-9.wav'),
   'milestone-10': require('../../assets/sounds/milestone-10.wav'),
   'milestone-11': require('../../assets/sounds/milestone-11.wav'),
-  sweep: require('../../assets/sounds/sweep.wav'),
+  'sweep-1': require('../../assets/sounds/sweep-1.wav'),
+  'sweep-2': require('../../assets/sounds/sweep-2.wav'),
+  'knock-1': require('../../assets/sounds/knock-1.wav'),
+  'knock-2': require('../../assets/sounds/knock-2.wav'),
+  'knock-3': require('../../assets/sounds/knock-3.wav'),
   tray: require('../../assets/sounds/tray.wav'),
   tap: require('../../assets/sounds/tap.wav'),
   'toggle-on': require('../../assets/sounds/toggle-on.wav'),
@@ -158,22 +162,30 @@ export const fx = {
     play('invalid');
     buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));
   },
-  /** One merge producing `value`. `step` is its place in a placed piece's
-      cascade: each later step plays a semitone higher (up to five) and
-      presses a little harder, so a long chain is heard before its ×2 shows. */
+  /** One merge producing `value`. `step` is its place in the cascade: each
+      merge plays the next degree of the pentatonic, so a chain climbs a
+      staircase; the hand presses harder as the chain grows and as the tile
+      gets heavier. */
   merge: (value: number, step = 0) => {
     const r = rungOf(value);
-    play(`merge-${r}` as SoundName, step ? 2 ** (Math.min(step, 5) / 12) : 1);
+    play(`merge-${3 + Math.min(8, step)}` as SoundName);
     const style = step >= 4 ? Haptics.ImpactFeedbackStyle.Heavy : step >= 2 || r >= 6 ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Soft;
     buzz(() => Haptics.impactAsync(style));
   },
   /** A chain: each step one beat after the last, so it climbs audibly. */
   cascade: (values: number[], beat = 120) => {
-    values.forEach((v, k) => setTimeout(() => fx.merge(v), k * beat));
+    values.forEach((v, k) => setTimeout(() => fx.merge(v, k), k * beat));
   },
-  sweep: () => {
-    play('sweep');
-    buzz(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft));
+  /** A sweep's slide, on release: the skid swells as the blocks speed up.
+      `moved` is how many blocks travel. */
+  sweep: (moved = 4) => {
+    play(moved > 4 ? 'sweep-2' : 'sweep-1');
+  },
+  /** The blocks hit the wall, on the frame they arrive: a clack, and the
+      hand feels the stop. Heavier when more blocks hit. */
+  knock: (moved = 4) => {
+    play(moved > 8 ? 'knock-3' : moved > 3 ? 'knock-2' : 'knock-1');
+    buzz(() => Haptics.impactAsync(moved > 8 ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Rigid));
   },
   tray: () => play('tray'),
   /** A new best of 24 and up: the rung's bell, and a firm tap. */
