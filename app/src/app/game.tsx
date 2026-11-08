@@ -16,7 +16,7 @@ import { slideMoves, type Move } from '@/game/slide';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
 import { TileNum } from '@/components/TileNum';
-import { Block, Socket } from '@/components/Block';
+import { Block, plastic, Socket } from '@/components/Block';
 import { Icon } from '@/components/icons';
 import { Formula } from '@/components/Formula';
 import { INTRO_STEP, milestonesFor } from '@/components/Track';
@@ -144,6 +144,7 @@ export default function Game() {
   /** An earned sweep: a stud flying from the merge that earned it to the sweep key. */
   const [studFly, setStudFly] = useState<{ id: number; at: number; to: { x: number; y: number } } | null>(null);
   const keyRef = useRef<ComponentRef<typeof View>>(null);
+  const burstClear = useRef<ReturnType<typeof setTimeout> | null>(null);
   // While a swipe is held past the threshold: where the next piece will ride in.
   const [aim, setAim] = useState<{ id: string; piece: Piece; ox: number; oy: number; dir: Dir } | null>(null);
   const aimDir = useRef<Dir | null>(null);
@@ -353,6 +354,10 @@ export default function Game() {
       seen.add(l);
       return true;
     });
+    // One wave per move: a long cascade that passes 24, 48 and 96 plays the
+    // full show for the highest only; the ones on the way are plain merges.
+    const last = marks.lastIndexOf(true);
+    marks.forEach((m, k) => (marks[k] = m && k === last));
     moveHadMilestone.current = marks.some(Boolean);
     return marks;
   };
@@ -383,8 +388,11 @@ export default function Game() {
     {
       const id = `${at}-${Date.now()}-${step}`;
       const power = milestone ? 5 : Math.min(4, step + 1);
-      setBursts((e) => [...e, { id, at, v: level, n: 1 + power * 3, power }]);
-      later(BURST_MS + 80, () => setBursts((e) => e.filter((x) => x.id !== id)));
+      // At most three bursts in the air; spent ones are cleared in one go
+      // once the board is quiet, so a long chain costs no extra renders.
+      setBursts((e) => [...e.slice(-2), { id, at, v: level, n: 1 + power * 2, power }]);
+      if (burstClear.current) clearTimeout(burstClear.current);
+      burstClear.current = setTimeout(() => setBursts([]), BURST_MS + 80);
       if (!milestone) scoreKick.value = withSequence(withTiming(1 + 0.04 * power, { duration: 60 }), withTiming(1, back(260, 2.4)));
     }
     float(at, pts, Math.round(pts / level));
@@ -1402,6 +1410,9 @@ function Burst({ at, v, n, power, cell, gap }: { at: number; v: number; n: numbe
 }
 
 function Chip({ vx, vy, spin, size, delay, cx, cy, v, cell }: { vx: number; vy: number; spin: number; size: number; delay: number; cx: number; cy: number; v: number; cell: number }) {
+  const { c } = useTheme();
+  const color = c.tile[rank(v)];
+  const ledge = plastic(color).ledge;
   const t = useSharedValue(0);
   useEffect(() => {
     t.value = withDelay(delay, withTiming(1, { duration: BURST_MS - delay, easing: Easing.linear }));
@@ -1418,9 +1429,11 @@ function Chip({ vx, vy, spin, size, delay, cx, cy, v, cell }: { vx: number; vy: 
     };
   });
   return (
-    <Animated.View style={[{ position: 'absolute', left: 0, top: 0 }, st]}>
-      <Block v={v} size={size} numbers={false} />
-    </Animated.View>
+    // A flat chip with a ledge in a darker shade: no gradient, no shadow, so
+    // a dozen of them cost almost nothing to draw.
+    <Animated.View
+      style={[{ position: 'absolute', left: 0, top: 0, width: size, height: size, borderRadius: Math.round(size * 0.22), backgroundColor: color, borderBottomWidth: Math.max(1, Math.round(size * 0.18)), borderBottomColor: ledge }, st]}
+    />
   );
 }
 
