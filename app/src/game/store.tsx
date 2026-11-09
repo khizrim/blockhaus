@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import engine, { type Dir, type Game, type Piece, type PlaceResult, type SweepResult } from './engine';
-import { LESSONS } from './lessons';
+import { FIRST_BOARD, FIRST_TRAY, LESSONS } from './lessons';
 
 /* The one running game and the player's record, shared by every screen and
    saved after every move, so closing the app never loses a game. */
@@ -193,7 +193,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const finishLessons = useCallback(() => {
     setLearned(true);
     setLesson(null);
-    gRef.current = saved.current && saved.current.moves > 0 && !saved.current.over ? saved.current : engine.newGame(rulesConfig(nextRules));
+    if (saved.current && saved.current.moves > 0 && !saved.current.over) gRef.current = saved.current;
+    else {
+      const g = engine.newGame(rulesConfig(nextRules));
+      for (const [x, y, v] of FIRST_BOARD) g.board[y * engine.N + x] = v;
+      g.tray = [...FIRST_TRAY.map((p) => ({ cells: p.cells.map((c) => [...c] as [number, number, number]), used: false })), g.tray[2]];
+      g.bestTile = Math.max(...g.board);
+      gRef.current = g;
+    }
     saved.current = null;
     setWinSeen(false);
     bump();

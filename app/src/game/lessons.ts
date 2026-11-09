@@ -13,15 +13,25 @@ import engine, { type Dir, type Game, type Piece } from './engine';
      1  2×2  1 + 2 = 3            a lone 1 shoves the held 1 away
      2  2×2  3 + 3 = 6            the 2 finds the 1, their 3 finds the 3:
                                   the first chain happens on its own
+     (One grammar for the formulas: + joins what the move lays to what it
+     meets, → is a merge of the chain; the stud enters a formula only on
+     the last step, after the swipe has shown what it is for.)
+
      3  4×4  choose the chain     two cells are open; the board shows, while
                                   the piece is held, how far each one runs and
                                   whether it earns a sweep. The short one plays
                                   out and the step comes back.
-     4  4×4  build, then fire     a 2 that merges with nothing finishes the
-                                  ladder 3, 6, 12; the 1 then runs it to 24
-     5  4×4  the 2×2 square       four 1s at once, six merges
-     6  6×6  the swipe            brings the far tiles together: 24 + 24 = 48,
-                                  and the two 6s fold into a 12
+     4  4×4  build, then fire     the 2 may go to three cells and merges
+                                  with nothing in any of them; only beside the
+                                  3 does it finish the ladder. The 1 then goes
+                                  beside it: a run to 24, or one short merge
+                                  and the step comes back. A real choice.
+     5  6×6  the swipe            spends a stud: 24 + 24 = 48
+     6  6×6  the 2×2 square       four 1s at once, a chain of four: its stud
+                                  sets into the socket the swipe emptied, so
+                                  the lessons end on a full key (2026-11-09,
+                                  after the game designer's review: earned,
+                                  spent, earned again)
 
    Only the taught moves are possible: a piece goes in only at its step's
    cells, the board slides only the taught way. Cells outside the plate hold
@@ -41,8 +51,10 @@ export type Lesson = {
   tray: Piece[];
   sweeps: number;
   /** The moves of the step, in order: the tray slot to play and the cells
-      its top-left may go to. More than one cell is a choice. */
-  moves?: { slot: number; at: number[] }[];
+      its top-left may go to. More than one cell is a choice. 'best': the
+      free cell beside the piece just placed where this one runs the longest
+      chain (so it follows wherever the player built). */
+  moves?: { slot: number; at: number[] | 'best' }[];
   /** Sweep steps: the only directions the board answers. */
   dirs?: Dir[];
   goal: (g: Game) => boolean;
@@ -64,7 +76,6 @@ const TINY: Lesson['open'] = [2, 2, 3, 3];
 const MID: Lesson['open'] = [1, 1, 4, 4];
 const FULL: Lesson['open'] = [0, 0, 5, 5];
 
-const count = (v: number, n: number) => (g: Game) => g.board.filter((x) => x === v).length >= n;
 
 export const LESSONS: Lesson[] = [
   {
@@ -81,7 +92,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     title: 'Поставьте 2 к единице, и тройки сольются',
-    formula: [3, '+', 3, '=', 6],
+    formula: [2, '+', 1, '→', 3, '→', 6],
     open: TINY,
     // The 2 takes the 1 into a 3, and that 3 sits by the first 3.
     board: board(TINY, [[2, 2, 3], [3, 3, 1]]),
@@ -92,7 +103,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     title: 'Выберите клетку, где цепочка длиннее: три слияния дают сдвиг',
-    formula: [3, '→', 6, '→', 12, '=', 'stud'],
+    formula: [1, '→', 3, '→', 6, '→', 12],
     open: MID,
     // By the lone 2 the 1 makes one 3. By the 2 under the 3 it runs
     // 1 + 2 = 3, 3 + 3 = 6, 6 + 6 = 12 and earns a sweep.
@@ -104,39 +115,47 @@ export const LESSONS: Lesson[] = [
   },
   {
     title: 'Достройте лесенку двойкой, потом запустите её единицей',
-    formula: [3, '→', 6, '→', 12, '→', 24],
+    formula: [1, '→', 3, '→', 6, '→', 12, '→', 24],
     open: MID,
-    // The 2 goes in under the 3 and merges with nothing: it is the last rung.
-    // The 1 beside it then climbs the whole ladder.
+    // Three cells for the 2, none of them merges: the player has to see
+    // that only the one under the 3 makes the ladder. The 1 then goes
+    // beside the 2 wherever it went.
     board: board(MID, [[2, 2, 12], [1, 4, 2], [3, 2, 6], [4, 2, 3]]),
     tray: [piece([[0, 0, 2]]), none(), piece([[0, 0, 1]])],
     sweeps: 1,
     moves: [
-      { slot: 0, at: [at(4, 3)] },
-      { slot: 2, at: [at(3, 3), at(4, 4)] },
+      { slot: 0, at: [at(1, 1), at(4, 3), at(3, 4)] },
+      { slot: 2, at: 'best' },
     ],
     goal: has(24),
   },
   {
-    title: 'Квадрат ставит четыре блока сразу',
-    formula: [{ grid: [[1, 1], [1, 1]] }, '=', [6, 6]],
-    open: MID,
-    // Each 1 finds a 2; the 3s pair off into two 6s.
-    board: board(MID, [[2, 2, 24], [1, 4, 2], [1, 3, 2], [4, 3, 2], [4, 4, 2]]),
-    tray: [none(), piece([[0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]]), none()],
-    sweeps: 2,
-    moves: [{ slot: 1, at: [at(2, 3)] }],
-    goal: count(6, 2),
-  },
-  {
-    title: 'Смахните доску вбок',
+    title: 'Смахните доску влево',
     formula: ['swipe', 24, '+', 24, '=', 48],
     open: FULL,
-    // A 24 comes in with the last ring, across the board from the other.
-    board: board(FULL, [[2, 2, 24], [1, 4, 6], [4, 4, 6], [5, 2, 24]]),
+    // A 24 comes in with the last ring, across the row from the other.
+    board: board(FULL, [[2, 2, 24], [1, 4, 2], [5, 2, 24]]),
     tray: [none(), none(), none()],
     sweeps: 2,
-    dirs: ['left', 'right'],
+    dirs: ['left'],
     goal: has(48),
   },
+  {
+    title: 'Квадрат ставит четыре блока сразу и возвращает сдвиг',
+    formula: [{ grid: [[1, 1], [1, 1]] }, '=', 'stud'],
+    open: FULL,
+    // Three of the square's 1s find a 2; two of the 3s make a 6: four
+    // merges, and the stud fills the socket the swipe emptied.
+    board: board(FULL, [[0, 2, 48], [0, 4, 2], [1, 2, 2], [2, 2, 2]]),
+    tray: [none(), piece([[0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]]), none()],
+    sweeps: 1,
+    moves: [{ slot: 1, at: [at(1, 3)] }],
+    goal: (g) => g.sweeps >= 2,
+  },
 ];
+
+/** The first game after the lessons does not start blank: a ladder 12, 6, 3
+    is laid out and the tray holds a 2 and a 1, so the first thing the player
+    can do alone is what the lessons ended on: finish the ladder, then fire it. */
+export const FIRST_BOARD: [number, number, number][] = [[1, 2, 12], [2, 2, 6], [3, 2, 3]];
+export const FIRST_TRAY: Piece[] = [piece([[0, 0, 2]]), piece([[0, 0, 1]])];

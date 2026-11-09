@@ -50,6 +50,8 @@ declare const engine: {
   /** The lanes of a sweep cut at stones. */
   laneRuns(board: number[], dir: Dir): number[][];
   pairs(a: number, b: number): boolean;
+  /** The cells beside cell i (left, right, up, down). */
+  neighbours(i: number): number[];
   merged(a: number, b: number): number;
   rank(v: number): number;
   fits(board: number[], piece: Piece, ox: number, oy: number): boolean;

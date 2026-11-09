@@ -125,7 +125,29 @@ export default function Game() {
   const showTrack = false;
   const lesson = store.lesson === null ? null : LESSONS[store.lesson];
   /** The lesson move to play now: its tray slot and the cells it may go to. */
-  const mv = lesson?.moves?.[g.moves] ?? null;
+  const mvRaw = lesson?.moves?.[g.moves] ?? null;
+  /** Where the last placed piece went: a 'best' move follows it. */
+  const lastLaid = useRef<number[]>([]);
+  const mv = useMemo(() => {
+    if (!mvRaw) return null;
+    if (mvRaw.at !== 'best') return { slot: mvRaw.slot, at: mvRaw.at };
+    // The free cell beside the last piece where this one runs longest.
+    const p = g.tray[mvRaw.slot];
+    let best = -1;
+    let cellAt = -1;
+    for (const a of lastLaid.current)
+      for (const n of engine.neighbours(a)) {
+        if (!p || g.board[n] !== 0) continue;
+        const b = g.board.slice();
+        const len = engine.applyPlacement(b, { cells: p.cells.map((c) => [...c] as [number, number, number]), used: false }, n % N, (n / N) | 0, g.cfg.absorb).steps.length;
+        if (len > best) {
+          best = len;
+          cellAt = n;
+        }
+      }
+    return { slot: mvRaw.slot, at: cellAt >= 0 ? [cellAt] : [] };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mvRaw, store.version]);
   const [coach, setCoach] = useState<'task' | 'done'>('task');
   // The lesson on the board now, for timers that outlive a render (skip from pause).
   const lessonNow = useRef(store.lesson);
@@ -292,6 +314,8 @@ export default function Game() {
            brings its sweep the way every new tray does when the key is
            empty: a stud rises out of the tray into the key. */
         later(120, () => fx.learned());
+        // The first game's ladder pops in, the way lesson tiles did.
+        stageLesson(new Array(N * N).fill(0), g.board);
         setBonusHeld(true);
         loudOnce('tray');
         later(700, () => {
@@ -434,10 +458,21 @@ export default function Game() {
   };
 
   /** The tile a lesson was about: the highest one on the board. */
-  const resultCell = (board: number[], _L: unknown) => {
+  const resultCell = (board: number[], L: (typeof LESSONS)[number]) => {
+    // The tile the formula ends on, made by this move; else the highest.
+    const last = L.formula[L.formula.length - 1];
+    const want = typeof last === 'number' ? last : Array.isArray(last) ? last[0] : 0;
+    const laid = lastLaid.current;
     let at = -1;
     board.forEach((v, i) => {
-      if (v > 0 && (at < 0 || v > board[at])) at = i;
+      if (want && v === want && (at < 0 || laid.includes(i))) at = i;
+    });
+    if (at >= 0) return at;
+    // No tile to show (the step ends on a stud): the biggest tile the move
+    // touched, the cells it laid and their neighbours.
+    const near = new Set(laid.flatMap((i) => [i, ...engine.neighbours(i)]));
+    board.forEach((v, i) => {
+      if (v > 0 && (near.size === 0 || near.has(i)) && (at < 0 || v > board[at])) at = i;
     });
     return at;
   };
@@ -658,6 +693,7 @@ export default function Game() {
     const sw0 = g.sweeps;
     const res = store.place(h.slot, t.gx, t.gy);
     if (!res) return;
+    lastLaid.current = res.laid;
     if (res.refilled) trayId.current++;
 
     // Frame 0: the piece laid. Then one frame per merge of the chain.
@@ -708,7 +744,9 @@ export default function Game() {
       later(done, () => {
         flyStud(from, g.cfg.sweepsMax - 1, 'bounce', loud);
         if (!loud) return;
-        later(STUD_BOUNCE * STUD_KNOCK, () => fx.repel());
+        // A full key is good news, not a mistake: a soft chime, and the
+        // stud melts into light on the key instead of falling.
+        later(STUD_BOUNCE * STUD_KNOCK, () => fx.bonus());
         later(STUD_BOUNCE, () => setStudFly(null));
       });
     } else if (counted && res.refilled && g.sweeps > sw0) {
@@ -1196,8 +1234,10 @@ export default function Game() {
           <Animated.View accessible accessibilityLabel={`Очки: ${g.score}`} style={[{ height: 48, justifyContent: 'center', alignItems: 'center' }, scoreStyle]}>
             {/* The 1919 stamp: a yellow chip flashes in behind the score. */}
             <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: -space.md, right: -space.md, top: 2, bottom: 2, borderRadius: 12, backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 3px 0 #C9A21F' }, stampStyle]} />
-            <ScoreNum v={g.score} />
-            {chainMult(g.cfg.chainScore, chain) > 1 ? <MultChip k={chainMult(g.cfg.chainScore, chain)} /> : null}
+            {/* No score in the lessons: it teaches nothing there and would
+                drop to 0 at the first game. No ×2 chip (2026-11-09): nothing
+                taught it; a long chain's reward is the score's jump. */}
+            {store.lesson === null ? <ScoreNum v={g.score} /> : null}
           </Animated.View>
           <Animated.View style={keyStyle}>
             <View ref={keyRef} collapsable={false}>
@@ -1688,11 +1728,11 @@ function StudFlight({ from, to, mode, loud, cell }: { from: { x: number; y: numb
     const base = { x: sx + (to.x - sx) * a, y: sy + (to.y - sy) * a - lift };
     const scale = 2.6 - a * 1.6;
     if (mode === 'bounce' && p > END) {
-      // Knocked off the full key: up a little, then down and away.
+      // The key is full: the stud melts into light on it, swelling and fading.
       const b = (p - END) / (1 - END);
       return {
-        opacity: b < 0.5 ? 1 : 1 - (b - 0.5) / 0.5,
-        transform: [{ translateX: to.x + b * cell * 0.7 }, { translateY: to.y - Math.sin(Math.PI * Math.min(1, b * 1.6)) * cell * 0.6 + b * b * cell * 2.6 }, { rotate: `${b * 240}deg` }, { scale: 1 }],
+        opacity: 1 - b,
+        transform: [{ translateX: to.x }, { translateY: to.y - b * cell * 0.3 }, { rotate: '0deg' }, { scale: 1 + b * 1.4 }],
       };
     }
     return { opacity: 1, transform: [{ translateX: base.x }, { translateY: base.y }, { rotate: `${a * 360}deg` }, { scale }] };
@@ -1896,29 +1936,6 @@ function ScoreNum({ v }: { v: number }) {
     };
   }, [v]);
   return <TileNum v={shownV} size={40} color={c.text} style={{ lineHeight: 48, fontVariant: ['tabular-nums'] }} />;
-}
-
-/** The cascade's score multiplier for the merge in hand, from chainScore. */
-function chainMult(table: number[] | undefined, k: number) {
-  if (!table || !table.length || k <= 0) return 1;
-  return table[Math.min(k, table.length) - 1];
-}
-
-/** A yellow chip beside the score: ×2, ×3 while a cascade pays more. */
-function MultChip({ k }: { k: number }) {
-  const s = useSharedValue(0);
-  useEffect(() => {
-    s.value = withSequence(withTiming(1.15, { duration: 100 }), withTiming(1, { duration: 120 }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [k]);
-  const st = useAnimatedStyle(() => ({ transform: [{ translateY: -14 }, { scale: s.value }] }));
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[{ position: 'absolute', left: '100%', marginLeft: 8, top: '50%', height: 28, paddingHorizontal: 8, borderRadius: 8, justifyContent: 'center', backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 3px 0 #C9A21F' }, st]}>
-      <TileNum v={`×${k}`} size={16} color="#2A2A2A" />
-    </Animated.View>
-  );
 }
 
 /** The sweep key: a four-way arrow and one stud socket per sweep the game
