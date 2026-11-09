@@ -14,8 +14,8 @@ They are played by the same General MIDI band as the "Blocks" loop
   pizzicato C.
 Each file keeps the loudness (RMS of its first 0.4 s) of the synthesised
 sound it replaces, so the in-game balance stays as tuned.
-The board's moves (placing, sweeps, the wall knock) are played on the
-band's wooden kit too, see board(). Keys, lessons, the tray pop and the
+The board's moves (placing, sweeps, the wall knock) match the band too,
+see board(). Keys, lessons, the tray pop and the
 slam stay in make-sounds.py.
 """
 import importlib.util
@@ -113,7 +113,7 @@ def write(name, x, fade=0.12, level=rms_head):
     print(f'{name}: level {level(x):.3f} (was {ref:.3f}) peak {np.max(np.abs(x)):.2f}')
 
 
-WOOD_HI, WOOD_LO, SIDESTICK, CABASA, MARACAS, CONGA_LO, TOM_LO, TOM_FLOOR = 76, 77, 37, 69, 70, 64, 45, 41
+CABASA, MARACAS = 69, 70
 
 
 def roll(inst, d, n, v0, v1):
@@ -122,21 +122,25 @@ def roll(inst, d, n, v0, v1):
     return [(d * (k / n) ** 0.6, None, inst, 0.05, int(v0 + (v1 - v0) * (k / n) ** 1.5)) for k in range(n)]
 
 
+def felt(h=1.0):
+    """A felt-covered block hitting the wall: a low sine thump falling in
+    pitch and a soft puff of low noise; h is its weight."""
+    return mk.mix(mk.osc('sine', 120 / h, 55 / h, 0.12 * h, 0.5), mk.burst(0.02, 600 / h, 1, 0.12))
+
+
 def board():
-    """The board's moves, played on the band's wooden kit (2026-11-09):
-    placing is a wood block (lower for a bigger piece), a sweep is a cabasa
-    roll swelling on release that stops dead at 190 ms, and the wall hit is
-    a side-stick with a conga or tom body, a flam for many blocks."""
-    write('place-1', render([(0, None, WOOD_HI, 0.1, 96)], 0.14), 0.04, rms_peak)
-    write('place-2', render([(0, None, WOOD_LO, 0.1, 100)], 0.15), 0.04, rms_peak)
-    write('place-3', render([(0, None, WOOD_LO, 0.1, 104), (0.004, None, CONGA_LO, 0.1, 80)], 0.16), 0.04, rms_peak)
+    """The board's moves (picked by Khizri on the sound board, 2026-11-09):
+    placing is a short low marimba note in key, lower for a bigger piece
+    (E3, C3, G2); a sweep is a cabasa roll swelling on release that stops
+    dead at 190 ms; the wall hit is a soft felt thump, a flam for many blocks."""
+    for name, n in [('place-1', 52), ('place-2', 48), ('place-3', 43)]:
+        write(name, render([(0, MARIMBA, n, 0.12, 100)], 0.25), 0.06, rms_peak)
     for name, extra in [('sweep-1', []), ('sweep-2', roll(MARACAS, 0.17, 7, 45, 90))]:
         x = render(roll(CABASA, 0.17, 9, 50, 105) + extra, 0.25)[:int(0.19 * SR)]
         write(name, x, 0.003, rms_peak)
-    write('knock-1', render([(0, None, SIDESTICK, 0.1, 100), (0, None, CONGA_LO, 0.1, 70)], 0.16), 0.04, rms_peak)
-    write('knock-2', render([(0, None, SIDESTICK, 0.1, 108), (0.009, None, TOM_LO, 0.15, 80)], 0.2), 0.05, rms_peak)
-    write('knock-3', render([(0, None, SIDESTICK, 0.1, 118), (0.008, None, TOM_FLOOR, 0.2, 95),
-                             (0.017, None, SIDESTICK, 0.1, 80)], 0.24), 0.06, rms_peak)
+    write('knock-1', mk.pad(felt(0.9)), 0.02, rms_peak)
+    write('knock-2', mk.pad(felt(1.0)), 0.02, rms_peak)
+    write('knock-3', mk.pad(mk.layer(felt(1.15), felt(1.25), 0.012, 0.7)), 0.02, rms_peak)
 
 
 def main():
