@@ -144,8 +144,19 @@ export default function Game() {
   /** Plastic crumbs thrown off a cascade's merges and a new best tile. */
   const [bursts, setBursts] = useState<{ id: string; at: number; v: number; n: number; power: number }[]>([]);
   /** An earned sweep: a stud flying from the merge that earned it to the sweep key. */
-  const [studFly, setStudFly] = useState<{ id: number; at: number; to: { x: number; y: number } } | null>(null);
+  const [studFly, setStudFly] = useState<{ id: number; from: { x: number; y: number }; to: { x: number; y: number }; mode: StudMode } | null>(null);
   const keyRef = useRef<ComponentRef<typeof View>>(null);
+  /** The top-left of a stud chip centred on a board cell. */
+  const cellPt = (at: number) => ({ x: gap / 2 + (at % N) * cell + cell / 2 - 9, y: gap / 2 + ((at / N) | 0) * cell + cell / 2 - 9 });
+  /** Sends a stud between `from` and socket `k` of the sweep key ('out' flies
+      from the socket to `from`), all in the board's coordinates. */
+  const flyStud = (from: { x: number; y: number }, k: number, mode: StudMode) => {
+    keyRef.current?.measureInWindow((kx, ky, kw, kh) => {
+      const studs = g.cfg.sweepsMax;
+      const sock = { x: kx + kw - 24 - (studs - 1 - Math.max(0, Math.min(studs - 1, k))) * 19 - boardAt.current.x, y: ky + kh / 2 - 9 - boardAt.current.y };
+      setStudFly(mode === 'out' ? { id: Date.now(), from: sock, to: from, mode } : { id: Date.now(), from, to: sock, mode });
+    });
+  };
   const burstClear = useRef<ReturnType<typeof setTimeout> | null>(null);
   // While a swipe is held past the threshold: where the next piece will ride in.
   const [aim, setAim] = useState<{ id: string; piece: Piece; ox: number; oy: number; dir: Dir } | null>(null);
@@ -228,6 +239,24 @@ export default function Game() {
       peak.current = g.bestTile;
       if (store.lesson !== null) stageLesson(prevEnd.current ?? new Array(N * N).fill(engine.STONE), g.board);
       prevEnd.current = null;
+      if (introStud.current && store.lesson === null) {
+        introStud.current = false;
+        /* Out of the lessons: their phrase plays, and the first game's tray
+           brings its sweep the way every new tray does when the key is
+           empty: a stud rises out of the tray into the key. */
+        later(120, () => fx.learned());
+        setBonusHeld(true);
+        later(700, () => {
+          slotRefs.current[1]?.measureInWindow((sx_, sy_, sw, sh) => {
+            flyStud({ x: sx_ + sw / 2 - 9 - boardAt.current.x, y: sy_ + sh / 2 - 9 - boardAt.current.y }, 0, 'in');
+          });
+          later(STUD_FLY, () => {
+            setStudFly(null);
+            setBonusHeld(false);
+            fx.bonus();
+          });
+        });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g, store.version]);
@@ -236,6 +265,8 @@ export default function Game() {
      grew, its new ring of sockets sinks in with a ratchet of clicks, then
      the step's new tiles pop up one by one, each a note higher. */
   const prevEnd = useRef<number[] | null>(null);
+  /** The lessons just ended: the first game's sweep flies in from the tray. */
+  const introStud = useRef(false);
   const [opened, setOpened] = useState<Set<number> | null>(null);
   const stageLesson = (from: number[], to: number[]) => {
     const grown = to.map((v, i) => (from[i] < 0 && v >= 0 ? i : -1)).filter((i) => i >= 0);
@@ -378,9 +409,9 @@ export default function Game() {
     fx.sweep();
     later(SCATTER_MS, () => {
       setScatter(null);
+      introStud.current = true;
       skipLessons();
       setTrackIntro(Date.now());
-      later(120, () => fx.learned());
     });
   };
 
@@ -574,6 +605,7 @@ export default function Game() {
     settle();
     const before = g.board.slice();
     const s0 = g.score;
+    const sw0 = g.sweeps;
     const res = store.place(h.slot, t.gx, t.gy);
     if (!res) return;
     if (res.refilled) trayId.current++;
@@ -605,13 +637,34 @@ export default function Game() {
     /* An earned sweep is seen being earned: a yellow stud pops out of the
        merge that completed the cascade and flies in an arc into its socket on
        the sweep key, and clicks in on the frame it lands. */
+    const chainAnchor = () => res.steps[Math.min(res.steps.length, g.cfg.chainBonus) - 1]?.anchor ?? res.steps[res.steps.length - 1].anchor;
     if (res.bonus) {
       setBonusHeld(true);
-      const from = res.steps[Math.min(res.steps.length, g.cfg.chainBonus) - 1]?.anchor ?? res.steps[res.steps.length - 1].anchor;
+      const from = cellPt(chainAnchor());
       later(done, () => {
-        keyRef.current?.measureInWindow((kx, ky, kw, kh) => {
-          const to = { x: kx + kw - 24 - boardAt.current.x, y: ky + kh / 2 - 9 - boardAt.current.y };
-          setStudFly({ id: Date.now(), at: from, to });
+        flyStud(from, g.sweeps - 1, 'in');
+        later(STUD_FLY, () => {
+          setStudFly(null);
+          setBonusHeld(false);
+          fx.bonus();
+        });
+      });
+    } else if (counted && g.cfg.chainBonus && res.steps.length >= g.cfg.chainBonus && sw0 >= g.cfg.sweepsMax) {
+      /* Earned with the key already full: the stud flies up, knocks on the
+         key and drops away. Sweeps keep, but only two of them. */
+      const from = cellPt(chainAnchor());
+      later(done, () => {
+        flyStud(from, g.cfg.sweepsMax - 1, 'bounce');
+        later(STUD_FLY * 0.62, () => fx.repel());
+        later(STUD_FLY * 1.4, () => setStudFly(null));
+      });
+    } else if (counted && res.refilled && g.sweeps > sw0) {
+      /* A new tray tops an empty key up to one sweep: the stud rises out of
+         the tray with the new pieces and flies up into its socket. */
+      setBonusHeld(true);
+      later(done + 200, () => {
+        slotRefs.current[1]?.measureInWindow((sx_, sy_, sw, sh) => {
+          flyStud({ x: sx_ + sw / 2 - 9 - boardAt.current.x, y: sy_ + sh / 2 - 9 - boardAt.current.y }, g.sweeps - 1, 'in');
         });
         later(STUD_FLY, () => {
           setStudFly(null);
@@ -854,6 +907,14 @@ export default function Game() {
     }
     const moved = moves.filter((m) => m.from !== m.to).length;
     fx.sweep(moved);
+    /* A sweep is paid with a stud: it pops out of its socket on the key and
+       drops off the board the way the board went. */
+    if (counted) {
+      const W = cell * N + gap;
+      const [ux, uy] = UNIT[dir];
+      flyStud({ x: W / 2 - 9 + ux * (W / 2 + cell * 0.4), y: W / 2 - 9 + uy * (W / 2 + cell * 0.4) }, g.sweeps, 'out');
+      later(STUD_FLY * 1.4, () => setStudFly((f) => (f?.mode === 'out' ? null : f)));
+    }
     tilt(dir, 3, SLIDE - 90);
     const push = res.pushed ?? null;
     const allMarks = milestonesIn([...res.made.map((m) => m.level), ...(push ? push.steps.map((st) => st.level) : [])]);
@@ -1134,7 +1195,7 @@ export default function Game() {
                 {bursts.map((b) => (
                   <Burst key={b.id} at={b.at} v={b.v} n={b.n} power={b.power} cell={cell} gap={gap} />
                 ))}
-                {studFly ? <StudFlight key={studFly.id} at={studFly.at} to={studFly.to} cell={cell} gap={gap} /> : null}
+                {studFly ? <StudFlight key={studFly.id} from={studFly.from} to={studFly.to} mode={studFly.mode} cell={cell} /> : null}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
               </View>
             </View>
@@ -1196,7 +1257,7 @@ export default function Game() {
             cell={cell}
             gap={gap}
           />
-        ) : lesson.dirs ? (
+        ) : lesson.dirs && g.sweeps === lesson.sweeps ? (
           <Finger key={`finger-${store.lesson}`} board={geo.board} vertical={!!lesson.dirs?.includes('up')} />
         ) : null
       ) : null}
@@ -1522,16 +1583,43 @@ function Chip({ vx, vy, spin, size, delay, cx, cy, v, cell }: { vx: number; vy: 
 
 /** The stud of an earned sweep, flying from its merge to the sweep key in an
     arc, turning as it goes, and shrinking to the stud's size on arrival. */
-function StudFlight({ at, to, cell, gap }: { at: number; to: { x: number; y: number }; cell: number; gap: number }) {
-  const pad = gap / 2;
-  const from = { x: pad + (at % N) * cell + cell / 2 - 9, y: pad + ((at / N) | 0) * cell + cell / 2 - 9 };
+/* A sweep's stud in flight, in the board's coordinates (top-left of the
+   18 px chip). 'in': an arc into a socket of the sweep key. 'bounce': the
+   same arc, but the key is full: it knocks on it and falls away. 'out': a
+   spent sweep leaves its socket and drops off the edge the board went. */
+type StudMode = 'in' | 'bounce' | 'out';
+function StudFlight({ from, to, mode, cell }: { from: { x: number; y: number }; to: { x: number; y: number }; mode: StudMode; cell: number }) {
   const k = useSharedValue(0);
   useEffect(() => {
-    k.value = withTiming(1, { duration: STUD_FLY, easing: Easing.inOut(Easing.cubic) });
+    k.value = mode === 'in' ? withTiming(1, { duration: STUD_FLY, easing: Easing.inOut(Easing.cubic) }) : withTiming(1, { duration: STUD_FLY * 1.4, easing: Easing.linear });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const st = useAnimatedStyle(() => {
     const p = k.value;
+    if (mode === 'out') {
+      // Pops up out of the socket, then falls away along a short arc.
+      const lift = Math.sin(Math.PI * Math.min(1, p * 1.6)) * cell * 0.8;
+      return {
+        opacity: p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3,
+        transform: [{ translateX: from.x + (to.x - from.x) * p }, { translateY: from.y + (to.y - from.y) * p * p - lift }, { rotate: `${p * 270}deg` }, { scale: 1 + Math.sin(Math.PI * p) * 0.5 }],
+      };
+    }
+    if (mode === 'bounce') {
+      // 0 to 0.62: the arc to the key; then it drops off it and fades.
+      const a = Math.min(1, p / 0.62);
+      const e = a < 0.5 ? 4 * a * a * a : 1 - Math.pow(-2 * a + 2, 3) / 2;
+      const lift = Math.sin(Math.PI * e) * cell * 1.2;
+      const b = Math.max(0, (p - 0.62) / 0.38);
+      return {
+        opacity: b < 0.5 ? 1 : 1 - (b - 0.5) / 0.5,
+        transform: [
+          { translateX: from.x + (to.x - from.x) * e + b * cell * 0.6 },
+          { translateY: from.y + (to.y - from.y) * e - lift - Math.sin(Math.PI * Math.min(1, b * 1.5)) * cell * 0.5 + b * b * cell * 2.4 },
+          { rotate: `${e * 360 + b * 200}deg` },
+          { scale: 1.9 - e * 0.9 + Math.sin(Math.PI * e) * 0.4 },
+        ],
+      };
+    }
     const lift = Math.sin(Math.PI * p) * cell * 1.2;
     return {
       transform: [
