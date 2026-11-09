@@ -100,7 +100,7 @@ export function setFeedback(o: { sound: boolean; haptics: boolean; music: boolea
 }
 
 /* ---------- background music ----------
-   One quiet loop (scripts/make-music.py), in the same key as the merge notes.
+   One quiet loop (scripts/music/run.py), in the same key as the merge notes.
    It fades in and out instead of starting or stopping dead, and drops to a
    murmur on the pause screen. */
 
