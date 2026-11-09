@@ -1,8 +1,10 @@
+import { Asset } from 'expo-asset';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import { AppState, Platform } from 'react-native';
 
 import { getMusic } from './music';
+import { assetBytes, audioContext, decode } from './webAudio';
 
 /* Sound and touch feedback in one place. Every game event calls one function
    here; it plays the sound if sound is on and the matching haptic if
@@ -81,10 +83,38 @@ function mode() {
   setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers', shouldPlayInBackground: false }).catch(() => {});
 }
 
+const WEB = Platform.OS === 'web';
+
+/* On the web every sound is decoded once into a Web Audio buffer and each
+   play is a fresh buffer source (see webAudio.ts): no voice limit, no
+   start-up delay, and the rate shifts the pitch the way the phone does. */
+const buffers = new Map<SoundName, AudioBuffer>();
+let sfxOut: GainNode | null = null;
+
+function initWeb() {
+  const c = audioContext();
+  if (!c) return;
+  sfxOut = c.createGain();
+  sfxOut.connect(c.destination);
+  // The game's own notes first, the rest after; one at a time, so the
+  // decoding never fights the first frames of the board.
+  const order = [...SOUND_NAMES].sort((a, b) => Number(!/^(pick|place|merge|sweep|knock)/.test(a)) - Number(!/^(pick|place|merge|sweep|knock)/.test(b)));
+  (async () => {
+    for (const name of order) {
+      try {
+        buffers.set(name, await decode(c, await assetBytes(Asset.fromModule(SRC[name]).uri)));
+      } catch {
+        // A sound that fails to load stays silent; the game goes on.
+      }
+    }
+  })();
+}
+
 function init() {
   if (ready) return;
   ready = true;
   mode();
+  if (WEB) return initWeb();
   for (const name of SOUND_NAMES) {
     pool.set(name, { players: Array.from({ length: VOICES }, () => createAudioPlayer(SRC[name])), next: 0 });
   }
@@ -155,12 +185,44 @@ function kickMusic() {
    a cluster. At most two merge notes ring at once: a third one stops the
    oldest, so the chain stays a climbing line. */
 const ringing: AudioPlayer[] = [];
+const ringingWeb: AudioBufferSourceNode[] = [];
+
+function playWeb(name: SoundName, rate: number) {
+  const c = audioContext();
+  const buf = buffers.get(name);
+  if (!c || !buf || !sfxOut) return;
+  if (c.state !== 'running') {
+    // Outside a touch the browser will not start audio: drop the sound
+    // rather than let a pile of them burst out at the next tap.
+    const ua = (globalThis.navigator as { userActivation?: { isActive: boolean } } | undefined)?.userActivation;
+    if (ua && !ua.isActive) return;
+    c.resume().catch(() => {});
+  }
+  try {
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    src.connect(sfxOut);
+    src.start();
+    if (name.startsWith('merge-')) {
+      ringingWeb.push(src);
+      src.onended = () => {
+        const i = ringingWeb.indexOf(src);
+        if (i >= 0) ringingWeb.splice(i, 1);
+      };
+      while (ringingWeb.length > 2) ringingWeb.shift()!.stop();
+    }
+  } catch {
+    // Sound is a garnish: a failed play never reaches the game.
+  }
+}
 
 /** Play one sound, regardless of the haptic. */
 export function play(name: SoundName, rate = 1) {
   kickMusic();
   if (!soundOn) return;
   init();
+  if (WEB) return playWeb(name, rate);
   const v = pool.get(name);
   if (!v) return;
   const p = v.players[v.next];
