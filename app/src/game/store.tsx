@@ -36,15 +36,13 @@ type Store = {
   winSeen: boolean;
   /** A game worth continuing: started and not over. */
   inProgress: boolean;
-  /** In the lessons, with a free game put aside to go back to. */
-  resumes: boolean;
   /** The first-game lesson was finished or skipped. */
   learned: boolean;
   /** Index of the lesson on the board, or null in a normal game. */
   lesson: number | null;
   startLesson: (k: number) => void;
-  /** Leave the lessons: back to the game put aside, else a new one, which
-      goes on from the lesson board when `carry` (the lessons were finished). */
+  /** Leave the lessons. Finished (`carry`): the game goes on from the lesson
+      board. Skipped: back to the game put aside, else a new one. */
   finishLessons: (carry?: boolean) => void;
   place: (slot: number, ox: number, oy: number) => PlaceResult | null;
   sweep: (dir: Dir) => SweepResult | null;
@@ -196,11 +194,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const finishLessons = useCallback((carry = false) => {
     setLearned(true);
     setLesson(null);
-    if (saved.current && saved.current.moves > 0 && !saved.current.over) gRef.current = saved.current;
+    const put = saved.current && saved.current.moves > 0 && !saved.current.over ? saved.current : null;
+    if (put && !carry) gRef.current = put;
     else if (!carry) gRef.current = engine.newGame(rulesConfig(nextRules));
     else {
-      /* The first game goes on from the lessons' last board and key: the
-         same tiles, the same studs, a fresh tray and the score from 0. */
+      /* The game goes on from the lessons' last board and key: the same
+         tiles, the same studs, a fresh tray and the score from 0. Finished
+         lessons always hand over this way, also when they were replayed
+         with a game put aside (2026-11-09, Khizri: the board after the
+         lessons was still another one): that game goes into the record. */
+      if (put) record(put);
       const L = gRef.current;
       const g = engine.newGame(rulesConfig(nextRules));
       g.board = L.board.map((v) => (v === engine.STONE ? 0 : v));
@@ -216,7 +219,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     saved.current = null;
     setWinSeen(false);
     bump();
-  }, [nextRules]);
+  }, [nextRules, record]);
 
   const value = useMemo<Store>(() => {
     const g = gRef.current;
@@ -233,7 +236,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
       },
       winSeen,
       inProgress: lesson === null && g.moves > 0 && !g.over,
-      resumes: lesson !== null && !!saved.current && saved.current.moves > 0 && !saved.current.over,
       learned,
       lesson,
       startLesson,

@@ -258,8 +258,6 @@ export default function Game() {
   const moveHadMilestone = useRef(false);
   /** Bumps when the track should assemble itself square by square (the start of the first game). */
   const [trackIntro, setTrackIntro] = useState(0);
-  /** The lesson board breaking up at the end of the lessons. */
-  const [scatter, setScatter] = useState<{ id: number; board: number[] } | null>(null);
   /** Bumps when the lesson line changes, so it kicks in. */
   const lineKick = useSharedValue(1);
   /** The lesson line coming in (1, from the right) or going out (-1, to the left); 0 at rest. */
@@ -299,12 +297,11 @@ export default function Game() {
     setSliding(null);
     setReturning(null);
     setHeld(null);
-    /* The milestone wave and the lessons' break-up draw copies of the board
-       over it and take them down from a timer. clearTimers just dropped that
+    /* The milestone wave draws copies of the board
+       over it and takes them down from a timer. clearTimers just dropped that
        timer, so they go here too, or the copies stay on the board as tiles
        that never move, even into a new game. */
     setRipple(null);
-    setScatter(null);
     setTrackHold(0);
     setAim(null);
     aimDir.current = null;
@@ -483,33 +480,16 @@ export default function Game() {
     lineKick.value = withSequence(withTiming(1.12, { duration: 0 }), withTiming(1, back(320, 2.4)));
   };
 
-  /* The end of the lessons. The first game goes on from where they ended
+  /* The end of the lessons. The game goes on from where they ended
      (2026-11-09, Khizri: the lessons ended on a full key and the game began
      on a new board with a spent one): the same board, the same studs, a new
-     tray rising from its slots, and the track to 384 assembles square by
-     square. Only a replay from the menu, with a game put aside, still breaks
-     the lesson board up (every tile lifts and drops away in a wave from the
-     centre) to go back to that game. */
+     tray rising from its slots. Always, also after a replay from the menu. */
   const finale = () => {
-    if (!store.resumes) {
-      introGo.current = true;
-      setCarried(true);
-      trayId.current++;
-      skipLessons(true);
-      setTrackIntro(Date.now());
-      return;
-    }
-    // The engine's board, not the shown one: this runs from a timer set
-    // before the last move finished drawing.
-    const board = g.board.slice();
-    setScatter({ id: Date.now(), board });
-    setShown(new Array(N * N).fill(0));
-    fx.sweep();
-    later(SCATTER_MS, () => {
-      setScatter(null);
-      skipLessons();
-      setTrackIntro(Date.now());
-    });
+    introGo.current = true;
+    setCarried(true);
+    trayId.current++;
+    skipLessons(true);
+    setTrackIntro(Date.now());
   };
 
   const skipLessons = (carry = false) => {
@@ -1305,7 +1285,6 @@ export default function Game() {
                   <SlidingTile key={f.id} m={f.m} cell={cell} gap={gap} ms={f.ms} />
                 ))}
                 {incoming ? <Incoming key={incoming.id} {...incoming} cell={cell} gap={gap} /> : null}
-                {scatter ? <Scatter key={scatter.id} board={scatter.board} cell={cell} gap={gap} /> : null}
                 {bursts.map((b) => (
                   <Burst key={b.id} at={b.at} v={b.v} n={b.n} power={b.power} cell={cell} gap={gap} />
                 ))}
@@ -1567,65 +1546,6 @@ function LiftTile({ v, d, at, cell, gap, hero, home }: { v: number; d: number; a
         </Animated.View>
       ) : null}
     </>
-  );
-}
-
-const SCATTER_MS = 900;
-
-/** The lesson board breaking up: every tile lifts, tips and drops away in a
-    wave from the centre, leaving the empty board for the first game. */
-function Scatter({ board, cell, gap }: { board: number[]; cell: number; gap: number }) {
-  const { c } = useTheme();
-  const pad = gap / 2;
-  return (
-    <>
-      {/* The whole ladder runs over the board corner to corner, each
-          diagonal one rung higher, 3 up to the goal's ink. */}
-      {Array.from({ length: N * N }, (_, i) => {
-        const diag = (i % N) + ((i / N) | 0);
-        return (
-          <FloorFlash
-            key={`l${i}`}
-            d={diag * 0.9}
-            color={c.tile[Math.min(10, 3 + Math.floor((diag * 8) / (2 * N - 2)))]}
-            style={{ left: pad + (i % N) * cell + pad, top: pad + ((i / N) | 0) * cell + pad, width: cell - gap, height: cell - gap }}
-          />
-        );
-      })}
-      {board.map((v, i) => {
-        if (v <= 0) return null;
-        const x = i % N;
-        const y = (i / N) | 0;
-        const d = Math.abs(x - 2.5) + Math.abs(y - 2.5);
-        return <ScatterTile key={i} v={v} d={d} side={x < 3 ? -1 : 1} at={{ x: pad + x * cell, y: pad + y * cell }} cell={cell} gap={gap} />;
-      })}
-    </>
-  );
-}
-
-function ScatterTile({ v, d, side, at, cell, gap }: { v: number; d: number; side: number; at: { x: number; y: number }; cell: number; gap: number }) {
-  const pad = gap / 2;
-  const k = useSharedValue(0);
-  useEffect(() => {
-    k.value = withDelay(d * 60, withTiming(1, { duration: 420, easing: Easing.in(Easing.quad) }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const st = useAnimatedStyle(() => {
-    const up = Math.sin(Math.min(1, k.value * 2.2) * Math.PI) * 0.25; // a hop before the drop
-    return {
-      opacity: k.value < 0.75 ? 1 : 1 - (k.value - 0.75) / 0.25,
-      transform: [
-        { translateX: side * k.value * cell * 0.5 },
-        { translateY: -up * cell + k.value * k.value * cell * 2.2 },
-        { rotate: `${side * k.value * 35}deg` },
-        { scale: 1 + up * 0.5 - k.value * 0.35 },
-      ],
-    };
-  });
-  return (
-    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: at.x, top: at.y, width: cell, height: cell, padding: pad }, st]}>
-      <Block v={v} size={cell - gap} />
-    </Animated.View>
   );
 }
 
