@@ -7,7 +7,7 @@ import { Field, type CellLook } from '@/components/Field';
 import { IconButton, Key, Screen } from '@/components/ui';
 import { pieceGrid } from '@/design/mock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { dur, enter, exit, HIT, space, type } from '@/design/system';
+import { dur, enter, exit, HIT, layer, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Game as EngineGame, type Piece, type Step } from '@/game/engine';
@@ -1314,7 +1314,7 @@ export default function Game() {
             // The lessons' line keeps its room in the game that goes on from them.
             <View style={{ width: col, height: LESSON_H, marginBottom: step }} />
           ) : null}
-          <Animated.View style={boardStyle} {...swipe.panHandlers}>
+          <Animated.View style={[layer, boardStyle]} {...swipe.panHandlers}>
             <View
               ref={boardRef}
               onLayout={measureBoard}
@@ -1413,7 +1413,7 @@ export default function Game() {
 
       {/* The lifted piece, above everything. No drop shadow: the lift reads
           from the scale-up and from the ghost on the board. */}
-      <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0 }, dragStyle]}>
+      <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0 }, layer, dragStyle]}>
         {hold || held ? <Field variant="piece" {...pieceGrid((hold?.piece ?? held)!)} cell={cell} gap={gap} /> : null}
       </Animated.View>
     </View>

@@ -1,5 +1,5 @@
 import { Easing, ReduceMotion, useReducedMotion, type WithTimingConfig } from 'react-native-reanimated';
-import type { TextStyle } from 'react-native';
+import { Platform, type TextStyle, type ViewStyle } from 'react-native';
 
 import { font } from './tokens';
 
@@ -54,3 +54,13 @@ export const exit = (duration: number = dur.fast): WithTimingConfig => ({
 /** True when the system asks for reduced motion. JS-driven effects (count-ups,
     timers) read this; Reanimated animations follow the system on their own. */
 export const useCalm = useReducedMotion;
+
+/** A layer of its own for the browser's compositor (web only).
+
+    Safari paints a view that moves into the layer under it, so a block
+    sliding over the board repainted the plate and its 36 soft-shadowed
+    sockets on every frame. A view with this style is painted once and
+    then only moved by the GPU. Use it on what moves (the held piece, the
+    board when it shakes) and on what stays still under moving things (the
+    plate with its sockets). Not on everything: each layer costs memory. */
+export const layer = (Platform.OS === 'web' ? { willChange: 'transform' } : {}) as ViewStyle;
