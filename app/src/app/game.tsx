@@ -27,11 +27,19 @@ import { milestonesFor } from '@/components/Track';
    cascade while the marimba climbs. */
 
 const N = engine.N;
-const STEP = 190; // ms between merges of a chain: long enough to read each one
+/* Pace (2026-11-09). A short chain, one or two merges, is read at a glance,
+   so it plays quick; a long one keeps the beat that lets each merge be read,
+   and speeds up as it climbs. */
+const STEP = 190; // ms between merges of a sweep's long chain
+const STEP_SHORT = 120; // ...and of a sweep that merges once or twice
+const SHORT = 2; // merges a chain may have and still count as short
+type Pace = { base: number; fly: number; gaps: number[] };
 /** A cascade speeds up as it goes: the gap before merge k+1. */
-const GAPS = [180, 160, 140, 120, 110];
-const chainAt = (k: number) => GAPS.slice(0, k).reduce((a, b) => a + b, 0) + Math.max(0, k - GAPS.length) * GAPS[GAPS.length - 1];
-const FLY = 110; // ms for an absorbed tile to fly into its partner
+const LONG_PACE: Pace = { base: 90, fly: 110, gaps: [180, 160, 140, 120, 110] };
+const SHORT_PACE: Pace = { base: 50, fly: 80, gaps: [120] };
+const paceOf = (merges: number) => (merges <= SHORT ? SHORT_PACE : LONG_PACE);
+const chainAt = (k: number, gaps: number[]) => gaps.slice(0, k).reduce((a, b) => a + b, 0) + Math.max(0, k - gaps.length) * gaps[gaps.length - 1];
+const sweepStep = (merges: number) => (merges <= SHORT ? STEP_SHORT : STEP);
 const BURST_MS = 620; // ms the crumbs of a merge fly and fall
 const STUD_FLY = 520; // ms an earned sweep's stud flies to the sweep key
 const PLATE = 6; // px each sweep layer shows under the board
@@ -195,6 +203,7 @@ export default function Game() {
   const [chain, setChain] = useState(0);
   const settle = () => {
     clearTimers();
+    pending.current = [];
     setBonusHeld(false);
     setChain(0);
     setFlights([]);
@@ -409,7 +418,7 @@ export default function Game() {
   };
   /** One merge lands: the note, the points, the press. A milestone rings its
       bell instead of the note and sends a wave of its colour across the board. */
-  const land = (at: number, level: number, milestone: boolean, board: number[], pts = level, step = 0) => {
+  const land = (at: number, level: number, milestone: boolean, board: number[], pts = level, step = 0, chainLen = 0) => {
     setPops((pp) => ({ ...pp, [at]: Date.now() }));
     if (milestone) {
       // The goal itself rings with the win card that follows, not a bell.
@@ -433,7 +442,8 @@ export default function Game() {
        score jumps with it. A new best tile throws the most. */
     {
       const id = `${at}-${Date.now()}-${step}`;
-      const power = milestone ? 5 : Math.min(4, step + 1);
+      // The merge that ends a long chain throws the most of all.
+      const power = chainLen >= 3 ? Math.min(7, chainLen + 2) : milestone ? 5 : Math.min(4, step + 1);
       // At most three bursts in the air; spent ones are cleared in one go
       // once the board is quiet, so a long chain costs no extra renders.
       setBursts((e) => [...e.slice(-2), { id, at, v: level, n: 1 + power * 2, power }]);
@@ -443,6 +453,39 @@ export default function Game() {
     }
     float(at, pts, Math.round(pts / level));
     thump(milestone ? Math.max(level, 192) : level, step);
+    if (chainLen >= 3) slam(chainLen);
+  };
+
+  /* The end of a long chain hits (2026-11-09): on the frame its last merge
+     lands the board shakes, harder the longer the chain, a low slam sounds
+     under the note and the hand gets a heavy press. A chain of one or two
+     merges gets none of this, so the hit stays the reward for a long one. */
+  const slam = (merges: number) => {
+    const a = Math.min(9, 3 + (merges - 3) * 2);
+    const j = (x: number, y: number) => [x * a, y * a] as const;
+    const path = [j(1, -0.6), j(-0.9, 0.7), j(0.6, 0.5), j(-0.4, -0.4), j(0.2, 0.2)];
+    const run = (i: 0 | 1) =>
+      withSequence(...path.map((p) => withTiming(p[i], { duration: 40, easing: Easing.out(Easing.quad) })), withTiming(0, { duration: 90, easing: Easing.out(Easing.cubic) }));
+    sx.value = run(0);
+    sy.value = run(1);
+    fx.slam(merges);
+  };
+
+  /* Merges still to land from the last move. A new move can be made while a
+     chain plays out; then whatever it had left lands at once, each tile
+     popping on the board as it is, with one note, and the new move plays. */
+  const pending = useRef<{ t: number; at: number; step: number; chain: number }[]>([]);
+  const expect = (ms: number, at: number, step: number, chain = 0) => pending.current.push({ t: Date.now() + ms, at, step, chain });
+  const flush = () => {
+    const now = Date.now();
+    const left = pending.current.filter((p) => p.t > now);
+    pending.current = [];
+    if (!left.length) return;
+    setPops((pp) => ({ ...pp, ...Object.fromEntries(left.filter((p) => g.board[p.at] > 0).map((p) => [p.at, now])) }));
+    fx.merge(0, Math.max(...left.map((p) => p.step)));
+    // A long chain cut short still hits: its reward is not lost to a quick hand.
+    const chain = Math.max(...left.map((p) => p.chain));
+    if (chain >= 3) slam(chain);
   };
 
   /* 1919 points, the year the Bauhaus opened: a milestone of the score,
@@ -571,6 +614,7 @@ export default function Game() {
       return;
     }
     lift.value = 0;
+    flush();
     settle();
     const before = g.board.slice();
     const s0 = g.score;
@@ -589,7 +633,7 @@ export default function Game() {
     /* The chain, one merge per step: the absorbed tile flies into its
        partner, and on arrival the partner flashes, its number kicks, the note
        plays, the haptic taps and the points float up, all on the same frame. */
-    const done = playChain(frame, res.steps, milestonesIn(res.steps.map((st) => st.level)), 90);
+    const done = playChain(frame, res.steps, milestonesIn(res.steps.map((st) => st.level)), 0);
     later(done + 20, () => setShown(g.board.slice()));
     if (res.refilled) later(done + 120, () => fx.tray());
     // A chain of two or more earns a sweep: its layer slides in under the
@@ -599,7 +643,8 @@ export default function Game() {
        the frame it lands, so a chain of three shows how far it got: three of
        five. A full layer becomes the earned sweep. */
     if (counted && g.cfg.chainBonus && res.steps.length) {
-      res.steps.slice(0, g.cfg.chainBonus).forEach((_, k) => later(90 + chainAt(k) + FLY, () => setChain(k + 1)));
+      const pc = paceOf(res.steps.length);
+      res.steps.slice(0, g.cfg.chainBonus).forEach((_, k) => later(pc.base + chainAt(k, pc.gaps) + pc.fly, () => setChain(k + 1)));
       later(done + (res.bonus ? 0 : 700), () => setChain(0));
     }
     /* An earned sweep is seen being earned: a yellow stud pops out of the
@@ -624,30 +669,34 @@ export default function Game() {
     afterMove(done);
   };
 
-  /** Plays a placed piece's chain from `base` ms: one merge per step, the
-      absorbed tile flies into its partner, and on arrival the partner flashes,
-      its number kicks, the note plays, the haptic taps and the points float up,
-      all on the same frame. `frame` is the board with the piece laid. Returns
-      when the last merge has landed. */
+  /** Plays a placed piece's chain from `base` ms (the frame it was laid): one
+      merge per step, the absorbed tile flies into its partner, and on arrival
+      the partner flashes, its number kicks, the note plays, the haptic taps
+      and the points float up, all on the same frame. A short chain plays
+      quicker than a long one (paceOf). `frame` is the board with the piece
+      laid. Returns when the last merge has landed. */
   const playChain = (frame: number[], steps: Step[], marks: boolean[], base: number) => {
+    const pc = paceOf(steps.length);
     steps.forEach((st, k) => {
-      const t0 = base + chainAt(k);
+      const t0 = base + pc.base + chainAt(k, pc.gaps);
       const value = frame[st.absorbed[0]];
       for (const a of st.absorbed) frame[a] = 0;
       const mid = frame.slice();
       frame[st.anchor] = st.level;
       const snap = frame.slice();
+      const last = k === steps.length - 1;
+      expect(t0 + pc.fly, st.anchor, k, last ? steps.length : 0);
       later(t0, () => {
         setShown(mid);
-        setFlights((f) => [...f, ...st.absorbed.map((a) => ({ id: `${t0}-${a}-${Date.now()}`, m: { from: a, to: st.anchor, value, merges: true }, ms: FLY }))]);
+        setFlights((f) => [...f, ...st.absorbed.map((a) => ({ id: `${t0}-${a}-${Date.now()}`, m: { from: a, to: st.anchor, value, merges: true }, ms: pc.fly }))]);
       });
-      later(t0 + FLY, () => {
+      later(t0 + pc.fly, () => {
         setShown(snap);
         setFlights((f) => f.filter((x) => !st.absorbed.some((a) => x.m.from === a)));
-        land(st.anchor, st.level, marks[k], snap, st.pts, k);
+        land(st.anchor, st.level, marks[k], snap, st.pts, k, last ? steps.length : 0);
       });
     });
-    return base + chainAt(Math.max(0, steps.length - 1)) + (steps.length ? FLY : 0);
+    return steps.length ? base + pc.base + chainAt(steps.length - 1, pc.gaps) + pc.fly : base;
   };
 
   const holdRef = useRef<Hold | null>(null);
@@ -678,8 +727,10 @@ export default function Game() {
      takes the smaller in, so the end is often a tile already on the board.
      The board shows exactly this, so a merge never comes as a surprise. */
   const preview = useMemo(() => {
-    if (!hold || !target || !engine.fits(shown, hold.piece, target.gx, target.gy)) return null;
-    const b = shown.slice();
+    /* On the game's board, not the one shown: a piece can be picked up while
+       the last chain still plays out, and it lands on where that chain ends. */
+    if (!hold || !target || !engine.fits(g.board, hold.piece, target.gx, target.gy)) return null;
+    const b = g.board.slice();
     const { laid, steps } = engine.applyPlacement(b, hold.piece, target.gx, target.gy, g.cfg.absorb);
     const own = new Map(laid.map((at, k) => [at, hold.piece.cells[k][2]] as [number, number]));
     const eaten = new Set<number>();
@@ -687,7 +738,8 @@ export default function Game() {
     const result: Record<number, number> = {};
     for (const st of steps) if (b[st.anchor] > 0) result[st.anchor] = b[st.anchor];
     return { laid: own, eaten, result, merges: steps.length };
-  }, [shown, hold, target]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, hold, target, store.version]);
   /* The sweep a held move would earn: its stud lights as a ghost on the
      sweep key before the piece is let go, so a long chain can be aimed for. */
   const earns = !!preview && counted && !!g.cfg.chainBonus && preview.merges >= g.cfg.chainBonus && g.sweeps < g.cfg.sweepsMax;
@@ -841,6 +893,7 @@ export default function Game() {
       tilt(dir, 1.5, 0);
       return;
     }
+    flush();
     settle();
     const before = g.board.slice();
     const moves = slideMoves(before, dir, !!g.cfg.sweepChain);
@@ -882,17 +935,19 @@ export default function Game() {
     });
     // The k-th merge of one tile in its line is step k of its chain.
     const nth: Record<number, number> = {};
+    const beat = sweepStep(res.made.length);
     res.made.forEach((m, k) => {
       const step = (nth[m.at] = (nth[m.at] ?? -1) + 1);
-      later(SLIDE + k * STEP, () => {
+      expect(SLIDE + k * beat, m.at, step, k === res.made.length - 1 && !push?.steps.length ? res.made.length : 0);
+      later(SLIDE + k * beat, () => {
         setShown((sh) => (sh[m.at] === m.level ? sh : Object.assign(sh.slice(), { [m.at]: m.level })));
-        land(m.at, m.level, marks[k], after, m.pts, step);
+        land(m.at, m.level, marks[k], after, m.pts, step, k === res.made.length - 1 && !push?.steps.length ? res.made.length : 0);
       });
     });
-    let done = SLIDE + res.made.length * STEP;
+    let done = SLIDE + res.made.length * beat;
     later(done, () => setShown(after));
     const sMade = s0 + res.made.reduce((t, m) => t + m.level, 0);
-    if (res.made.length) bauhausCheck(s0, SLIDE + (res.made.length - 1) * STEP, res.made[res.made.length - 1].at, sMade);
+    if (res.made.length) bauhausCheck(s0, SLIDE + (res.made.length - 1) * beat, res.made[res.made.length - 1].at, sMade);
     /* The push: the next tray piece leaves its slot and rides in from beyond
        the far edge into the room the slide made. It lands with the place
        sound and haptic on the frame it stops, then its own chain plays. */
@@ -908,7 +963,7 @@ export default function Game() {
         setLands((l) => ({ ...l, ...Object.fromEntries(push.laid.map((i) => [i, now])) }));
         fx.place(push.piece.cells.length);
       });
-      const chainEnd = playChain(frame, push.steps, allMarks.slice(res.made.length), enterAt + PUSH_MS + 90);
+      const chainEnd = playChain(frame, push.steps, allMarks.slice(res.made.length), enterAt + PUSH_MS);
       if (push.steps.length) bauhausCheck(sMade, chainEnd, push.steps[push.steps.length - 1].anchor);
       done = chainEnd;
       later(done + 20, () => setShown(g.board.slice()));
@@ -1176,7 +1231,7 @@ export default function Game() {
                   key={`${trayId.current}-${slot}-${JSON.stringify(p.cells)}`}
                   delay={slot * 60}
                   rise={trayCell}
-                  opacity={p.used || hold?.slot === slot || returning === slot ? 0 : g.over || !fitsSomewhere(shown, p) ? 0.35 : 1}>
+                  opacity={p.used || hold?.slot === slot || returning === slot ? 0 : g.over || !fitsSomewhere(g.board, p) ? 0.35 : 1}>
                   <Field variant="piece" {...pieceGrid(p)} cell={trayCell} gap={gap} />
                 </TrayPiece>
                 </Animated.View>

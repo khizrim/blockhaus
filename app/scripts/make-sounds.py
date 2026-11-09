@@ -284,6 +284,15 @@ def main():
     # Game over: two soft notes gliding down.
     write('over', mix(osc('sine', 330, 220, 0.3, 0.2), osc('sine', 247, 165, 0.4, 0.2, 0.18)), 0.45)
 
+    # The end of a long chain (2026-11-09): a low slam under the last note.
+    # A sub drop and a plastic crack, with C and G an octave down so it sits
+    # in the key; heavier and longer for a chain of 4, and of 5 and more.
+    for k, h in enumerate([1.0, 1.25, 1.5]):
+        boom = osc('sine', 120 / h, 42 / h, 0.22 * h, 0.5)
+        crack = mix(burst(0.03, 1500 / h, 0.9, 0.35), knock(1.2 * h, 0.8))
+        body = mix(mallet(note(0) / 2, 0.5 * h, 0.16), layer(np.zeros(0), mallet(note(3) / 2, 0.5 * h, 0.12), 0.01))
+        write(f'slam-{k + 1}', mix(boom, crack, body), 0.5 + 0.08 * k)
+
 
 if __name__ == '__main__':
     main()
