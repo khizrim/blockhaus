@@ -15,6 +15,7 @@ import { assetBytes, audioContext, decode } from './webAudio';
 
 const SRC = {
   pick: require('../../assets/sounds/pick.wav'),
+  putback: require('../../assets/sounds/putback.wav'),
   'place-1': require('../../assets/sounds/place-1.wav'),
   'place-2': require('../../assets/sounds/place-2.wav'),
   'place-3': require('../../assets/sounds/place-3.wav'),
@@ -98,7 +99,7 @@ function initWeb() {
   sfxOut.connect(c.destination);
   // The game's own notes first, the rest after; one at a time, so the
   // decoding never fights the first frames of the board.
-  const order = [...SOUND_NAMES].sort((a, b) => Number(!/^(pick|place|merge|sweep|knock)/.test(a)) - Number(!/^(pick|place|merge|sweep|knock)/.test(b)));
+  const order = [...SOUND_NAMES].sort((a, b) => Number(!/^(pick|putback|place|merge|sweep|knock)/.test(a)) - Number(!/^(pick|putback|place|merge|sweep|knock)/.test(b)));
   (async () => {
     for (const name of order) {
       try {
@@ -264,7 +265,7 @@ export const fx = {
     buzz(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
   },
   /** A piece let go off the board goes home: not a mistake, so no warning. */
-  putBack: () => play('pick'),
+  putBack: () => play('putback'),
   invalid: () => {
     play('invalid');
     buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));

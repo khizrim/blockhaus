@@ -95,9 +95,9 @@ def rms_peak(x):
     return max(np.sqrt((x[i:i + w] ** 2).mean()) for i in range(0, max(1, len(x) - w), 220))
 
 
-def write(name, x, fade=0.12, level=rms_head):
-    """Match the loudness of the sound being replaced, fade the tail, write."""
-    ref = level(old(name))
+def write(name, x, fade=0.12, level=rms_head, ref=None):
+    """Match the loudness of the sound being replaced (or `ref`), fade the tail, write."""
+    ref = level(old(name)) if ref is None else ref
     x = x - x.mean()
     n = int(fade * SR)
     x[-n:] *= np.linspace(1, 0, n) ** 2
@@ -130,9 +130,16 @@ def felt(h=1.0):
 
 def board():
     """The board's moves (picked by Khizri on the sound board, 2026-11-09):
+    picking up is a soft marimba G4 and putting back E4 to C4;
     placing is a short low marimba note in key, lower for a bigger piece
     (E3, C3, G2); a sweep is a cabasa roll swelling on release that stops
     dead at 190 ms; the wall hit is a soft felt thump, a flam for many blocks."""
+    # Picking up and putting back (picked 2026-11-09): a soft high marimba
+    # G4 when a piece is lifted, E4 falling to C4 when it settles back in
+    # the tray, so the two never sound alike. A touch under the old pick.
+    PICK_LEVEL = 0.06
+    write('pick', render([(0, MARIMBA, 67, 0.06, 70)], 0.2), 0.02, rms_peak, PICK_LEVEL)
+    write('putback', render([(0, MARIMBA, 64, 0.05, 64), (0.05, MARIMBA, 60, 0.08, 56)], 0.25), 0.02, rms_peak, PICK_LEVEL)
     for name, n in [('place-1', 52), ('place-2', 48), ('place-3', 43)]:
         write(name, render([(0, MARIMBA, n, 0.12, 100)], 0.25), 0.06, rms_peak)
     for name, extra in [('sweep-1', []), ('sweep-2', roll(MARACAS, 0.17, 7, 45, 90))]:

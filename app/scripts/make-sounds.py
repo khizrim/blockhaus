@@ -208,8 +208,7 @@ def main():
     # Placing, sweeps and the wall knock are the band's wooden kit now:
     # scripts/music/make-stings.py.
 
-    # Picking up: a short breath of noise.
-    write('pick', burst(0.05, 1800, 1.2, 0.12), 0.3)
+    # Picking up and putting back: scripts/music/make-stings.py.
 
     # Dropped where it does not fit: the repelling magnet, two low pushes.
     write('invalid', mix(osc('sine', 110, 80, 0.12, 0.25), osc('sine', 110, 80, 0.1, 0.18, 0.07)), 0.4)
