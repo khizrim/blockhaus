@@ -448,3 +448,14 @@ test('a stone walls a sweep and never merges', () => {
   const g = E.newGame({ stones: [14] }, E.seeded(1));
   assert.equal(g.board[14], E.STONE);
 });
+
+test('a cascade at a fork climbs the longer ladder', () => {
+  // A 1 laid between two 2s: the left 2 leads nowhere, the right one sits
+  // by a 3, so the chain goes right and makes a 6.
+  const b = empty();
+  b[idx(0, 1)] = 2; b[idx(2, 1)] = 2; b[idx(3, 1)] = 3;
+  const { steps } = E.applyPlacement(b, piece(1), 1, 1);
+  assert.equal(steps.length, 2);
+  assert.equal(b[idx(0, 1)], 2);
+  assert.equal(steps[1].level, 6);
+});

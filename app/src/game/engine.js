@@ -140,23 +140,45 @@
   function applyPlacement(board, piece, ox, oy, absorb = 'big') {
     const laid = piece.cells.map(([dx, dy]) => idx(ox + dx, oy + dy));
     piece.cells.forEach(([, , v], k) => { board[laid[k]] = v; });
+    return { laid, steps: cascade(board, [...laid], absorb, true) };
+  }
 
+  /** Runs a cascade from the tiles in `frontier`. A tile that can pair with
+      two neighbours (a 3 between two 3s) takes the one that lets the chain
+      run longest (2026-11-09): the chain always climbs the longest ladder,
+      so a player can read where it goes. Before, the first neighbour in
+      left, right, up, down order won, which no one could see. Ties of
+      equal length keep that order. */
+  function cascade(board, frontier, absorb, look) {
     const steps = [];
-    const frontier = [...laid];
+    const join = (b, i, n) => {
+      const lvl = merged(b[i], b[n]);
+      const into = absorb === 'big' && b[n] >= b[i] ? n : i;
+      const from = into === i ? n : i;
+      b[from] = 0;
+      b[into] = lvl;
+      return { absorbed: [from], anchor: into, level: lvl };
+    };
     while (frontier.length) {
       const i = frontier.shift();
       if (board[i] <= 0) continue;
-      const partner = neighbours(i).find(n => board[n] > 0 && pairs(board[i], board[n]));
-      if (partner === undefined) continue;
-      const lvl = merged(board[i], board[partner]);
-      const into = absorb === 'big' && board[partner] >= board[i] ? partner : i;
-      const from = into === i ? partner : i;
-      steps.push({ absorbed: [from], anchor: into, level: lvl });
-      board[from] = 0;
-      board[into] = lvl;
-      frontier.push(into);
+      const cand = neighbours(i).filter(n => board[n] > 0 && pairs(board[i], board[n]));
+      if (!cand.length) continue;
+      let partner = cand[0];
+      if (look && cand.length > 1) {
+        let best = -1;
+        for (const n of cand) {
+          const b = board.slice();
+          const st = join(b, i, n);
+          const len = cascade(b, [...frontier, st.anchor], absorb, false).length;
+          if (len > best) { best = len; partner = n; }
+        }
+      }
+      const st = join(board, i, partner);
+      steps.push(st);
+      frontier.push(st.anchor);
     }
-    return { laid, steps };
+    return steps;
   }
 
   /* ---- sweeping ----------------------------------------------------------

@@ -237,3 +237,19 @@ pair barely changes anything.
 Shipped: bonus at three and the square at weight 0.6 in cascade mode. The
 square takes back the room the extra sweeps give, so the game is about as
 long as before, but a sweep now comes about once in seven placements.
+
+## A chain at a fork climbs the longer ladder (2026-11-09)
+
+A tile that could pair with two neighbours (a 3 between two 3s, a 1
+between two 2s) used to take the first in left, right, up, down order,
+which a player cannot see. It happened in about 8% of placements that
+merge. Now it takes the neighbour that lets the chain run longest. Same
+60 games on the cascade rules above, thinker / noisy:
+
+| fork rule | moves | 192 / 384 | median score |
+|---|---|---|---|
+| fixed order (was) | 218 / 187 | 70 / 25%, 52 / 12% | 3204 / 2661 |
+| longest ladder | 235 / 175 | 82 / 25%, 50 / 20% | 3771 / 2433 |
+
+The random swiper is unchanged (44 moves, reaches nothing). While a piece
+is held, the sweep it would earn shows as a half-lit stud on the sweep key.
