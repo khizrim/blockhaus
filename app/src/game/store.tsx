@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import engine, { type Dir, type Game, type Piece, type PlaceResult, type SweepResult } from './engine';
-import { FIRST_BOARD, FIRST_TRAY, LESSONS } from './lessons';
+import { FIRST_TRAY, LESSONS } from './lessons';
 
 /* The one running game and the player's record, shared by every screen and
    saved after every move, so closing the app never loses a game. */
@@ -36,13 +36,16 @@ type Store = {
   winSeen: boolean;
   /** A game worth continuing: started and not over. */
   inProgress: boolean;
+  /** In the lessons, with a free game put aside to go back to. */
+  resumes: boolean;
   /** The first-game lesson was finished or skipped. */
   learned: boolean;
   /** Index of the lesson on the board, or null in a normal game. */
   lesson: number | null;
   startLesson: (k: number) => void;
-  /** Leave the lessons for a fresh game. */
-  finishLessons: () => void;
+  /** Leave the lessons: back to the game put aside, else a new one, which
+      goes on from the lesson board when `carry` (the lessons were finished). */
+  finishLessons: (carry?: boolean) => void;
   place: (slot: number, ox: number, oy: number) => PlaceResult | null;
   sweep: (dir: Dir) => SweepResult | null;
   newGame: () => void;
@@ -190,13 +193,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [lesson, nextRules],
   );
 
-  const finishLessons = useCallback(() => {
+  const finishLessons = useCallback((carry = false) => {
     setLearned(true);
     setLesson(null);
     if (saved.current && saved.current.moves > 0 && !saved.current.over) gRef.current = saved.current;
+    else if (!carry) gRef.current = engine.newGame(rulesConfig(nextRules));
     else {
+      /* The first game goes on from the lessons' last board and key: the
+         same tiles, the same studs, a fresh tray and the score from 0. */
+      const L = gRef.current;
       const g = engine.newGame(rulesConfig(nextRules));
-      for (const [x, y, v] of FIRST_BOARD) g.board[y * engine.N + x] = v;
+      g.board = L.board.map((v) => (v === engine.STONE ? 0 : v));
+      g.sweeps = L.sweeps;
       g.tray = [...FIRST_TRAY.map((p) => ({ cells: p.cells.map((c) => [...c] as [number, number, number]), used: false })), g.tray[2]];
       g.bestTile = Math.max(...g.board);
       gRef.current = g;
@@ -221,6 +229,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       },
       winSeen,
       inProgress: lesson === null && g.moves > 0 && !g.over,
+      resumes: lesson !== null && !!saved.current && saved.current.moves > 0 && !saved.current.over,
       learned,
       lesson,
       startLesson,

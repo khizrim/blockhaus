@@ -308,26 +308,12 @@ export default function Game() {
       peak.current = g.bestTile;
       if (store.lesson !== null) stageLesson(prevEnd.current ?? new Array(N * N).fill(engine.STONE), g.board);
       prevEnd.current = null;
-      if (introStud.current && store.lesson === null) {
-        introStud.current = false;
-        /* Out of the lessons: their phrase plays, and the first game's tray
-           brings its sweep the way every new tray does when the key is
-           empty: a stud rises out of the tray into the key. */
+      if (introGo.current && store.lesson === null) {
+        introGo.current = false;
+        /* Out of the lessons and into the game on the same board: nothing on
+           it moves. Only their phrase plays, the score comes up and the tray
+           deals its first pieces. */
         later(120, () => fx.learned());
-        // The first game's ladder pops in, the way lesson tiles did.
-        stageLesson(new Array(N * N).fill(0), g.board);
-        setBonusHeld(true);
-        loudOnce('tray');
-        later(700, () => {
-          slotRefs.current[1]?.measureInWindow((sx_, sy_, sw, sh) => {
-            flyStud({ x: sx_ + sw / 2 - 9 - boardAt.current.x, y: sy_ + sh / 2 - 9 - boardAt.current.y }, 0, 'in', true);
-          });
-          later(STUD_FLY, () => {
-            setStudFly(null);
-            setBonusHeld(false);
-            fx.bonus();
-          });
-        });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -337,8 +323,8 @@ export default function Game() {
      grew, its new ring of sockets sinks in with a ratchet of clicks, then
      the step's new tiles pop up one by one, each a note higher. */
   const prevEnd = useRef<number[] | null>(null);
-  /** The lessons just ended: the first game's sweep flies in from the tray. */
-  const introStud = useRef(false);
+  /** The lessons just ended and the first game goes on from their board. */
+  const introGo = useRef(false);
   const [opened, setOpened] = useState<Set<number> | null>(null);
   const stageLesson = (from: number[], to: number[]) => {
     const grown = to.map((v, i) => (from[i] < 0 && v >= 0 ? i : -1)).filter((i) => i >= 0);
@@ -481,11 +467,21 @@ export default function Game() {
     lineKick.value = withSequence(withTiming(1.12, { duration: 0 }), withTiming(1, back(320, 2.4)));
   };
 
-  /* The end of the lessons. The lesson board breaks up: every tile lifts and
-     drops away in a wave from the centre, one soft knock each. Then the real
-     game: the board is empty, the goal kicks into the line, and the track to
-     384 assembles square by square while the marimba climbs the milestones. */
+  /* The end of the lessons. The first game goes on from where they ended
+     (2026-11-09, Khizri: the lessons ended on a full key and the game began
+     on a new board with a spent one): the same board, the same studs, a new
+     tray rising from its slots, and the track to 384 assembles square by
+     square. Only a replay from the menu, with a game put aside, still breaks
+     the lesson board up (every tile lifts and drops away in a wave from the
+     centre) to go back to that game. */
   const finale = () => {
+    if (!store.resumes) {
+      introGo.current = true;
+      trayId.current++;
+      skipLessons(true);
+      setTrackIntro(Date.now());
+      return;
+    }
     // The engine's board, not the shown one: this runs from a timer set
     // before the last move finished drawing.
     const board = g.board.slice();
@@ -494,15 +490,14 @@ export default function Game() {
     fx.sweep();
     later(SCATTER_MS, () => {
       setScatter(null);
-      introStud.current = true;
       skipLessons();
       setTrackIntro(Date.now());
     });
   };
 
-  const skipLessons = () => {
+  const skipLessons = (carry = false) => {
     settle();
-    store.finishLessons();
+    store.finishLessons(carry);
   };
 
   /** Of a move's merge levels, in order, which ones make a new milestone:

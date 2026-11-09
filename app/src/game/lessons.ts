@@ -27,11 +27,12 @@ import engine, { type Dir, type Game, type Piece } from './engine';
                                   beside it: a run to 24, or one short merge
                                   and the step comes back. A real choice.
      5  6×6  the swipe            spends a stud: 24 + 24 = 48
-     6  6×6  the 2×2 square       four 1s at once, a chain of four: its stud
+     6  6×6  the 2×2 square       four 1s at once, a chain of three: its stud
                                   sets into the socket the swipe emptied, so
                                   the lessons end on a full key (2026-11-09,
                                   after the game designer's review: earned,
-                                  spent, earned again)
+                                  spent, earned again). The game goes on
+                                  from this board: no new board, no reset.
 
    Only the taught moves are possible: a piece goes in only at its step's
    cells, the board slides only the taught way. Cells outside the plate hold
@@ -144,9 +145,10 @@ export const LESSONS: Lesson[] = [
     title: 'Квадрат ставит четыре блока сразу и возвращает сдвиг',
     formula: [{ grid: [[1, 1], [1, 1]] }, '=', 'stud'],
     open: FULL,
-    // Three of the square's 1s find a 2; two of the 3s make a 6: four
-    // merges, and the stud fills the socket the swipe emptied.
-    board: board(FULL, [[0, 2, 48], [0, 4, 2], [1, 2, 2], [2, 2, 2]]),
+    // A 2 and a 3 come in under the 48. Two of the square's 1s find the
+    // two 2s and their 3s make a 6: three merges, and the stud fills the
+    // socket the swipe emptied. The new 3 waits under the 6 for the game.
+    board: board(FULL, [[0, 2, 48], [0, 3, 2], [0, 4, 2], [0, 5, 3]]),
     tray: [none(), piece([[0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]]), none()],
     sweeps: 1,
     moves: [{ slot: 1, at: [at(1, 3)] }],
@@ -154,8 +156,11 @@ export const LESSONS: Lesson[] = [
   },
 ];
 
-/** The first game after the lessons does not start blank: a ladder 12, 6, 3
-    is laid out and the tray holds a 2 and a 1, so the first thing the player
-    can do alone is what the lessons ended on: finish the ladder, then fire it. */
-export const FIRST_BOARD: [number, number, number][] = [[1, 2, 12], [2, 2, 6], [3, 2, 3]];
+/** The lessons do not hand over to a new board: the first game goes on from
+    the last step's board, with its full key (2026-11-09, Khizri: «Хочется,
+    чтобы игра продолжалась дальше с тем же набором и с той же доской»).
+    Step 6 leaves 48, a 6 with a 3 under it and two 1s; the first tray holds
+    a 2 and a 1, so the first thing the player can do alone is what step 4
+    taught: lay the 2 by the 3 where it merges with nothing, then fire the 1
+    between them, 1 → 3 → 6 → 12. */
 export const FIRST_TRAY: Piece[] = [piece([[0, 0, 2]]), piece([[0, 0, 1]])];
