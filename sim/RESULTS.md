@@ -211,3 +211,45 @@ fit (more weight on the last piece of a tray), cascade rules, 60 games:
 | blurred, plans for it | 234 | 90 / 65 / 20% | 3678 |
 
 Looking ahead pays for both players, so it becomes the default.
+
+## Sweeps for chains of three, and the 2x2 square (2026-11-09)
+
+With the bonus at five merges a careful bot earned 1.6 sweeps in a 210-move
+game, under 1% of placements: a player never meets it. `node sim/earn.js`,
+60 games, numbers before this change (one-move-ahead "thinker" / blurred
+"noisy" / random "swiper"):
+
+| rule | thinker moves | bonus per placement | thinker 192 / 384 | noisy 192 / 384 | swiper moves |
+|---|---|---|---|---|---|
+| bonus at 5 (was) | 210 | 0.9% | 62 / 17% | 47 / 5% | 47 |
+| bonus at 4 | 227 | 3.5% | 73 / 17% | 40 / 8% | 47 |
+| bonus at 3 | 286 | 14% | 77 / 38% | 68 / 17% | 54 |
+| 3 → +1, 4 → +2, 6 → +3, three in hand | 341 | 21% | 88 / 55% | 73 / 43% | 61 |
+| no tray sweep, only chains of 3 | 155 | 21% | 32 / 2% | 37 / 5% | 33 |
+| bonus at 3 + 2x2 square (now) | 218 | 15% | 70 / 25% | 52 / 12% | 44 |
+| bonus at 3 + square + T | 194 | 16% | 62 / 15% | 45 / 12% | 43 |
+
+New shapes on the old rule, thinker moves / 192: square 158 / 48%, square + T
+138 / 32%, four-long bar 165 / 45%, diagonal pair 187 / 48%, pair with a gap
+206 / 65%. Every four-cell piece makes the board drown faster; the gapped
+pair barely changes anything.
+
+Shipped: bonus at three and the square at weight 0.6 in cascade mode. The
+square takes back the room the extra sweeps give, so the game is about as
+long as before, but a sweep now comes about once in seven placements.
+
+## A chain at a fork climbs the longer ladder (2026-11-09)
+
+A tile that could pair with two neighbours (a 3 between two 3s, a 1
+between two 2s) used to take the first in left, right, up, down order,
+which a player cannot see. It happened in about 8% of placements that
+merge. Now it takes the neighbour that lets the chain run longest. Same
+60 games on the cascade rules above, thinker / noisy:
+
+| fork rule | moves | 192 / 384 | median score |
+|---|---|---|---|
+| fixed order (was) | 218 / 187 | 70 / 25%, 52 / 12% | 3204 / 2661 |
+| longest ladder | 235 / 175 | 82 / 25%, 50 / 20% | 3771 / 2433 |
+
+The random swiper is unchanged (44 moves, reaches nothing). While a piece
+is held, the sweep it would earn shows as a half-lit stud on the sweep key.

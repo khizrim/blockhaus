@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Field, type CellLook } from '@/components/Field';
 import { IconButton, Key, Screen } from '@/components/ui';
@@ -639,8 +639,11 @@ export default function Game() {
     for (const st of steps) for (const a of st.absorbed) if (!own.has(a)) eaten.add(a);
     const result: Record<number, number> = {};
     for (const st of steps) if (b[st.anchor] > 0) result[st.anchor] = b[st.anchor];
-    return { laid: own, eaten, result };
+    return { laid: own, eaten, result, merges: steps.length };
   }, [shown, hold, target]);
+  /* The sweep a held move would earn: its stud lights as a ghost on the
+     sweep key before the piece is let go, so a long chain can be aimed for. */
+  const earns = !!preview && counted && !!g.cfg.chainBonus && preview.merges >= g.cfg.chainBonus && g.sweeps < g.cfg.sweepsMax;
 
   /* ---------- what each cell looks like right now ---------- */
   const look = useCallback(
@@ -1002,7 +1005,7 @@ export default function Game() {
             {chainMult(g.cfg.chainScore, chain) > 1 ? <MultChip k={chainMult(g.cfg.chainScore, chain)} /> : null}
           </Animated.View>
           <View ref={keyRef} collapsable={false}>
-            <SweepKey studs={counted ? g.cfg.sweepsMax : 0} filled={g.sweeps - (bonusHeld ? 1 : 0)} onPress={hintSweep} />
+            <SweepKey studs={counted ? g.cfg.sweepsMax : 0} filled={g.sweeps - (bonusHeld ? 1 : 0)} ghost={earns} onPress={hintSweep} />
           </View>
         </View>
 
@@ -1673,7 +1676,7 @@ function MultChip({ k }: { k: number }) {
 
 /** The sweep key: a four-way arrow and one stud socket per sweep the game
     can hold; a held sweep is a yellow chip in its socket. */
-function SweepKey({ studs, filled, onPress }: { studs: number; filled: number; onPress: () => void }) {
+function SweepKey({ studs, filled, ghost = false, onPress }: { studs: number; filled: number; ghost?: boolean; onPress: () => void }) {
   const { c } = useTheme();
   const empty = studs > 0 && filled <= 0;
   return (
@@ -1684,7 +1687,7 @@ function SweepKey({ studs, filled, onPress }: { studs: number; filled: number; o
       {studs > 0 ? (
         <View style={{ flexDirection: 'row', gap: 5 }}>
           {Array.from({ length: studs }, (_, k) => (
-            <Stud key={k} on={k < filled} />
+            <Stud key={k} on={k < filled} ghost={ghost && k === Math.max(0, filled)} />
           ))}
         </View>
       ) : null}
@@ -1692,8 +1695,15 @@ function SweepKey({ studs, filled, onPress }: { studs: number; filled: number; o
   );
 }
 
-function Stud({ on }: { on: boolean }) {
+function Stud({ on, ghost = false }: { on: boolean; ghost?: boolean }) {
   const { isDark } = useTheme();
+  // A stud the held move would fill: its yellow breathes in, half lit.
+  const pulse = useSharedValue(0);
+  useEffect(() => {
+    pulse.value = ghost ? withRepeat(withSequence(withTiming(0.6, { duration: 300 }), withTiming(0.3, { duration: 300 })), -1) : withTiming(0, { duration: 100 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ghost]);
+  const ghostSt = useAnimatedStyle(() => ({ opacity: pulse.value }));
   const k = useSharedValue(on ? 1 : 0);
   useEffect(() => {
     k.value = on ? withSequence(withTiming(1.5, { duration: 0 }), withTiming(1, { duration: 180 })) : withTiming(0, { duration: 120 });
@@ -1705,6 +1715,7 @@ function Stud({ on }: { on: boolean }) {
       <Animated.View
         style={[{ position: 'absolute', left: 0, top: 0, width: 14, height: 14, borderRadius: 4, backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 2px 0 #C9A21F, inset 0 1px 0 rgba(255,255,255,0.8)' }, st]}
       />
+      {!on ? <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: 14, height: 14, borderRadius: 4, backgroundColor: '#FFD43B' }, ghostSt]} /> : null}
     </View>
   );
 }
