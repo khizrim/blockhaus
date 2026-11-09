@@ -11,7 +11,7 @@ import { dur, enter, exit, HIT, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Game as EngineGame, type Piece, type Step } from '@/game/engine';
-import { LESSONS } from '@/game/lessons';
+import { FIRST_MOVES, LESSONS } from '@/game/lessons';
 import { slideMoves, type Move } from '@/game/slide';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
@@ -149,6 +149,20 @@ export default function Game() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mvRaw, store.version]);
   const [coach, setCoach] = useState<'task' | 'done'>('task');
+  /** The first game, gone on from the lessons' board: it keeps their line's
+      room above the board (so the board does not jump) and lights its first
+      move (FIRST_MOVES) as a hint the player may ignore. */
+  const [carried, setCarried] = useState(false);
+  const hintMv = useMemo(() => {
+    if (!carried || store.lesson !== null) return null;
+    const f = FIRST_MOVES[g.moves];
+    if (!f || g.board[f.at] !== 0) return null;
+    // Every earlier hinted move was played where it was lit.
+    if (FIRST_MOVES.slice(0, g.moves).some((p) => g.board[p.at] !== p.v)) return null;
+    const slot = g.tray.findIndex((p) => p && !p.used && p.cells.length === 1 && p.cells[0][2] === f.v);
+    return slot < 0 ? null : { slot, at: [f.at] };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carried, store.lesson, store.version]);
   // The lesson on the board now, for timers that outlive a render (skip from pause).
   const lessonNow = useRef(store.lesson);
   lessonNow.current = store.lesson;
@@ -308,6 +322,8 @@ export default function Game() {
       peak.current = g.bestTile;
       if (store.lesson !== null) stageLesson(prevEnd.current ?? new Array(N * N).fill(engine.STONE), g.board);
       prevEnd.current = null;
+      // Any other new game is a plain one: no kept line, no hint.
+      if (!introGo.current) setCarried(false);
       if (introGo.current && store.lesson === null) {
         introGo.current = false;
         /* Out of the lessons and into the game on the same board: nothing on
@@ -360,7 +376,7 @@ export default function Game() {
      paddings around them. Never wider than the screen, never under 240. */
   // The line above the board: a lesson's formula, its tiles at the tray's cell.
   const LESSON_H = trayMax;
-  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null ? LESSON_H + space.lg : 0) + 12 + trayMax * 3 + 32 + 48;
+  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || carried ? LESSON_H + space.lg : 0) + 12 + trayMax * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
   /* One column for the whole screen: the header, the lesson, the board and
@@ -477,6 +493,7 @@ export default function Game() {
   const finale = () => {
     if (!store.resumes) {
       introGo.current = true;
+      setCarried(true);
       trayId.current++;
       skipLessons(true);
       setTrackIntro(Date.now());
@@ -738,10 +755,12 @@ export default function Game() {
       const loud = isLoud('full');
       later(done, () => {
         flyStud(from, g.cfg.sweepsMax - 1, 'bounce', loud);
-        if (!loud) return;
-        // A full key is good news, not a mistake: a soft chime, and the
-        // stud melts into light on the key instead of falling.
-        later(STUD_BOUNCE * STUD_KNOCK, () => fx.bonus());
+        /* Its own sound on the frame it taps the key (a tick and two bars
+           stepping down), never the click of a stud going in: "no room" must
+           not sound like "earned". The quiet one is the key's small shake,
+           which starts at once, so the sound plays with it. */
+        if (!loud) return fx.full();
+        later(STUD_BOUNCE * STUD_KNOCK, () => fx.full());
         later(STUD_BOUNCE, () => setStudFly(null));
       });
     } else if (counted && res.refilled && g.sweeps > sw0) {
@@ -849,9 +868,10 @@ export default function Game() {
       }
       // The step's cells, hatched in the piece's colour: one place, or the
       // places to choose between.
-      if (!hold && mv && coach === 'task' && shown[i] === 0) {
-        const p = g.tray[mv.slot];
-        for (const a of mv.at) {
+      const guide = mv && coach === 'task' ? mv : hintMv;
+      if (!hold && guide && shown[i] === 0) {
+        const p = g.tray[guide.slot];
+        for (const a of guide.at) {
           const m = p?.cells.find(([cx, cy]) => ((a / N) | 0) * N + cy * N + (a % N) + cx === i);
           if (m) l.ghost = m[2];
         }
@@ -892,7 +912,7 @@ export default function Game() {
       }
       return l;
     },
-    [shown, hold, target, preview, pops, lands, lesson, coach, nudge, aim, opened, mv],
+    [shown, hold, target, preview, pops, lands, lesson, coach, nudge, aim, opened, mv, hintMv],
   );
 
   const values = useMemo(() => {
@@ -1255,6 +1275,9 @@ export default function Game() {
                 <Formula terms={lesson.formula} cell={trayCell} gap={gap} open={coach === 'task'} fit={col} />
               </Animated.View>
             </View>
+          ) : carried ? (
+            // The lessons' line keeps its room in the game that goes on from them.
+            <View style={{ width: col, height: LESSON_H, marginBottom: step }} />
           ) : null}
           <Animated.View style={boardStyle} {...swipe.panHandlers}>
             <View

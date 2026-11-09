@@ -280,6 +280,13 @@ def main():
     for i in [5, 7, 9]:
         out = layer(out, mallet(note(i), 1.1, 0.18), tk + 0.06)
     write('learned', out, 0.5)
+    # An earned stud on a full key: it taps the key (a muted plastic tick)
+    # and melts away as two high bars stepping down, softer than a stud
+    # clicking home (toggle-on), so "kept" and "no room" never sound alike.
+    out = mix(burst(0.01, 4200, 2, 0.18), osc('triangle', 1100, 900, 0.025, 0.05))
+    out = layer(out, mallet(note(9), 0.35, 0.12), 0.03)
+    out = layer(out, mallet(note(7), 0.5, 0.09), 0.13)
+    write('full', out, 0.32)
 
     # Game over: two soft notes gliding down.
     write('over', mix(osc('sine', 330, 220, 0.3, 0.2), osc('sine', 247, 165, 0.4, 0.2, 0.18)), 0.45)

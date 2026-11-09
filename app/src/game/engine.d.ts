@@ -62,6 +62,8 @@ declare const engine: {
   collapse(vals: number[], chain?: boolean): { v: number; from: number[]; levels: number[] }[];
   lanes(dir: Dir): number[][];
   dealTray(cfg: Config, board: number[], rng: () => number): Piece[];
+  /** Three shapes for a tray to come, before any value is chosen. */
+  dealShapes(cfg: Config, rng: () => number): [number, number][][];
   newGame(config?: Config, rng?: () => number): Game;
   place(g: Game, slot: number, ox: number, oy: number): PlaceResult | null;
   sweep(g: Game, dir: Dir): SweepResult | null;

@@ -205,7 +205,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const g = engine.newGame(rulesConfig(nextRules));
       g.board = L.board.map((v) => (v === engine.STONE ? 0 : v));
       g.sweeps = L.sweeps;
-      g.tray = [...FIRST_TRAY.map((p) => ({ cells: p.cells.map((c) => [...c] as [number, number, number]), used: false })), g.tray[2]];
+      g.tray = FIRST_TRAY.map((p) => ({ cells: p.cells.map((c) => [...c] as [number, number, number]), used: false }));
+      // The next tray, after the lessons' singles: small pieces only (1 and
+      // 2 cells), so long pieces do not arrive all at once.
+      const small = (g.cfg.shapes as [[number, number][], number][]).filter(([sh]) => sh.length <= 2);
+      if (g.cfg.peek && small.length) g.next = engine.dealShapes({ ...g.cfg, shapes: small }, g.rng);
       g.bestTile = Math.max(...g.board);
       gRef.current = g;
     }

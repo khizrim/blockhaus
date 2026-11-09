@@ -160,7 +160,15 @@ export const LESSONS: Lesson[] = [
     the last step's board, with its full key (2026-11-09, Khizri: «Хочется,
     чтобы игра продолжалась дальше с тем же набором и с той же доской»).
     Step 6 leaves 48, a 6 with a 3 under it and two 1s; the first tray holds
-    a 2 and a 1, so the first thing the player can do alone is what step 4
+    a 2 and two 1s (fixed, so the opening is the same for everyone), so the first thing the player can do alone is what step 4
     taught: lay the 2 by the 3 where it merges with nothing, then fire the 1
     between them, 1 → 3 → 6 → 12. */
-export const FIRST_TRAY: Piece[] = [piece([[0, 0, 2]]), piece([[0, 0, 1]])];
+export const FIRST_TRAY: Piece[] = [piece([[0, 0, 2]]), piece([[0, 0, 1]]), piece([[0, 0, 1]])];
+/** The first game's own first move, lit on the board as the lessons lit
+    theirs but not enforced: the 2 goes under the 6, by the 3, where it
+    merges with nothing; then a 1 between them. After the game designer's
+    second review: the drag preview alone pulls the 2 to the loose 1s. */
+export const FIRST_MOVES: { v: number; at: number }[] = [
+  { v: 2, at: at(1, 5) },
+  { v: 1, at: at(1, 4) },
+];
