@@ -31,6 +31,7 @@
     l2: [[0, 0], [1, 0], [1, 1]],
     l3: [[0, 0], [0, 1], [1, 1]],
     l4: [[1, 0], [0, 1], [1, 1]],
+    sq: [[0, 0], [1, 0], [0, 1], [1, 1]],
   };
 
   // The prototype's mix: 2 singles, 6 dominoes, 6 trominoes out of 14.
@@ -540,7 +541,16 @@
   // 35 pieces on a 12, where free sweeps carried it to a 96 (sim/RESULTS.md).
   // Five, not four, since the bigger tile takes the smaller in and cascades
   // run longer.
-  const CASCADE = { ...DEFAULTS, freeSweeps: false, sweepCost: 'none', sweepsPerTray: 1, chainBonus: 5, sweepsMax: 2 };
+  // 2026-11-09: at five merges a bonus came about once a game, too rare to
+  // notice. Three merges (1+2=3, 3+3=6, 6+6=12) earn it about once in seven
+  // placements, and the 2x2 square, a big piece that is hard to fit, takes
+  // back the room the extra sweeps give: a careful bot plays about as long
+  // as before (218 placements, was 210) and reaches 384 in a quarter of
+  // games, was a sixth. Swiping at random still dies in about 45 pieces.
+  const CASCADE = {
+    ...DEFAULTS, freeSweeps: false, sweepCost: 'none', sweepsPerTray: 1, chainBonus: 3, sweepsMax: 2,
+    shapes: [...SHIPPED_SHAPES, [S.sq, 0.6]],
+  };
 
   // The game of the day: thirty pieces on a board that starts with six
   // tiles. Some weekdays bend one rule, the same for everyone that day

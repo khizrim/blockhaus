@@ -402,23 +402,23 @@ test('merges made by the slide of a sweep score their plain level', () => {
   assert.equal(g.score, 18 + res.pushed.steps.reduce((s, st) => s + st.pts, 0));
 });
 
-test('cascade mode: one sweep a tray, a cascade of five earns one more, two at most', () => {
+test('cascade mode: one sweep a tray, a cascade of three earns one more, two at most', () => {
   const g = E.newGame(E.CASCADE, E.seeded(5));
   assert.equal(g.sweeps, 1);
   assert.equal(g.cfg.freeSweeps, false);
-  // Four merges are not enough.
+  // Two merges are not enough.
   g.board = empty();
-  g.board[idx(1, 2)] = 2; g.board[idx(2, 2)] = 3; g.board[idx(2, 1)] = 6; g.board[idx(2, 0)] = 12;
+  g.board[idx(1, 2)] = 2; g.board[idx(2, 2)] = 3;
   g.tray = [piece(1), piece(1), piece(2)];
-  const four = E.place(g, 0, 0, 2);
-  assert.equal(four.steps.length, 4);
-  assert.ok(!four.bonus);
+  const two = E.place(g, 0, 0, 2);
+  assert.equal(two.steps.length, 2);
+  assert.ok(!two.bonus);
   assert.equal(g.sweeps, 1);
-  // A 1 by a 2, then a 3, a 6, a 12 and a 24 in a walk: five merges.
+  // A 1 by a 2, then a 3 and a 6 in a walk: three merges.
   g.board = empty();
-  g.board[idx(1, 2)] = 2; g.board[idx(2, 2)] = 3; g.board[idx(2, 1)] = 6; g.board[idx(2, 0)] = 12; g.board[idx(3, 0)] = 24;
+  g.board[idx(1, 2)] = 2; g.board[idx(2, 2)] = 3; g.board[idx(2, 1)] = 6;
   const r = E.place(g, 1, 0, 2);
-  assert.equal(r.steps.length, 5);
+  assert.equal(r.steps.length, 3);
   assert.ok(r.bonus);
   assert.equal(g.sweeps, 2);
   // A sweep is a plain slide: no tray piece rides in.
@@ -426,6 +426,11 @@ test('cascade mode: one sweep a tray, a cascade of five earns one more, two at m
   assert.ok(s && !s.pushed);
   assert.equal(g.sweeps, 1);
   assert.ok(!g.tray[2].used);
+});
+
+test('cascade mode deals the 2x2 square', () => {
+  assert.ok(E.CASCADE.shapes.some(([sh]) => sh === E.SHAPES.sq));
+  assert.ok(!E.DEFAULTS.shapes.some(([sh]) => sh === E.SHAPES.sq));
 });
 
 test('a stone walls a sweep and never merges', () => {
