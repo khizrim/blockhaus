@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import engine, { type Dir, type Game, type Piece, type PlaceResult, type SweepResult } from './engine';
-import { LESSONS } from './lessons';
+import { FIRST_TRAY, LESSONS } from './lessons';
 
 /* The one running game and the player's record, shared by every screen and
    saved after every move, so closing the app never loses a game. */
@@ -41,8 +41,9 @@ type Store = {
   /** Index of the lesson on the board, or null in a normal game. */
   lesson: number | null;
   startLesson: (k: number) => void;
-  /** Leave the lessons for a fresh game. */
-  finishLessons: () => void;
+  /** Leave the lessons. Finished (`carry`): the game goes on from the lesson
+      board. Skipped: back to the game put aside, else a new one. */
+  finishLessons: (carry?: boolean) => void;
   place: (slot: number, ox: number, oy: number) => PlaceResult | null;
   sweep: (dir: Dir) => SweepResult | null;
   newGame: () => void;
@@ -190,14 +191,35 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [lesson, nextRules],
   );
 
-  const finishLessons = useCallback(() => {
+  const finishLessons = useCallback((carry = false) => {
     setLearned(true);
     setLesson(null);
-    gRef.current = saved.current && saved.current.moves > 0 && !saved.current.over ? saved.current : engine.newGame(rulesConfig(nextRules));
+    const put = saved.current && saved.current.moves > 0 && !saved.current.over ? saved.current : null;
+    if (put && !carry) gRef.current = put;
+    else if (!carry) gRef.current = engine.newGame(rulesConfig(nextRules));
+    else {
+      /* The game goes on from the lessons' last board and key: the same
+         tiles, the same studs, a fresh tray and the score from 0. Finished
+         lessons always hand over this way, also when they were replayed
+         with a game put aside (2026-11-09, Khizri: the board after the
+         lessons was still another one): that game goes into the record. */
+      if (put) record(put);
+      const L = gRef.current;
+      const g = engine.newGame(rulesConfig(nextRules));
+      g.board = L.board.map((v) => (v === engine.STONE ? 0 : v));
+      g.sweeps = L.sweeps;
+      g.tray = FIRST_TRAY.map((p) => ({ cells: p.cells.map((c) => [...c] as [number, number, number]), used: false }));
+      // The next tray, after the lessons' singles: small pieces only (1 and
+      // 2 cells), so long pieces do not arrive all at once.
+      const small = (g.cfg.shapes as [[number, number][], number][]).filter(([sh]) => sh.length <= 2);
+      if (g.cfg.peek && small.length) g.next = engine.dealShapes({ ...g.cfg, shapes: small }, g.rng);
+      g.bestTile = Math.max(...g.board);
+      gRef.current = g;
+    }
     saved.current = null;
     setWinSeen(false);
     bump();
-  }, [nextRules]);
+  }, [nextRules, record]);
 
   const value = useMemo<Store>(() => {
     const g = gRef.current;

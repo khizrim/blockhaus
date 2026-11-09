@@ -57,6 +57,7 @@ const SRC = {
   'step-4': require('../../assets/sounds/step-4.wav'),
   'step-5': require('../../assets/sounds/step-5.wav'),
   learned: require('../../assets/sounds/learned.wav'),
+  full: require('../../assets/sounds/full.wav'),
 } as const;
 
 export type SoundName = keyof typeof SRC;
@@ -231,6 +232,11 @@ export const fx = {
   bonus: () => {
     play('toggle-on');
     buzz(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
+  },
+  /** A chain earned a sweep the full key has no room for: it taps the key and melts. */
+  full: () => {
+    play('full');
+    buzz(() => Haptics.selectionAsync());
   },
   win: () => {
     play('win');
