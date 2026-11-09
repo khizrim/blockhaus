@@ -11,10 +11,11 @@ import { dur, enter, exit, HIT, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Game as EngineGame, type Piece, type Step } from '@/game/engine';
-import { LESSONS } from '@/game/lessons';
+import { FIRST_MOVES, LESSONS } from '@/game/lessons';
 import { slideMoves, type Move } from '@/game/slide';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
+import { loudOnce, type StudKind } from '@/game/seen';
 import { TileNum } from '@/components/TileNum';
 import { Block, plastic, Socket } from '@/components/Block';
 import { Icon } from '@/components/icons';
@@ -33,7 +34,15 @@ const GAPS = [180, 160, 140, 120, 110];
 const chainAt = (k: number) => GAPS.slice(0, k).reduce((a, b) => a + b, 0) + Math.max(0, k - GAPS.length) * GAPS[GAPS.length - 1];
 const FLY = 110; // ms for an absorbed tile to fly into its partner
 const BURST_MS = 620; // ms the crumbs of a merge fly and fall
-const STUD_FLY = 520; // ms an earned sweep's stud flies to the sweep key
+/* A sweep's stud on its way (2026-11-09: "it shows, but nothing explains
+   it"): it is a moment of its own. The stud pops up big where it comes from
+   and hangs there a beat, glowing, then flies to the key, which leans in to
+   meet it. */
+const STUD_FLY = 1050; // ms: pop, hang, fly into the key
+const STUD_BOUNCE = 1500; // ms: pop, hang, fly, knock on a full key, fall
+const STUD_KNOCK = 0.62; // part of STUD_BOUNCE when it hits the full key
+const STUD_OUT = 750; // ms for a spent stud to leave the key and fall
+const STUD_QUIET = 420; // ms for the small hop of a stud the player has seen enough
 const PLATE = 6; // px each sweep layer shows under the board
 const back = (d: number, k = 1.8) => ({ duration: d, easing: Easing.out(Easing.back(k)) });
 
@@ -46,7 +55,7 @@ const noSelect = { userSelect: 'none' } as object;
 const SWIPE = 24; // px of travel that counts as a swipe
 const SLIDE = dur.base; // ms for tiles to travel in a sweep
 const PUSH_MS = 260; // ms for the pushed piece to ride in from the far edge
-const LESSON_READ = 2500; // ms to read the proved formula before the next step slides in
+const LESSON_READ = 1300; // ms to read the proved formula before the next step slides in (2500 felt like a hang)
 
 type Hold = { slot: number; piece: Piece };
 
@@ -116,8 +125,44 @@ export default function Game() {
   const showTrack = false;
   const lesson = store.lesson === null ? null : LESSONS[store.lesson];
   /** The lesson move to play now: its tray slot and the cells it may go to. */
-  const mv = lesson?.moves?.[g.moves] ?? null;
+  const mvRaw = lesson?.moves?.[g.moves] ?? null;
+  /** Where the last placed piece went: a 'best' move follows it. */
+  const lastLaid = useRef<number[]>([]);
+  const mv = useMemo(() => {
+    if (!mvRaw) return null;
+    if (mvRaw.at !== 'best') return { slot: mvRaw.slot, at: mvRaw.at };
+    // The free cell beside the last piece where this one runs longest.
+    const p = g.tray[mvRaw.slot];
+    let best = -1;
+    let cellAt = -1;
+    for (const a of lastLaid.current)
+      for (const n of engine.neighbours(a)) {
+        if (!p || g.board[n] !== 0) continue;
+        const b = g.board.slice();
+        const len = engine.applyPlacement(b, { cells: p.cells.map((c) => [...c] as [number, number, number]), used: false }, n % N, (n / N) | 0, g.cfg.absorb).steps.length;
+        if (len > best) {
+          best = len;
+          cellAt = n;
+        }
+      }
+    return { slot: mvRaw.slot, at: cellAt >= 0 ? [cellAt] : [] };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mvRaw, store.version]);
   const [coach, setCoach] = useState<'task' | 'done'>('task');
+  /** The first game, gone on from the lessons' board: it keeps their line's
+      room above the board (so the board does not jump) and lights its first
+      move (FIRST_MOVES) as a hint the player may ignore. */
+  const [carried, setCarried] = useState(false);
+  const hintMv = useMemo(() => {
+    if (!carried || store.lesson !== null) return null;
+    const f = FIRST_MOVES[g.moves];
+    if (!f || g.board[f.at] !== 0) return null;
+    // Every earlier hinted move was played where it was lit.
+    if (FIRST_MOVES.slice(0, g.moves).some((p) => g.board[p.at] !== p.v)) return null;
+    const slot = g.tray.findIndex((p) => p && !p.used && p.cells.length === 1 && p.cells[0][2] === f.v);
+    return slot < 0 ? null : { slot, at: [f.at] };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carried, store.lesson, store.version]);
   // The lesson on the board now, for timers that outlive a render (skip from pause).
   const lessonNow = useRef(store.lesson);
   lessonNow.current = store.lesson;
@@ -130,6 +175,8 @@ export default function Game() {
   useEffect(() => {
     setCoach('task');
     if (store.lesson === 0) lessonPeak.current = 0;
+    lineIn.value = 1;
+    lineIn.value = withTiming(0, { duration: dur.slow, easing: Easing.out(Easing.cubic) });
   }, [store.lesson]);
 
   // What the board shows. Equal to the game's board at rest; during a chain it
@@ -144,8 +191,53 @@ export default function Game() {
   /** Plastic crumbs thrown off a cascade's merges and a new best tile. */
   const [bursts, setBursts] = useState<{ id: string; at: number; v: number; n: number; power: number }[]>([]);
   /** An earned sweep: a stud flying from the merge that earned it to the sweep key. */
-  const [studFly, setStudFly] = useState<{ id: number; at: number; to: { x: number; y: number } } | null>(null);
+  const [studFly, setStudFly] = useState<{ id: number; from: { x: number; y: number }; to: { x: number; y: number }; mode: StudMode; loud: boolean } | null>(null);
   const keyRef = useRef<ComponentRef<typeof View>>(null);
+  /** The top-left of a stud chip centred on a board cell. */
+  const cellPt = (at: number) => ({ x: gap / 2 + (at % N) * cell + cell / 2 - 9, y: gap / 2 + ((at / N) | 0) * cell + cell / 2 - 9 });
+  /** Sends a stud between `from` and socket `k` of the sweep key ('out' flies
+      from the socket to `from`), all in the board's coordinates. */
+  const flyStud = (from: { x: number; y: number }, k: number, mode: StudMode, loud: boolean) => {
+    /* Quiet, once the player knows it: a stud from a chain or a tray makes
+       a short small hop into its socket; a full key gives a small shake and
+       nothing flies; a spent stud just sinks in its socket as the key ticks. */
+    if (!loud) {
+      if (mode === 'bounce') keyShake.value = withSequence(withTiming(-3, { duration: 40 }), withTiming(3, { duration: 60 }), withTiming(0, { duration: 60 }));
+      if (mode === 'out') keyZoom.value = withSequence(withTiming(1.06, { duration: 80 }), withTiming(1, { duration: 160 }));
+      if (mode !== 'in') return;
+      keyZoom.value = withDelay(STUD_QUIET - 40, withSequence(withTiming(1.1, { duration: 60 }), withTiming(1, back(220, 2))));
+    }
+    keyRef.current?.measureInWindow((kx, ky, kw, kh) => {
+      const studs = g.cfg.sweepsMax;
+      const sock = { x: kx + kw - 24 - (studs - 1 - Math.max(0, Math.min(studs - 1, k))) * 19 - boardAt.current.x, y: ky + kh / 2 - 9 - boardAt.current.y };
+      setStudFly(mode === 'out' ? { id: Date.now(), from: sock, to: from, mode, loud } : { id: Date.now(), from, to: sock, mode, loud });
+    });
+    if (!loud) return;
+    keyMoment(mode);
+    // The pop where the stud comes from, on the frame it jumps up.
+    if (mode !== 'out') fx.boop(4);
+  };
+  /** In the lessons every sweep moment plays in full; in a game, only the
+      first showings of each kind (see seen.ts). */
+  const isLoud = (kind: StudKind) => store.lesson !== null || loudOnce(kind);
+  /* The sweep key answers the stud: it grows to meet one coming in and
+     kicks as it clicks home; a full key grows, then shakes it off; a key
+     that pays for a swipe pulses as the stud leaves. */
+  const keyZoom = useSharedValue(1);
+  const keyShake = useSharedValue(0);
+  const keyStyle = useAnimatedStyle(() => ({ transform: [{ translateX: keyShake.value }, { scale: keyZoom.value }], transformOrigin: 'right center' }));
+  const keyMoment = (mode: StudMode) => {
+    const grow = { duration: 200, easing: Easing.out(Easing.cubic) };
+    if (mode === 'in') {
+      keyZoom.value = withSequence(withDelay(STUD_FLY * 0.4, withTiming(1.3, grow)), withDelay(STUD_FLY * 0.6 - 200, withTiming(1.45, { duration: 60 })), withTiming(1, back(360, 2.2)));
+    } else if (mode === 'bounce') {
+      const at = STUD_BOUNCE * STUD_KNOCK;
+      keyZoom.value = withSequence(withDelay(STUD_BOUNCE * 0.28, withTiming(1.3, grow)), withDelay(at - STUD_BOUNCE * 0.28 - 200, withTiming(1.3, { duration: 0 })), withDelay(320, withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) })));
+      keyShake.value = withDelay(at, withSequence(withTiming(-7, { duration: 50 }), withTiming(7, { duration: 70 }), withTiming(-4, { duration: 60 }), withTiming(0, { duration: 80 })));
+    } else {
+      keyZoom.value = withSequence(withTiming(1.3, { duration: 120, easing: Easing.out(Easing.cubic) }), withTiming(1, back(380, 2.2)));
+    }
+  };
   const burstClear = useRef<ReturnType<typeof setTimeout> | null>(null);
   // While a swipe is held past the threshold: where the next piece will ride in.
   const [aim, setAim] = useState<{ id: string; piece: Piece; ox: number; oy: number; dir: Dir } | null>(null);
@@ -166,10 +258,10 @@ export default function Game() {
   const moveHadMilestone = useRef(false);
   /** Bumps when the track should assemble itself square by square (the start of the first game). */
   const [trackIntro, setTrackIntro] = useState(0);
-  /** The lesson board breaking up at the end of the lessons. */
-  const [scatter, setScatter] = useState<{ id: number; board: number[] } | null>(null);
   /** Bumps when the lesson line changes, so it kicks in. */
   const lineKick = useSharedValue(1);
+  /** The lesson line coming in (1, from the right) or going out (-1, to the left); 0 at rest. */
+  const lineIn = useSharedValue(0);
   /** A milestone whose copy is still flying to the track: its square waits. */
   const [trackHold, setTrackHold] = useState(0);
   const lastDir = useRef<Dir>('down');
@@ -205,12 +297,11 @@ export default function Game() {
     setSliding(null);
     setReturning(null);
     setHeld(null);
-    /* The milestone wave and the lessons' break-up draw copies of the board
-       over it and take them down from a timer. clearTimers just dropped that
+    /* The milestone wave draws copies of the board
+       over it and takes them down from a timer. clearTimers just dropped that
        timer, so they go here too, or the copies stay on the board as tiles
        that never move, even into a new game. */
     setRipple(null);
-    setScatter(null);
     setTrackHold(0);
     setAim(null);
     aimDir.current = null;
@@ -228,6 +319,15 @@ export default function Game() {
       peak.current = g.bestTile;
       if (store.lesson !== null) stageLesson(prevEnd.current ?? new Array(N * N).fill(engine.STONE), g.board);
       prevEnd.current = null;
+      // Any other new game is a plain one: no kept line, no hint.
+      if (!introGo.current) setCarried(false);
+      if (introGo.current && store.lesson === null) {
+        introGo.current = false;
+        /* Out of the lessons and into the game on the same board: nothing on
+           it moves. Only their phrase plays, the score comes up and the tray
+           deals its first pieces. */
+        later(120, () => fx.learned());
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g, store.version]);
@@ -236,6 +336,8 @@ export default function Game() {
      grew, its new ring of sockets sinks in with a ratchet of clicks, then
      the step's new tiles pop up one by one, each a note higher. */
   const prevEnd = useRef<number[] | null>(null);
+  /** The lessons just ended and the first game goes on from their board. */
+  const introGo = useRef(false);
   const [opened, setOpened] = useState<Set<number> | null>(null);
   const stageLesson = (from: number[], to: number[]) => {
     const grown = to.map((v, i) => (from[i] < 0 && v >= 0 ? i : -1)).filter((i) => i >= 0);
@@ -246,9 +348,9 @@ export default function Game() {
       later(600, () => setOpened(null));
     }
     setShown(to.map((v, i) => (fresh.includes(i) ? 0 : v)));
-    const t0 = grown.length ? 380 : 160;
+    const t0 = grown.length ? 300 : 120;
     fresh.forEach((i, k) =>
-      later(t0 + k * 150, () => {
+      later(t0 + k * 110, () => {
         setShown((sh) => Object.assign(sh.slice(), { [i]: to[i] }));
         setLands((l) => ({ ...l, [i]: Date.now() }));
         fx.boop(k);
@@ -271,7 +373,7 @@ export default function Game() {
      paddings around them. Never wider than the screen, never under 240. */
   // The line above the board: a lesson's formula, its tiles at the tray's cell.
   const LESSON_H = trayMax;
-  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null ? LESSON_H + space.lg : 0) + 12 + trayMax * 3 + 32 + 48;
+  const chrome = ins.top + ins.bottom + 24 + 64 + (store.lesson !== null || carried ? LESSON_H + space.lg : 0) + 12 + trayMax * 3 + 32 + 48;
   const boardSize = Math.max(240, Math.min(inner, height - chrome));
   const cell = Math.floor((boardSize - gap) / N);
   /* One column for the whole screen: the header, the lesson, the board and
@@ -342,6 +444,8 @@ export default function Game() {
   };
 
   const advance = (k: number) => {
+    // The proved line slides out to the left as the next one comes in from the right.
+    lineIn.value = withTiming(-1, { duration: dur.base, easing: Easing.in(Easing.cubic) });
     later(dur.base, () => {
       if (lessonNow.current !== k) return;
       if (k + 1 < LESSONS.length) {
@@ -353,10 +457,21 @@ export default function Game() {
   };
 
   /** The tile a lesson was about: the highest one on the board. */
-  const resultCell = (board: number[], _L: unknown) => {
+  const resultCell = (board: number[], L: (typeof LESSONS)[number]) => {
+    // The tile the formula ends on, made by this move; else the highest.
+    const last = L.formula[L.formula.length - 1];
+    const want = typeof last === 'number' ? last : Array.isArray(last) ? last[0] : 0;
+    const laid = lastLaid.current;
     let at = -1;
     board.forEach((v, i) => {
-      if (v > 0 && (at < 0 || v > board[at])) at = i;
+      if (want && v === want && (at < 0 || laid.includes(i))) at = i;
+    });
+    if (at >= 0) return at;
+    // No tile to show (the step ends on a stud): the biggest tile the move
+    // touched, the cells it laid and their neighbours.
+    const near = new Set(laid.flatMap((i) => [i, ...engine.neighbours(i)]));
+    board.forEach((v, i) => {
+      if (v > 0 && (near.size === 0 || near.has(i)) && (at < 0 || v > board[at])) at = i;
     });
     return at;
   };
@@ -365,28 +480,21 @@ export default function Game() {
     lineKick.value = withSequence(withTiming(1.12, { duration: 0 }), withTiming(1, back(320, 2.4)));
   };
 
-  /* The end of the lessons. The lesson board breaks up: every tile lifts and
-     drops away in a wave from the centre, one soft knock each. Then the real
-     game: the board is empty, the goal kicks into the line, and the track to
-     384 assembles square by square while the marimba climbs the milestones. */
+  /* The end of the lessons. The game goes on from where they ended
+     (2026-11-09, Khizri: the lessons ended on a full key and the game began
+     on a new board with a spent one): the same board, the same studs, a new
+     tray rising from its slots. Always, also after a replay from the menu. */
   const finale = () => {
-    // The engine's board, not the shown one: this runs from a timer set
-    // before the last move finished drawing.
-    const board = g.board.slice();
-    setScatter({ id: Date.now(), board });
-    setShown(new Array(N * N).fill(0));
-    fx.sweep();
-    later(SCATTER_MS, () => {
-      setScatter(null);
-      skipLessons();
-      setTrackIntro(Date.now());
-      later(120, () => fx.learned());
-    });
+    introGo.current = true;
+    setCarried(true);
+    trayId.current++;
+    skipLessons(true);
+    setTrackIntro(Date.now());
   };
 
-  const skipLessons = () => {
+  const skipLessons = (carry = false) => {
     settle();
-    store.finishLessons();
+    store.finishLessons(carry);
   };
 
   /** Of a move's merge levels, in order, which ones make a new milestone:
@@ -574,8 +682,10 @@ export default function Game() {
     settle();
     const before = g.board.slice();
     const s0 = g.score;
+    const sw0 = g.sweeps;
     const res = store.place(h.slot, t.gx, t.gy);
     if (!res) return;
+    lastLaid.current = res.laid;
     if (res.refilled) trayId.current++;
 
     // Frame 0: the piece laid. Then one frame per merge of the chain.
@@ -605,15 +715,44 @@ export default function Game() {
     /* An earned sweep is seen being earned: a yellow stud pops out of the
        merge that completed the cascade and flies in an arc into its socket on
        the sweep key, and clicks in on the frame it lands. */
+    const chainAnchor = () => res.steps[Math.min(res.steps.length, g.cfg.chainBonus) - 1]?.anchor ?? res.steps[res.steps.length - 1].anchor;
     if (res.bonus) {
       setBonusHeld(true);
-      const from = res.steps[Math.min(res.steps.length, g.cfg.chainBonus) - 1]?.anchor ?? res.steps[res.steps.length - 1].anchor;
+      const from = cellPt(chainAnchor());
+      const loud = isLoud('chain');
       later(done, () => {
-        keyRef.current?.measureInWindow((kx, ky, kw, kh) => {
-          const to = { x: kx + kw - 24 - boardAt.current.x, y: ky + kh / 2 - 9 - boardAt.current.y };
-          setStudFly({ id: Date.now(), at: from, to });
+        flyStud(from, g.sweeps - 1, 'in', loud);
+        later(loud ? STUD_FLY : STUD_QUIET, () => {
+          setStudFly(null);
+          setBonusHeld(false);
+          fx.bonus();
         });
-        later(STUD_FLY, () => {
+      });
+    } else if (counted && g.cfg.chainBonus && res.steps.length >= g.cfg.chainBonus && sw0 >= g.cfg.sweepsMax) {
+      /* Earned with the key already full: the stud flies up, knocks on the
+         key and drops away. Sweeps keep, but only two of them. */
+      const from = cellPt(chainAnchor());
+      const loud = isLoud('full');
+      later(done, () => {
+        flyStud(from, g.cfg.sweepsMax - 1, 'bounce', loud);
+        /* Its own sound on the frame it taps the key (a tick and two bars
+           stepping down), never the click of a stud going in: "no room" must
+           not sound like "earned". The quiet one is the key's small shake,
+           which starts at once, so the sound plays with it. */
+        if (!loud) return fx.full();
+        later(STUD_BOUNCE * STUD_KNOCK, () => fx.full());
+        later(STUD_BOUNCE, () => setStudFly(null));
+      });
+    } else if (counted && res.refilled && g.sweeps > sw0) {
+      /* A new tray tops an empty key up to one sweep: the stud rises out of
+         the tray with the new pieces and flies up into its socket. */
+      setBonusHeld(true);
+      const loud = isLoud('tray');
+      later(done + 200, () => {
+        slotRefs.current[1]?.measureInWindow((sx_, sy_, sw, sh) => {
+          flyStud({ x: sx_ + sw / 2 - 9 - boardAt.current.x, y: sy_ + sh / 2 - 9 - boardAt.current.y }, g.sweeps - 1, 'in', loud);
+        });
+        later(loud ? STUD_FLY : STUD_QUIET, () => {
           setStudFly(null);
           setBonusHeld(false);
           fx.bonus();
@@ -709,9 +848,10 @@ export default function Game() {
       }
       // The step's cells, hatched in the piece's colour: one place, or the
       // places to choose between.
-      if (!hold && mv && coach === 'task' && shown[i] === 0) {
-        const p = g.tray[mv.slot];
-        for (const a of mv.at) {
+      const guide = mv && coach === 'task' ? mv : hintMv;
+      if (!hold && guide && shown[i] === 0) {
+        const p = g.tray[guide.slot];
+        for (const a of guide.at) {
           const m = p?.cells.find(([cx, cy]) => ((a / N) | 0) * N + cy * N + (a % N) + cx === i);
           if (m) l.ghost = m[2];
         }
@@ -752,7 +892,7 @@ export default function Game() {
       }
       return l;
     },
-    [shown, hold, target, preview, pops, lands, lesson, coach, nudge, aim, opened, mv],
+    [shown, hold, target, preview, pops, lands, lesson, coach, nudge, aim, opened, mv, hintMv],
   );
 
   const values = useMemo(() => {
@@ -854,6 +994,14 @@ export default function Game() {
     }
     const moved = moves.filter((m) => m.from !== m.to).length;
     fx.sweep(moved);
+    /* A sweep is paid with a stud: it pops out of its socket on the key and
+       drops off the board the way the board went. */
+    if (counted) {
+      const W = cell * N + gap;
+      const [ux, uy] = UNIT[dir];
+      flyStud({ x: W / 2 - 9 + ux * (W / 2 + cell * 0.4), y: W / 2 - 9 + uy * (W / 2 + cell * 0.4) }, g.sweeps, 'out', isLoud('spend'));
+      later(STUD_OUT, () => setStudFly((f) => (f?.mode === 'out' ? null : f)));
+    }
     tilt(dir, 3, SLIDE - 90);
     const push = res.pushed ?? null;
     const allMarks = milestonesIn([...res.made.map((m) => m.level), ...(push ? push.steps.map((st) => st.level) : [])]);
@@ -1067,7 +1215,7 @@ export default function Game() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.lesson, store.version, coach, width, height]);
 
-  const lineStyle = useAnimatedStyle(() => ({ transform: [{ scale: lineKick.value }], transformOrigin: 'center' }));
+  const lineStyle = useAnimatedStyle(() => ({ opacity: 1 - Math.abs(lineIn.value), transform: [{ translateX: lineIn.value * 40 }, { scale: lineKick.value }], transformOrigin: 'center' }));
 
   return (
     <View style={[{ flex: 1 }, noSelect]}>
@@ -1081,12 +1229,16 @@ export default function Game() {
           <Animated.View accessible accessibilityLabel={`Очки: ${g.score}`} style={[{ height: 48, justifyContent: 'center', alignItems: 'center' }, scoreStyle]}>
             {/* The 1919 stamp: a yellow chip flashes in behind the score. */}
             <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: -space.md, right: -space.md, top: 2, bottom: 2, borderRadius: 12, backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 3px 0 #C9A21F' }, stampStyle]} />
-            <ScoreNum v={g.score} />
-            {chainMult(g.cfg.chainScore, chain) > 1 ? <MultChip k={chainMult(g.cfg.chainScore, chain)} /> : null}
+            {/* No score in the lessons: it teaches nothing there and would
+                drop to 0 at the first game. No ×2 chip (2026-11-09): nothing
+                taught it; a long chain's reward is the score's jump. */}
+            {store.lesson === null ? <ScoreNum v={g.score} /> : null}
           </Animated.View>
-          <View ref={keyRef} collapsable={false}>
-            <SweepKey studs={counted ? g.cfg.sweepsMax : 0} filled={g.sweeps - (bonusHeld ? 1 : 0)} ghost={earns} onPress={hintSweep} />
-          </View>
+          <Animated.View style={keyStyle}>
+            <View ref={keyRef} collapsable={false}>
+              <SweepKey studs={counted ? g.cfg.sweepsMax : 0} filled={g.sweeps - (bonusHeld ? 1 : 0)} ghost={earns} onPress={hintSweep} />
+            </View>
+          </Animated.View>
         </View>
 
         {/* the lesson and the board, centred between the header and the tray, never closer than one step */}
@@ -1103,6 +1255,9 @@ export default function Game() {
                 <Formula terms={lesson.formula} cell={trayCell} gap={gap} open={coach === 'task'} fit={col} />
               </Animated.View>
             </View>
+          ) : carried ? (
+            // The lessons' line keeps its room in the game that goes on from them.
+            <View style={{ width: col, height: LESSON_H, marginBottom: step }} />
           ) : null}
           <Animated.View style={boardStyle} {...swipe.panHandlers}>
             <View
@@ -1130,12 +1285,12 @@ export default function Game() {
                   <SlidingTile key={f.id} m={f.m} cell={cell} gap={gap} ms={f.ms} />
                 ))}
                 {incoming ? <Incoming key={incoming.id} {...incoming} cell={cell} gap={gap} /> : null}
-                {scatter ? <Scatter key={scatter.id} board={scatter.board} cell={cell} gap={gap} /> : null}
                 {bursts.map((b) => (
                   <Burst key={b.id} at={b.at} v={b.v} n={b.n} power={b.power} cell={cell} gap={gap} />
                 ))}
-                {studFly ? <StudFlight key={studFly.id} at={studFly.at} to={studFly.to} cell={cell} gap={gap} /> : null}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
+                {/* Above the wave: the stud is what the eye should follow. */}
+                {studFly ? <StudFlight key={studFly.id} from={studFly.from} to={studFly.to} mode={studFly.mode} loud={studFly.loud} cell={cell} /> : null}
               </View>
             </View>
           </Animated.View>
@@ -1196,7 +1351,7 @@ export default function Game() {
             cell={cell}
             gap={gap}
           />
-        ) : lesson.dirs ? (
+        ) : lesson.dirs && g.sweeps === lesson.sweeps ? (
           <Finger key={`finger-${store.lesson}`} board={geo.board} vertical={!!lesson.dirs?.includes('up')} />
         ) : null
       ) : null}
@@ -1394,65 +1549,6 @@ function LiftTile({ v, d, at, cell, gap, hero, home }: { v: number; d: number; a
   );
 }
 
-const SCATTER_MS = 900;
-
-/** The lesson board breaking up: every tile lifts, tips and drops away in a
-    wave from the centre, leaving the empty board for the first game. */
-function Scatter({ board, cell, gap }: { board: number[]; cell: number; gap: number }) {
-  const { c } = useTheme();
-  const pad = gap / 2;
-  return (
-    <>
-      {/* The whole ladder runs over the board corner to corner, each
-          diagonal one rung higher, 3 up to the goal's ink. */}
-      {Array.from({ length: N * N }, (_, i) => {
-        const diag = (i % N) + ((i / N) | 0);
-        return (
-          <FloorFlash
-            key={`l${i}`}
-            d={diag * 0.9}
-            color={c.tile[Math.min(10, 3 + Math.floor((diag * 8) / (2 * N - 2)))]}
-            style={{ left: pad + (i % N) * cell + pad, top: pad + ((i / N) | 0) * cell + pad, width: cell - gap, height: cell - gap }}
-          />
-        );
-      })}
-      {board.map((v, i) => {
-        if (v <= 0) return null;
-        const x = i % N;
-        const y = (i / N) | 0;
-        const d = Math.abs(x - 2.5) + Math.abs(y - 2.5);
-        return <ScatterTile key={i} v={v} d={d} side={x < 3 ? -1 : 1} at={{ x: pad + x * cell, y: pad + y * cell }} cell={cell} gap={gap} />;
-      })}
-    </>
-  );
-}
-
-function ScatterTile({ v, d, side, at, cell, gap }: { v: number; d: number; side: number; at: { x: number; y: number }; cell: number; gap: number }) {
-  const pad = gap / 2;
-  const k = useSharedValue(0);
-  useEffect(() => {
-    k.value = withDelay(d * 60, withTiming(1, { duration: 420, easing: Easing.in(Easing.quad) }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const st = useAnimatedStyle(() => {
-    const up = Math.sin(Math.min(1, k.value * 2.2) * Math.PI) * 0.25; // a hop before the drop
-    return {
-      opacity: k.value < 0.75 ? 1 : 1 - (k.value - 0.75) / 0.25,
-      transform: [
-        { translateX: side * k.value * cell * 0.5 },
-        { translateY: -up * cell + k.value * k.value * cell * 2.2 },
-        { rotate: `${side * k.value * 35}deg` },
-        { scale: 1 + up * 0.5 - k.value * 0.35 },
-      ],
-    };
-  });
-  return (
-    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: at.x, top: at.y, width: cell, height: cell, padding: pad }, st]}>
-      <Block v={v} size={cell - gap} />
-    </Animated.View>
-  );
-}
-
 /** The shape of the piece coming next into a tray slot, in the slot's corner. */
 function NextShape({ cells, cell, gap }: { cells: [number, number][]; cell: number; gap: number }) {
   const w = Math.max(...cells.map(([x]) => x)) + 1;
@@ -1522,33 +1618,75 @@ function Chip({ vx, vy, spin, size, delay, cx, cy, v, cell }: { vx: number; vy: 
 
 /** The stud of an earned sweep, flying from its merge to the sweep key in an
     arc, turning as it goes, and shrinking to the stud's size on arrival. */
-function StudFlight({ at, to, cell, gap }: { at: number; to: { x: number; y: number }; cell: number; gap: number }) {
-  const pad = gap / 2;
-  const from = { x: pad + (at % N) * cell + cell / 2 - 9, y: pad + ((at / N) | 0) * cell + cell / 2 - 9 };
+/* A sweep's stud in flight, in the board's coordinates (top-left of the
+   18 px chip). 'in': an arc into a socket of the sweep key. 'bounce': the
+   same arc, but the key is full: it knocks on it and falls away. 'out': a
+   spent sweep leaves its socket and drops off the edge the board went. */
+type StudMode = 'in' | 'bounce' | 'out';
+function StudFlight({ from, to, mode, loud, cell }: { from: { x: number; y: number }; to: { x: number; y: number }; mode: StudMode; loud: boolean; cell: number }) {
   const k = useSharedValue(0);
+  const total = !loud ? STUD_QUIET : mode === 'in' ? STUD_FLY : mode === 'bounce' ? STUD_BOUNCE : STUD_OUT;
   useEffect(() => {
-    k.value = withTiming(1, { duration: STUD_FLY, easing: Easing.inOut(Easing.cubic) });
+    k.value = withTiming(1, { duration: total, easing: Easing.linear });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const ease = (t: number) => {
+    'worklet';
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  };
+  // pop: 0 to POP the stud jumps up and grows; it hangs till HANG; then flies.
+  const POP = mode === 'in' ? 0.26 : 0.2;
+  const HANG = mode === 'in' ? 0.42 : 0.3;
+  const END = mode === 'in' ? 1 : STUD_KNOCK;
   const st = useAnimatedStyle(() => {
     const p = k.value;
-    const lift = Math.sin(Math.PI * p) * cell * 1.2;
-    return {
-      transform: [
-        { translateX: from.x + (to.x - from.x) * p },
-        { translateY: from.y + (to.y - from.y) * p - lift },
-        { rotate: `${p * 360}deg` },
-        { scale: 1.9 - p * 0.9 + Math.sin(Math.PI * p) * 0.4 },
-      ],
-    };
+    if (!loud) {
+      // The small hop: a low arc, a touch bigger than the stud, no hang.
+      const a = ease(p);
+      return { opacity: 1, transform: [{ translateX: from.x + (to.x - from.x) * a }, { translateY: from.y + (to.y - from.y) * a - Math.sin(Math.PI * a) * cell * 0.5 }, { rotate: '0deg' }, { scale: 1.3 - a * 0.3 }] };
+    }
+    if (mode === 'out') {
+      // Pops up out of the socket, big, then falls away along a short arc.
+      const lift = Math.sin(Math.PI * Math.min(1, p * 1.6)) * cell * 0.9;
+      return {
+        opacity: p < 0.75 ? 1 : 1 - (p - 0.75) / 0.25,
+        transform: [{ translateX: from.x + (to.x - from.x) * p }, { translateY: from.y + (to.y - from.y) * p * p - lift }, { rotate: `${p * 270}deg` }, { scale: 1 + Math.sin(Math.PI * Math.min(1, p * 1.4)) * 1.2 }],
+      };
+    }
+    const rise = cell * 0.7;
+    const up = Math.min(1, p / POP);
+    const popScale = 1 + (1 - Math.pow(1 - up, 3)) * 1.6 + (up >= 1 && p < HANG ? Math.sin(((p - POP) / (HANG - POP)) * Math.PI) * 0.12 : 0);
+    if (p < HANG) {
+      return { opacity: 1, transform: [{ translateX: from.x }, { translateY: from.y - rise * (1 - Math.pow(1 - up, 3)) }, { rotate: '0deg' }, { scale: popScale }] };
+    }
+    const a = ease(Math.min(1, (p - HANG) / (END - HANG)));
+    const sx = from.x;
+    const sy = from.y - rise;
+    const lift = Math.sin(Math.PI * a) * cell * 0.9;
+    const base = { x: sx + (to.x - sx) * a, y: sy + (to.y - sy) * a - lift };
+    const scale = 2.6 - a * 1.6;
+    if (mode === 'bounce' && p > END) {
+      // The key is full: the stud melts into light on it, swelling and fading.
+      const b = (p - END) / (1 - END);
+      return {
+        opacity: 1 - b,
+        transform: [{ translateX: to.x }, { translateY: to.y - b * cell * 0.3 }, { rotate: '0deg' }, { scale: 1 + b * 1.4 }],
+      };
+    }
+    return { opacity: 1, transform: [{ translateX: base.x }, { translateY: base.y }, { rotate: `${a * 360}deg` }, { scale }] };
+  });
+  // A ring of yellow light behind the stud while it hangs: look here.
+  const glow = useAnimatedStyle(() => {
+    const p = k.value;
+    if (!loud || mode === 'out' || p > HANG + 0.05) return { opacity: 0, transform: [{ scale: 1 }] };
+    const g = Math.min(1, p / HANG);
+    return { opacity: 0.55 * (1 - g), transform: [{ scale: 1 + g * 2.2 }] };
   });
   return (
-    <Animated.View
-      style={[
-        { position: 'absolute', left: 0, top: 0, width: 18, height: 18, borderRadius: 5, backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 2px 0 #C9A21F, inset 0 1px 0 rgba(255,255,255,0.8)' },
-        st,
-      ]}
-    />
+    <Animated.View style={[{ position: 'absolute', left: 0, top: 0, width: 18, height: 18 }, st]}>
+      <Animated.View style={[{ position: 'absolute', left: -3, top: -3, width: 24, height: 24, borderRadius: 7, borderWidth: 2, borderColor: '#FFD43B' }, glow]} />
+      <View style={{ width: 18, height: 18, borderRadius: 5, backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 2px 0 #C9A21F, inset 0 1px 0 rgba(255,255,255,0.8)' }} />
+    </Animated.View>
   );
 }
 
@@ -1736,29 +1874,6 @@ function ScoreNum({ v }: { v: number }) {
     };
   }, [v]);
   return <TileNum v={shownV} size={40} color={c.text} style={{ lineHeight: 48, fontVariant: ['tabular-nums'] }} />;
-}
-
-/** The cascade's score multiplier for the merge in hand, from chainScore. */
-function chainMult(table: number[] | undefined, k: number) {
-  if (!table || !table.length || k <= 0) return 1;
-  return table[Math.min(k, table.length) - 1];
-}
-
-/** A yellow chip beside the score: ×2, ×3 while a cascade pays more. */
-function MultChip({ k }: { k: number }) {
-  const s = useSharedValue(0);
-  useEffect(() => {
-    s.value = withSequence(withTiming(1.15, { duration: 100 }), withTiming(1, { duration: 120 }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [k]);
-  const st = useAnimatedStyle(() => ({ transform: [{ translateY: -14 }, { scale: s.value }] }));
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[{ position: 'absolute', left: '100%', marginLeft: 8, top: '50%', height: 28, paddingHorizontal: 8, borderRadius: 8, justifyContent: 'center', backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 3px 0 #C9A21F' }, st]}>
-      <TileNum v={`×${k}`} size={16} color="#2A2A2A" />
-    </Animated.View>
-  );
 }
 
 /** The sweep key: a four-way arrow and one stud socket per sweep the game
