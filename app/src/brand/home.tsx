@@ -6,7 +6,7 @@ import Animated, { Easing, type SharedValue, useAnimatedStyle, useSharedValue, w
 import { Block, plastic } from '@/components/Block';
 import { Field, type CellLook } from '@/components/Field';
 import { Overlay } from '@/components/Overlay';
-import { Body, Button, Chip, Gear, Heading, IconButton, Page, Panel, SoundIcon } from '@/components/ui';
+import { Body, Button, Chip, Gear, Heading, IconButton, Page, Panel, SoundKey } from '@/components/ui';
 import { space } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font } from '@/design/tokens';
@@ -22,7 +22,7 @@ import { fx } from '@/sound/sfx';
 let splashed = false;
 
 export function Home() {
-  const { c, sound, setSound } = useTheme();
+  const { c } = useTheme();
   const { game, stats, inProgress, newGame, learned } = useGame();
   const [confirm, setConfirm] = useState(false);
   const [splash, setSplash] = useState(!splashed);
@@ -46,9 +46,7 @@ export function Home() {
             <IconButton label="Настройки" size={48} onPress={() => router.push('/settings')}>
               <Gear color={c.text} />
             </IconButton>
-            <IconButton label={sound ? 'Выключить звук' : 'Включить звук'} size={48} onPress={() => setSound(!sound)}>
-              <SoundIcon on={sound} color={c.text} />
-            </IconButton>
+            <SoundKey />
           </View>
         }>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 28 }}>

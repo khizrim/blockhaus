@@ -221,6 +221,25 @@ export function TextLink({ label, onPress }: { label: string; onPress: () => voi
 }
 
 /** Square icon button, 44×44. Children draw the icon; the label is spoken. */
+/** The sound key: one tap silences effects and music together, the next
+   brings both back. Settings keep them apart. Quiet going off, so the tap
+   sound does not wake the music it is turning off. */
+export function SoundKey() {
+  const { c, audible, setAudible } = useTheme();
+  return (
+    <IconButton
+      label={audible ? 'Выключить звук' : 'Включить звук'}
+      size={48}
+      quiet
+      onPress={() => {
+        setAudible(!audible);
+        if (!audible) fx.tap();
+      }}>
+      <SoundIcon on={audible} color={c.text} />
+    </IconButton>
+  );
+}
+
 export function IconButton({
   onPress,
   label,
