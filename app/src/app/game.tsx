@@ -19,7 +19,7 @@ import { TileNum } from '@/components/TileNum';
 import { Block, plastic, Socket } from '@/components/Block';
 import { Icon } from '@/components/icons';
 import { Formula } from '@/components/Formula';
-import { INTRO_STEP, milestonesFor } from '@/components/Track';
+import { milestonesFor } from '@/components/Track';
 
 /* The game. The rules are the engine the prototype and the balance simulator
    run; this screen only shows them. A placement lands first, then each merge
@@ -115,6 +115,8 @@ export default function Game() {
   const counted = !g.cfg.freeSweeps && g.cfg.sweepsMax > 0;
   const showTrack = false;
   const lesson = store.lesson === null ? null : LESSONS[store.lesson];
+  /** The lesson move to play now: its tray slot and the cells it may go to. */
+  const mv = lesson?.moves?.[g.moves] ?? null;
   const [coach, setCoach] = useState<'task' | 'done'>('task');
   // The lesson on the board now, for timers that outlive a render (skip from pause).
   const lessonNow = useRef(store.lesson);
@@ -224,8 +226,35 @@ export default function Game() {
       setShown(g.board.slice());
       idleShown.current = 0;
       peak.current = g.bestTile;
+      if (store.lesson !== null) stageLesson(prevEnd.current ?? new Array(N * N).fill(engine.STONE), g.board);
+      prevEnd.current = null;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g, store.version]);
+
+  /* A lesson step comes on to the board the last one left: if the plate
+     grew, its new ring of sockets sinks in with a ratchet of clicks, then
+     the step's new tiles pop up one by one, each a note higher. */
+  const prevEnd = useRef<number[] | null>(null);
+  const [opened, setOpened] = useState<Set<number> | null>(null);
+  const stageLesson = (from: number[], to: number[]) => {
+    const grown = to.map((v, i) => (from[i] < 0 && v >= 0 ? i : -1)).filter((i) => i >= 0);
+    const fresh = to.map((v, i) => (v > 0 && v !== from[i] ? i : -1)).filter((i) => i >= 0);
+    if (grown.length) {
+      setOpened(new Set(grown));
+      fx.grow();
+      later(600, () => setOpened(null));
+    }
+    setShown(to.map((v, i) => (fresh.includes(i) ? 0 : v)));
+    const t0 = grown.length ? 380 : 160;
+    fresh.forEach((i, k) =>
+      later(t0 + k * 150, () => {
+        setShown((sh) => Object.assign(sh.slice(), { [i]: to[i] }));
+        setLands((l) => ({ ...l, [i]: Date.now() }));
+        fx.boop(k);
+      }),
+    );
+  };
   useEffect(() => {
     if (store.ready) setShown(store.game.board.slice());
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -272,6 +301,8 @@ export default function Game() {
     if (k === null) return;
     const L = LESSONS[k];
     const pieceStep = L.tray.some((p) => !p.used);
+    // A step of several moves goes on until its last one is played.
+    if (L.moves && g.moves < L.moves.length) return;
     // The engine refills a spent tray at random; a lesson keeps it empty.
     if (pieceStep) g.tray = g.tray.map((p) => ({ ...p, used: true }));
     const milestoneFired = moveHadMilestone.current;
@@ -286,14 +317,26 @@ export default function Game() {
           setRipple({ at, v: g.board[at], id: Date.now(), board: g.board.slice() });
           later(RIPPLE_MS, () => setRipple(null));
         }
-        if (!milestoneFired) fx.milestone(24 * 2 ** Math.min(k, 4));
+        // The step closes on its own figure, a step higher each time; after
+        // a milestone's bell it waits for the bell to ring out.
+        later(milestoneFired ? 520 : 0, () => fx.lessonStep(k));
         setCoach('done');
         kickLine();
         // The formula stays up to be read, then the next step slides in.
         later(milestoneFired ? RIPPLE_MS + 200 + LESSON_READ - 1100 : LESSON_READ, () => advance(k));
       } else if (pieceStep) {
-        // Cannot happen with moves locked, but never leave a lesson stuck.
-        later(400, () => lessonNow.current === k && store.startLesson(k));
+        /* The shorter chain of a choice: it plays out, the board pushes
+           back once, and the step comes again, its tiles popping back in. */
+        later(500, () => {
+          if (lessonNow.current !== k) return;
+          fx.repel();
+          shake();
+        });
+        later(1300, () => {
+          if (lessonNow.current !== k) return;
+          prevEnd.current = g.board.slice();
+          store.startLesson(k);
+        });
       }
     });
   };
@@ -301,7 +344,10 @@ export default function Game() {
   const advance = (k: number) => {
     later(dur.base, () => {
       if (lessonNow.current !== k) return;
-      if (k + 1 < LESSONS.length) return store.startLesson(k + 1);
+      if (k + 1 < LESSONS.length) {
+        prevEnd.current = g.board.slice();
+        return store.startLesson(k + 1);
+      }
       finale();
     });
   };
@@ -334,7 +380,7 @@ export default function Game() {
       setScatter(null);
       skipLessons();
       setTrackIntro(Date.now());
-      later(120, () => fx.cascade(milestonesFor(engine.DEFAULTS.goal), INTRO_STEP));
+      later(120, () => fx.learned());
     });
   };
 
@@ -457,11 +503,10 @@ export default function Game() {
       const gx = Math.round((px - boardAt.current.x - pad) / cell);
       const gy = Math.round((py - boardAt.current.y - pad) / cell);
       // In a lesson the piece goes in only where the lesson puts it.
-      const at = lesson?.hint?.[0]?.[0];
-      if (at !== undefined && (gx !== at % N || gy !== ((at / N) | 0))) return null;
+      if (mv && !mv.at.includes(gy * N + gx)) return null;
       return engine.fits(g.board, p, gx, gy) ? { gx, gy } : null;
     },
-    [g, cell, gap, lesson],
+    [g, cell, gap, lesson, mv],
   );
 
   const pieceOffset = (p: Piece) => {
@@ -475,6 +520,8 @@ export default function Game() {
   const start = (slot: number, pageX: number, pageY: number) => {
     const p = g.tray[slot];
     if (!p || p.used || g.over) return;
+    // In a lesson only the piece of the move now taught lifts.
+    if (mv && mv.slot !== slot) return;
     measureBoard();
     const { ox, oy } = pieceOffset(p);
     dx.value = pageX - ox;
@@ -649,6 +696,7 @@ export default function Game() {
   const look = useCallback(
     (i: number): CellLook | undefined => {
       const l: CellLook = { pop: pops[i], land: lands[i] };
+      if (opened?.has(i)) l.enterDelay = 60 + 40 * Math.max(Math.abs((i % N) - 2.5), Math.abs(((i / N) | 0) - 2.5));
       if (!hold && nudge) {
         const h = nudge.find(([at]) => at === i);
         if (h && shown[i] === 0) l.ghost = h[1];
@@ -659,9 +707,14 @@ export default function Game() {
         const m = aim.piece.cells.find(([cx, cy]) => (aim.oy + cy) * N + aim.ox + cx === i);
         if (m) l.ghost = m[2];
       }
-      if (!hold && lesson?.hint && coach === 'task') {
-        const h = lesson.hint.find(([at]) => at === i);
-        if (h && shown[i] === 0) l.ghost = h[1];
+      // The step's cells, hatched in the piece's colour: one place, or the
+      // places to choose between.
+      if (!hold && mv && coach === 'task' && shown[i] === 0) {
+        const p = g.tray[mv.slot];
+        for (const a of mv.at) {
+          const m = p?.cells.find(([cx, cy]) => ((a / N) | 0) * N + cy * N + (a % N) + cx === i);
+          if (m) l.ghost = m[2];
+        }
       }
       if (hold) {
         const pv = hold.piece.cells[0][2];
@@ -699,7 +752,7 @@ export default function Game() {
       }
       return l;
     },
-    [shown, hold, target, preview, pops, lands, lesson, coach, nudge, aim],
+    [shown, hold, target, preview, pops, lands, lesson, coach, nudge, aim, opened, mv],
   );
 
   const values = useMemo(() => {
@@ -718,6 +771,32 @@ export default function Game() {
     if (preview) for (const i of Object.keys(preview.result)) v[+i] = 0;
     return v;
   }, [shown, hold, target, aim, preview]);
+
+  // A lesson's board is only as big as its plate: past it there is no socket.
+  const plateValues = useMemo(() => (lesson ? values.map((v) => (v < 0 ? null : v)) : values), [values, lesson]);
+
+  /* The magnets speak: as the held piece comes over a cell, a partner beside
+     it hums, a like pole beside it pushes. Once per cell it enters. */
+  useEffect(() => {
+    if (!hold || !target) return;
+    let partner = 0;
+    let like = false;
+    for (const [cx, cy, cv] of hold.piece.cells) {
+      const x = target.gx + cx;
+      const y = target.gy + cy;
+      for (const [ux, uy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + ux;
+        const ny = y + uy;
+        if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+        const v = shown[ny * N + nx];
+        if (v > 0 && engine.pairs(cv, v)) partner = Math.max(partner, v);
+        else if (v > 0 && cv < 3 && v === cv) like = true;
+      }
+    }
+    if (partner) fx.hum(partner);
+    else if (like) fx.repel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.gx, target?.gy, !!hold]);
 
   /* ---------- sweep: swipe the board ----------
      While the finger moves the board leans a few points that way; on release
@@ -971,7 +1050,8 @@ export default function Game() {
   const slotRefs = useRef<(ComponentRef<typeof View> | null)[]>([]);
   type Geo = { board: { x: number; y: number; w: number }; slot?: { x: number; y: number } };
   const [geo, setGeo] = useState<Geo | null>(null);
-  const demoSlot = lesson && lesson.hint ? g.tray.findIndex((p) => p && !p.used) : -1;
+  // A choice is not shown: the player weighs the hatched cells themselves.
+  const demoSlot = mv && mv.at.length === 1 ? mv.slot : -1;
   useEffect(() => {
     setGeo(null);
     if (!lesson || coach !== 'task') return;
@@ -1037,7 +1117,7 @@ export default function Game() {
                 { name: 'down', label: 'Сдвиг вниз' },
               ]}
               onAccessibilityAction={(e) => sweep(e.nativeEvent.actionName as Dir)}>
-              <Field w={N} h={N} values={values} cell={cell} gap={gap} look={look} />
+              <Field w={N} h={N} values={plateValues} cell={cell} gap={gap} look={look} open={lesson?.open} />
               {sliding ? (
                 <View pointerEvents="none" style={StyleSheet.absoluteFill}>
                   {sliding.moves.map((m) => (
@@ -1107,17 +1187,17 @@ export default function Game() {
       </Screen>
 
       {lesson && coach === 'task' && !hold && !held && !sliding && geo ? (
-        demoSlot >= 0 && geo.slot && lesson.hint ? (
+        demoSlot >= 0 && geo.slot && mv ? (
           <Demo
             key={`demo-${store.lesson}-${store.version}`}
             piece={g.tray[demoSlot]!}
             from={geo.slot}
-            to={{ x: geo.board.x + gap / 2 + (lesson.hint[0][0] % N) * cell, y: geo.board.y + gap / 2 + ((lesson.hint[0][0] / N) | 0) * cell }}
+            to={{ x: geo.board.x + gap / 2 + (mv.at[0] % N) * cell, y: geo.board.y + gap / 2 + ((mv.at[0] / N) | 0) * cell }}
             cell={cell}
             gap={gap}
           />
-        ) : demoSlot < 0 ? (
-          <Finger key={`finger-${store.lesson}`} board={geo.board} />
+        ) : lesson.dirs ? (
+          <Finger key={`finger-${store.lesson}`} board={geo.board} vertical={!!lesson.dirs?.includes('up')} />
         ) : null
       ) : null}
 
@@ -1203,7 +1283,7 @@ function Ripple({ at, v, board, cell, gap, home, primaries }: { at: number; v: n
   return (
     <>
       {cells.map((i) =>
-        board[i] > 0 ? null : (
+        board[i] !== 0 ? null : (
           <FloorFlash key={`f${i}`} d={dist(i)} color={primaries ? c.tile[1 + (dist(i) % 3)] : c.tile[rank(v)]} style={{ left: pos(i).x + pad, top: pos(i).y + pad, width: cell - gap, height: cell - gap }} />
         ),
       )}
@@ -1337,7 +1417,7 @@ function Scatter({ board, cell, gap }: { board: number[]; cell: number; gap: num
         );
       })}
       {board.map((v, i) => {
-        if (!v) return null;
+        if (v <= 0) return null;
         const x = i % N;
         const y = (i / N) | 0;
         const d = Math.abs(x - 2.5) + Math.abs(y - 2.5);
@@ -1571,7 +1651,7 @@ function Demo({ piece, from, to, cell, gap }: { piece: Piece; from: { x: number;
 
 /** For the sweep lesson: a finger square that crosses the board, the gesture
     to copy. */
-function Finger({ board }: { board: { x: number; y: number; w: number } }) {
+function Finger({ board, vertical = false }: { board: { x: number; y: number; w: number }; vertical?: boolean }) {
   // A fingertip of white plastic presses down, drags across the board and lifts.
   const size = 48;
   const k = useSharedValue(0);
@@ -1589,10 +1669,17 @@ function Finger({ board }: { board: { x: number; y: number; w: number } }) {
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const x0 = board.x + board.w * 0.75 - size / 2;
-  const x1 = board.x + board.w * 0.25 - size / 2;
-  const y = board.y + board.w / 2 - size / 2;
-  const st = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateX: x0 + (x1 - x0) * k.value }, { translateY: y }, { scale: 1.1 - p.value * 0.1 }] }));
+  // Side to side, or (vertical) bottom to top, across the middle.
+  const mid = board.w / 2 - size / 2;
+  const a0 = board.w * 0.75 - size / 2;
+  const a1 = board.w * 0.25 - size / 2;
+  const st = useAnimatedStyle(() => {
+    const run = a0 + (a1 - a0) * k.value;
+    return {
+      opacity: o.value,
+      transform: [{ translateX: board.x + (vertical ? mid : run) }, { translateY: board.y + (vertical ? run : mid) }, { scale: 1.1 - p.value * 0.1 }],
+    };
+  });
   const shade = useAnimatedStyle(() => ({ opacity: 0.18 + p.value * 0.12, transform: [{ scale: 1 - p.value * 0.15 }] }));
   return (
     <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: size, height: size }, st]}>

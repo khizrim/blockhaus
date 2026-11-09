@@ -181,6 +181,25 @@ def knock(h=1.0, vol=1.0):
     return mix(burst(0.018, 2600 / h, 1.4, 0.4 * vol), osc('triangle', 240 / h, 120 / h, 0.06 * h, 0.26 * vol))
 
 
+def mallet(f, d=0.45, vol=0.22):
+    """A small plastic mallet on a tuned bar: the note, a quick fourth
+    partial for the strike, and a whisper of the tenth."""
+    return modes([f, f * 3.98, f * 9.9], [vol, vol * 0.32, vol * 0.08], [d * 0.45, 0.04, 0.012], d)
+
+
+LESSON_FIGURES = [[0, 2], [1, 3], [2, 4], [3, 5], [4, 6], [5, 7]]
+"""Each lesson step closes on a two-note figure, a step higher than the last
+(pentatonic degrees from C5); the end of the lessons plays them all as one
+phrase and lands on a chord."""
+
+
+def figure(degs, beat=0.11):
+    out = np.zeros(0)
+    for k, i in enumerate(degs):
+        out = layer(out, mallet(note(i), 0.6 if k == len(degs) - 1 else 0.4), beat * k)
+    return out
+
+
 ONLY = set(sys.argv[1:])
 
 
@@ -235,6 +254,32 @@ def main():
     for k, i in enumerate([0, 2, 4, 7]):
         out = layer(out, tone(note(i), 0.9), 0.09 + 0.09 * k)
     write('win', out, 0.55)
+
+    # ---- the lessons' voice (2026-11-09) ----
+    # A held piece over a cell beside its partner: the partner hums, a soft
+    # rising "mm" (played at the partner's pitch by rate).
+    write('hum', mix(osc('sine', note(0) * 0.98, note(0) * 1.02, 0.2, 0.18), osc('sine', note(0) * 2, note(0) * 2.03, 0.08, 0.04)), 0.28)
+    # Beside a like pole: two quick low pushes, softer than a refusal.
+    write('repel', mix(osc('triangle', 150, 120, 0.05, 0.2), osc('triangle', 150, 120, 0.045, 0.14, 0.055)), 0.3)
+    # A tile popping up onto the lesson board: a short rising boop.
+    write('boop', mix(osc('triangle', 420, 760, 0.07, 0.16), burst(0.012, 3800, 2, 0.12)), 0.32)
+    # The plate growing a ring: a quick ratchet of plastic clicks, climbing.
+    out = np.zeros(0)
+    for k in range(5):
+        out = layer(out, mix(burst(0.012, 3000 + 400 * k, 2, 0.3), osc('triangle', 900 + 120 * k, 800 + 120 * k, 0.02, 0.06)), 0.045 * k)
+    out = layer(out, thud(1.3), 0.24)
+    write('grow', out, 0.4)
+    # A step proved, and the whole phrase at the end.
+    for k, degs in enumerate(LESSON_FIGURES):
+        write(f'step-{k}', figure(degs), 0.45)
+    out = np.zeros(0)
+    tk = 0.0
+    for degs in LESSON_FIGURES:
+        out = layer(out, figure(degs, 0.075), tk)
+        tk += 0.16
+    for i in [5, 7, 9]:
+        out = layer(out, mallet(note(i), 1.1, 0.18), tk + 0.06)
+    write('learned', out, 0.5)
 
     # Game over: two soft notes gliding down.
     write('over', mix(osc('sine', 330, 220, 0.3, 0.2), osc('sine', 247, 165, 0.4, 0.2, 0.18)), 0.45)

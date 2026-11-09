@@ -3,12 +3,14 @@ import { View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
+import { Socket } from '@/components/Block';
 import { Field } from '@/components/Field';
 import { useTheme } from '@/design/theme';
 
 /** One part of a formula: a tile, a piece of several tiles side by side, or
     a sign. 'no' closes a pair that does not merge; 'swipe' is the gesture. */
-export type Term = number | number[] | '+' | '=' | '→' | 'no' | 'swipe';
+export type Term = number | number[] | { grid: number[][] } | '+' | '=' | '→' | 'no' | 'swipe' | 'swipeV' | 'stud';
+type Sym = '+' | '=' | '→' | 'no' | 'swipe' | 'swipeV';
 
 /* A rule written in tiles instead of words: [1] + [2] = [3]. The tiles are
    drawn as tray pieces, at the tray's cell and line, so a formula is made of
@@ -19,24 +21,30 @@ export type Term = number | number[] | '+' | '=' | '→' | 'no' | 'swipe';
 export function Formula({ terms, cell: want, gap, open = false, fit }: { terms: Term[]; cell: number; gap: number; open?: boolean; fit?: number }) {
   const { c } = useTheme();
   // Shrink to fit `fit` px: tiles count a cell, signs half, the swipe one, spaces a quarter.
-  const units = terms.reduce<number>((u, t) => u + (typeof t === 'number' ? 1 : Array.isArray(t) ? t.length : t === 'swipe' ? 1 : 0.5), 0) + (terms.length - 1) * 0.25;
+  const units = terms.reduce<number>((u, t) => u + (typeof t === 'number' || t === 'stud' ? 1 : Array.isArray(t) ? t.length : typeof t === 'object' ? 1 : t === 'swipe' ? 1 : 0.5), 0) + (terms.length - 1) * 0.25;
   const cell = fit ? Math.min(want, Math.floor((fit - gap) / units)) : want;
   const s = Math.round(cell * 0.5);
   const t = Math.max(2, Math.round(gap * 0.8));
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: Math.round(cell * 0.25) }}>
       {terms.map((term, k) => {
+        const last = k === terms.length - 1 && open;
         if (typeof term === 'number' || Array.isArray(term)) {
           const vs = typeof term === 'number' ? [term] : term;
-          return <Tiles key={k} vs={vs} cell={cell} gap={gap} empty={k === terms.length - 1 && open} />;
+          return <Tiles key={k} vs={[vs]} cell={cell} gap={gap} empty={last} />;
         }
-        return <Sign key={k} kind={term} s={s} t={t} color={term === 'no' ? c.tile[2] : c.text} />;
+        // A piece of several rows (the 2×2 square) at half the cell, so it
+        // stands as tall as one tile of the line.
+        if (typeof term === 'object') return <Tiles key={k} vs={term.grid} cell={Math.round(cell / 2)} gap={Math.max(2, Math.round(gap / 2))} empty={last} />;
+        // The sweep a chain earns: the yellow stud of the sweep key, at tile size.
+        if (term === 'stud') return <StudTerm key={k} cell={cell} gap={gap} empty={last} />;
+        return <Sign key={k} kind={term as Sym} s={s} t={t} color={term === 'no' ? c.tile[2] : c.text} />;
       })}
     </View>
   );
 }
 
-function Tiles({ vs, cell, gap, empty }: { vs: number[]; cell: number; gap: number; empty: boolean }) {
+function Tiles({ vs, cell, gap, empty }: { vs: number[][]; cell: number; gap: number; empty: boolean }) {
   const k = useSharedValue(1);
   const was = useRef(empty);
   useEffect(() => {
@@ -48,14 +56,47 @@ function Tiles({ vs, cell, gap, empty }: { vs: number[]; cell: number; gap: numb
   const st = useAnimatedStyle(() => ({ transform: [{ scale: k.value }] }));
   return (
     <Animated.View style={st}>
-      <Field variant="piece" w={vs.length} h={1} values={empty ? vs.map(() => 0) : vs} cell={cell} gap={gap} />
+      <Field variant="piece" w={vs[0].length} h={vs.length} values={vs.flat().map((v) => (empty ? 0 : v))} cell={cell} gap={gap} />
+    </Animated.View>
+  );
+}
+
+function StudTerm({ cell, gap, empty }: { cell: number; gap: number; empty: boolean }) {
+  const k = useSharedValue(1);
+  const was = useRef(empty);
+  useEffect(() => {
+    if (was.current && !empty) k.value = withSequence(withTiming(1.25, { duration: 0 }), withTiming(1, { duration: 360, easing: Easing.out(Easing.back(2.6)) }));
+    was.current = empty;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empty]);
+  const st = useAnimatedStyle(() => ({ transform: [{ scale: k.value }] }));
+  const size = cell - gap;
+  const s = Math.round(size * 0.62);
+  return (
+    <Animated.View style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, st]}>
+      <Socket size={size} style={{ position: 'absolute' }} />
+      {empty ? null : (
+        <View
+          style={{
+            width: s,
+            height: s,
+            borderRadius: Math.round(s * 0.28),
+            backgroundColor: '#FFD43B',
+            backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)',
+            boxShadow: `0 ${Math.max(2, Math.round(s * 0.12))}px 0 #C9A21F, inset 0 1px 0 rgba(255,255,255,0.8)`,
+            transform: [{ translateY: -2 }],
+          }}
+        />
+      )}
     </Animated.View>
   );
 }
 
 /** Signs drawn with one rounded stroke, like moulded plastic: plus, equals,
     a red cross, an arrow, the two-way swipe. */
-function Sign({ kind, s, color }: { kind: Exclude<Term, number | number[]>; s: number; t?: number; color: string }) {
+function Sign({ kind, s, color }: { kind: Sym; s: number; t?: number; color: string }) {
+  // The up-and-down swipe is the side-to-side one turned a quarter.
+  if (kind === 'swipeV') return <View style={{ width: s, height: s * 2, alignItems: 'center', justifyContent: 'center' }}><View style={{ transform: [{ rotate: '90deg' }] }}><Sign kind="swipe" s={s} color={color} /></View></View>;
   const w = kind === 'swipe' ? s * 2 : s;
   const sw = Math.max(2.4, s * 0.12);
   const m = sw / 2 + 1;
