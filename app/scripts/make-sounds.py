@@ -5,9 +5,8 @@
 The palette follows the board: glossy plastic blocks on a plastic plate
 (2026-11-08). Placing is a short plastic thud, a triangle wave falling in
 pitch with a puff of band-passed noise for the contact; heavier pieces sit
-lower. Keys are a bright plastic click. Merges are clean sine notes that
-climb the C major pentatonic one degree per merge of a cascade, with no
-click on top, so a chain is a staircase and never a drum roll. A new tray is
+lower. Keys are a bright plastic click. Merges, milestones, the win and
+game over belong to the music and live in scripts/music/make-stings.py. A new tray is
 one soft pop. Everything is short and quiet: a puzzle you play for an hour
 must not tire the ear.
 """
@@ -217,16 +216,8 @@ def main():
     # Dropped where it does not fit: the repelling magnet, two low pushes.
     write('invalid', mix(osc('sine', 110, 80, 0.12, 0.25), osc('sine', 110, 80, 0.1, 0.18, 0.07)), 0.4)
 
-    # Merges: merge-3 … merge-11 are the 1st … 9th merge of a cascade, one
-    # pentatonic degree each, starting a step above C5.
-    for k in range(9):
-        write(f'merge-{k + 3}', tone(note(1 + k)), 0.5)
-
-    # A milestone: its note with the fifth and the octave a beat apart.
-    for r in range(6, 12):
-        i = r - 2
-        out = mix(tone(note(i), 0.7), layer(np.zeros(0), tone(note(i + 3), 0.7, 0.14), 0.07), layer(np.zeros(0), tone(note(i + 5), 0.9, 0.16), 0.14))
-        write(f'milestone-{r}', out, 0.5)
+    # Merges and milestones are played by the music's band now:
+    # scripts/music/make-stings.py (vibraphone, FluidR3_GM).
 
     # Sweep, in two halves on the frames of the animation. The slide plays on
     # release: the blocks accelerate for 200 ms (ease-in), so the skid swells
@@ -249,11 +240,7 @@ def main():
     write('toggle-on', mix(click(), layer(np.zeros(0), osc('triangle', 1400, 1900, 0.04, 0.08), 0.03)), 0.22)
     write('toggle-off', mix(click(), layer(np.zeros(0), osc('triangle', 1400, 1000, 0.04, 0.08), 0.03)), 0.22)
 
-    # Win: the block lands, then a chord climbs, 90 ms a note.
-    out = thud(1.8)
-    for k, i in enumerate([0, 2, 4, 7]):
-        out = layer(out, tone(note(i), 0.9), 0.09 + 0.09 * k)
-    write('win', out, 0.55)
+    # Win and game over: scripts/music/make-stings.py.
 
     # ---- the lessons' voice (2026-11-09) ----
     # A held piece over a cell beside its partner: the partner hums, a soft
@@ -287,9 +274,6 @@ def main():
     out = layer(out, mallet(note(9), 0.35, 0.12), 0.03)
     out = layer(out, mallet(note(7), 0.5, 0.09), 0.13)
     write('full', out, 0.32)
-
-    # Game over: two soft notes gliding down.
-    write('over', mix(osc('sine', 330, 220, 0.3, 0.2), osc('sine', 247, 165, 0.4, 0.2, 0.18)), 0.45)
 
     # The end of a long chain (2026-11-09): a low slam under the last note.
     # A sub drop and a plastic crack, with C and G an octave down so it sits

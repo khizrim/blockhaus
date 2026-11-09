@@ -107,9 +107,28 @@ export function setFeedback(o: { sound: boolean; haptics: boolean; music: boolea
 const MUSIC_LEVEL = 0.35;
 let dimmed = false;
 let away = false;
+let ducked = false;
+let duckTimer: ReturnType<typeof setTimeout> | null = null;
 
-function syncMusic() {
-  getMusic().setVolume(musicOn && !away ? (dimmed ? MUSIC_LEVEL * 0.35 : MUSIC_LEVEL) : 0, away ? 150 : 600);
+function syncMusic(ms?: number) {
+  const level = (dimmed ? MUSIC_LEVEL * 0.35 : MUSIC_LEVEL) * (ducked ? 0.5 : 1);
+  getMusic().setVolume(musicOn && !away ? level : 0, ms ?? (away ? 150 : 600));
+}
+
+/* The music steps back for the big moments (a long chain, a new best, the
+   win), so they are heard over the band, and comes back once they ring out.
+   Each call keeps it down a little longer. */
+function duck(holdMs: number) {
+  if (!musicOn) return;
+  if (!ducked) {
+    ducked = true;
+    syncMusic(100);
+  }
+  if (duckTimer) clearTimeout(duckTimer);
+  duckTimer = setTimeout(() => {
+    ducked = false;
+    syncMusic(900);
+  }, holdMs);
 }
 
 /* Silent while the app is in the background or the browser tab is hidden,
@@ -195,6 +214,7 @@ export const fx = {
   merge: (value: number, step = 0) => {
     const r = rungOf(value);
     play(`merge-${3 + Math.min(8, step)}` as SoundName);
+    if (step >= 2) duck(700);
     const style = step >= 4 ? Haptics.ImpactFeedbackStyle.Heavy : step >= 2 || r >= 6 ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Soft;
     buzz(() => Haptics.impactAsync(style));
   },
@@ -226,6 +246,7 @@ export const fx = {
   milestone: (value: number) => {
     const r = Math.max(6, rungOf(value));
     play(`milestone-${r}` as SoundName);
+    duck(1100);
     buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
   },
   /** A chain earned a sweep. */
@@ -240,6 +261,7 @@ export const fx = {
   },
   win: () => {
     play('win');
+    duck(1500);
     buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
   },
   over: () => {
