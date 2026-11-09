@@ -33,7 +33,14 @@ const GAPS = [180, 160, 140, 120, 110];
 const chainAt = (k: number) => GAPS.slice(0, k).reduce((a, b) => a + b, 0) + Math.max(0, k - GAPS.length) * GAPS[GAPS.length - 1];
 const FLY = 110; // ms for an absorbed tile to fly into its partner
 const BURST_MS = 620; // ms the crumbs of a merge fly and fall
-const STUD_FLY = 520; // ms an earned sweep's stud flies to the sweep key
+/* A sweep's stud on its way (2026-11-09: "it shows, but nothing explains
+   it"): it is a moment of its own. The stud pops up big where it comes from
+   and hangs there a beat, glowing, then flies to the key, which leans in to
+   meet it. */
+const STUD_FLY = 1050; // ms: pop, hang, fly into the key
+const STUD_BOUNCE = 1500; // ms: pop, hang, fly, knock on a full key, fall
+const STUD_KNOCK = 0.62; // part of STUD_BOUNCE when it hits the full key
+const STUD_OUT = 750; // ms for a spent stud to leave the key and fall
 const PLATE = 6; // px each sweep layer shows under the board
 const back = (d: number, k = 1.8) => ({ duration: d, easing: Easing.out(Easing.back(k)) });
 
@@ -46,7 +53,7 @@ const noSelect = { userSelect: 'none' } as object;
 const SWIPE = 24; // px of travel that counts as a swipe
 const SLIDE = dur.base; // ms for tiles to travel in a sweep
 const PUSH_MS = 260; // ms for the pushed piece to ride in from the far edge
-const LESSON_READ = 2500; // ms to read the proved formula before the next step slides in
+const LESSON_READ = 1300; // ms to read the proved formula before the next step slides in (2500 felt like a hang)
 
 type Hold = { slot: number; piece: Piece };
 
@@ -130,6 +137,8 @@ export default function Game() {
   useEffect(() => {
     setCoach('task');
     if (store.lesson === 0) lessonPeak.current = 0;
+    lineIn.value = 1;
+    lineIn.value = withTiming(0, { duration: dur.slow, easing: Easing.out(Easing.cubic) });
   }, [store.lesson]);
 
   // What the board shows. Equal to the game's board at rest; during a chain it
@@ -156,6 +165,27 @@ export default function Game() {
       const sock = { x: kx + kw - 24 - (studs - 1 - Math.max(0, Math.min(studs - 1, k))) * 19 - boardAt.current.x, y: ky + kh / 2 - 9 - boardAt.current.y };
       setStudFly(mode === 'out' ? { id: Date.now(), from: sock, to: from, mode } : { id: Date.now(), from, to: sock, mode });
     });
+    keyMoment(mode);
+    // The pop where the stud comes from, on the frame it jumps up.
+    if (mode !== 'out') fx.boop(4);
+  };
+  /* The sweep key answers the stud: it grows to meet one coming in and
+     kicks as it clicks home; a full key grows, then shakes it off; a key
+     that pays for a swipe pulses as the stud leaves. */
+  const keyZoom = useSharedValue(1);
+  const keyShake = useSharedValue(0);
+  const keyStyle = useAnimatedStyle(() => ({ transform: [{ translateX: keyShake.value }, { scale: keyZoom.value }], transformOrigin: 'right center' }));
+  const keyMoment = (mode: StudMode) => {
+    const grow = { duration: 200, easing: Easing.out(Easing.cubic) };
+    if (mode === 'in') {
+      keyZoom.value = withSequence(withDelay(STUD_FLY * 0.4, withTiming(1.3, grow)), withDelay(STUD_FLY * 0.6 - 200, withTiming(1.45, { duration: 60 })), withTiming(1, back(360, 2.2)));
+    } else if (mode === 'bounce') {
+      const at = STUD_BOUNCE * STUD_KNOCK;
+      keyZoom.value = withSequence(withDelay(STUD_BOUNCE * 0.28, withTiming(1.3, grow)), withDelay(at - STUD_BOUNCE * 0.28 - 200, withTiming(1.3, { duration: 0 })), withDelay(320, withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) })));
+      keyShake.value = withDelay(at, withSequence(withTiming(-7, { duration: 50 }), withTiming(7, { duration: 70 }), withTiming(-4, { duration: 60 }), withTiming(0, { duration: 80 })));
+    } else {
+      keyZoom.value = withSequence(withTiming(1.3, { duration: 120, easing: Easing.out(Easing.cubic) }), withTiming(1, back(380, 2.2)));
+    }
   };
   const burstClear = useRef<ReturnType<typeof setTimeout> | null>(null);
   // While a swipe is held past the threshold: where the next piece will ride in.
@@ -181,6 +211,8 @@ export default function Game() {
   const [scatter, setScatter] = useState<{ id: number; board: number[] } | null>(null);
   /** Bumps when the lesson line changes, so it kicks in. */
   const lineKick = useSharedValue(1);
+  /** The lesson line coming in (1, from the right) or going out (-1, to the left); 0 at rest. */
+  const lineIn = useSharedValue(0);
   /** A milestone whose copy is still flying to the track: its square waits. */
   const [trackHold, setTrackHold] = useState(0);
   const lastDir = useRef<Dir>('down');
@@ -277,9 +309,9 @@ export default function Game() {
       later(600, () => setOpened(null));
     }
     setShown(to.map((v, i) => (fresh.includes(i) ? 0 : v)));
-    const t0 = grown.length ? 380 : 160;
+    const t0 = grown.length ? 300 : 120;
     fresh.forEach((i, k) =>
-      later(t0 + k * 150, () => {
+      later(t0 + k * 110, () => {
         setShown((sh) => Object.assign(sh.slice(), { [i]: to[i] }));
         setLands((l) => ({ ...l, [i]: Date.now() }));
         fx.boop(k);
@@ -373,6 +405,8 @@ export default function Game() {
   };
 
   const advance = (k: number) => {
+    // The proved line slides out to the left as the next one comes in from the right.
+    lineIn.value = withTiming(-1, { duration: dur.base, easing: Easing.in(Easing.cubic) });
     later(dur.base, () => {
       if (lessonNow.current !== k) return;
       if (k + 1 < LESSONS.length) {
@@ -655,8 +689,8 @@ export default function Game() {
       const from = cellPt(chainAnchor());
       later(done, () => {
         flyStud(from, g.cfg.sweepsMax - 1, 'bounce');
-        later(STUD_FLY * 0.62, () => fx.repel());
-        later(STUD_FLY * 1.4, () => setStudFly(null));
+        later(STUD_BOUNCE * STUD_KNOCK, () => fx.repel());
+        later(STUD_BOUNCE, () => setStudFly(null));
       });
     } else if (counted && res.refilled && g.sweeps > sw0) {
       /* A new tray tops an empty key up to one sweep: the stud rises out of
@@ -913,7 +947,7 @@ export default function Game() {
       const W = cell * N + gap;
       const [ux, uy] = UNIT[dir];
       flyStud({ x: W / 2 - 9 + ux * (W / 2 + cell * 0.4), y: W / 2 - 9 + uy * (W / 2 + cell * 0.4) }, g.sweeps, 'out');
-      later(STUD_FLY * 1.4, () => setStudFly((f) => (f?.mode === 'out' ? null : f)));
+      later(STUD_OUT, () => setStudFly((f) => (f?.mode === 'out' ? null : f)));
     }
     tilt(dir, 3, SLIDE - 90);
     const push = res.pushed ?? null;
@@ -1128,7 +1162,7 @@ export default function Game() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.lesson, store.version, coach, width, height]);
 
-  const lineStyle = useAnimatedStyle(() => ({ transform: [{ scale: lineKick.value }], transformOrigin: 'center' }));
+  const lineStyle = useAnimatedStyle(() => ({ opacity: 1 - Math.abs(lineIn.value), transform: [{ translateX: lineIn.value * 40 }, { scale: lineKick.value }], transformOrigin: 'center' }));
 
   return (
     <View style={[{ flex: 1 }, noSelect]}>
@@ -1145,9 +1179,11 @@ export default function Game() {
             <ScoreNum v={g.score} />
             {chainMult(g.cfg.chainScore, chain) > 1 ? <MultChip k={chainMult(g.cfg.chainScore, chain)} /> : null}
           </Animated.View>
-          <View ref={keyRef} collapsable={false}>
-            <SweepKey studs={counted ? g.cfg.sweepsMax : 0} filled={g.sweeps - (bonusHeld ? 1 : 0)} ghost={earns} onPress={hintSweep} />
-          </View>
+          <Animated.View style={keyStyle}>
+            <View ref={keyRef} collapsable={false}>
+              <SweepKey studs={counted ? g.cfg.sweepsMax : 0} filled={g.sweeps - (bonusHeld ? 1 : 0)} ghost={earns} onPress={hintSweep} />
+            </View>
+          </Animated.View>
         </View>
 
         {/* the lesson and the board, centred between the header and the tray, never closer than one step */}
@@ -1195,8 +1231,9 @@ export default function Game() {
                 {bursts.map((b) => (
                   <Burst key={b.id} at={b.at} v={b.v} n={b.n} power={b.power} cell={cell} gap={gap} />
                 ))}
-                {studFly ? <StudFlight key={studFly.id} from={studFly.from} to={studFly.to} mode={studFly.mode} cell={cell} /> : null}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
+                {/* Above the wave: the stud is what the eye should follow. */}
+                {studFly ? <StudFlight key={studFly.id} from={studFly.from} to={studFly.to} mode={studFly.mode} cell={cell} /> : null}
               </View>
             </View>
           </Animated.View>
@@ -1590,53 +1627,63 @@ function Chip({ vx, vy, spin, size, delay, cx, cy, v, cell }: { vx: number; vy: 
 type StudMode = 'in' | 'bounce' | 'out';
 function StudFlight({ from, to, mode, cell }: { from: { x: number; y: number }; to: { x: number; y: number }; mode: StudMode; cell: number }) {
   const k = useSharedValue(0);
+  const total = mode === 'in' ? STUD_FLY : mode === 'bounce' ? STUD_BOUNCE : STUD_OUT;
   useEffect(() => {
-    k.value = mode === 'in' ? withTiming(1, { duration: STUD_FLY, easing: Easing.inOut(Easing.cubic) }) : withTiming(1, { duration: STUD_FLY * 1.4, easing: Easing.linear });
+    k.value = withTiming(1, { duration: total, easing: Easing.linear });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const ease = (t: number) => {
+    'worklet';
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  };
+  // pop: 0 to POP the stud jumps up and grows; it hangs till HANG; then flies.
+  const POP = mode === 'in' ? 0.26 : 0.2;
+  const HANG = mode === 'in' ? 0.42 : 0.3;
+  const END = mode === 'in' ? 1 : STUD_KNOCK;
   const st = useAnimatedStyle(() => {
     const p = k.value;
     if (mode === 'out') {
-      // Pops up out of the socket, then falls away along a short arc.
-      const lift = Math.sin(Math.PI * Math.min(1, p * 1.6)) * cell * 0.8;
+      // Pops up out of the socket, big, then falls away along a short arc.
+      const lift = Math.sin(Math.PI * Math.min(1, p * 1.6)) * cell * 0.9;
       return {
-        opacity: p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3,
-        transform: [{ translateX: from.x + (to.x - from.x) * p }, { translateY: from.y + (to.y - from.y) * p * p - lift }, { rotate: `${p * 270}deg` }, { scale: 1 + Math.sin(Math.PI * p) * 0.5 }],
+        opacity: p < 0.75 ? 1 : 1 - (p - 0.75) / 0.25,
+        transform: [{ translateX: from.x + (to.x - from.x) * p }, { translateY: from.y + (to.y - from.y) * p * p - lift }, { rotate: `${p * 270}deg` }, { scale: 1 + Math.sin(Math.PI * Math.min(1, p * 1.4)) * 1.2 }],
       };
     }
-    if (mode === 'bounce') {
-      // 0 to 0.62: the arc to the key; then it drops off it and fades.
-      const a = Math.min(1, p / 0.62);
-      const e = a < 0.5 ? 4 * a * a * a : 1 - Math.pow(-2 * a + 2, 3) / 2;
-      const lift = Math.sin(Math.PI * e) * cell * 1.2;
-      const b = Math.max(0, (p - 0.62) / 0.38);
+    const rise = cell * 0.7;
+    const up = Math.min(1, p / POP);
+    const popScale = 1 + (1 - Math.pow(1 - up, 3)) * 1.6 + (up >= 1 && p < HANG ? Math.sin(((p - POP) / (HANG - POP)) * Math.PI) * 0.12 : 0);
+    if (p < HANG) {
+      return { opacity: 1, transform: [{ translateX: from.x }, { translateY: from.y - rise * (1 - Math.pow(1 - up, 3)) }, { rotate: '0deg' }, { scale: popScale }] };
+    }
+    const a = ease(Math.min(1, (p - HANG) / (END - HANG)));
+    const sx = from.x;
+    const sy = from.y - rise;
+    const lift = Math.sin(Math.PI * a) * cell * 0.9;
+    const base = { x: sx + (to.x - sx) * a, y: sy + (to.y - sy) * a - lift };
+    const scale = 2.6 - a * 1.6;
+    if (mode === 'bounce' && p > END) {
+      // Knocked off the full key: up a little, then down and away.
+      const b = (p - END) / (1 - END);
       return {
         opacity: b < 0.5 ? 1 : 1 - (b - 0.5) / 0.5,
-        transform: [
-          { translateX: from.x + (to.x - from.x) * e + b * cell * 0.6 },
-          { translateY: from.y + (to.y - from.y) * e - lift - Math.sin(Math.PI * Math.min(1, b * 1.5)) * cell * 0.5 + b * b * cell * 2.4 },
-          { rotate: `${e * 360 + b * 200}deg` },
-          { scale: 1.9 - e * 0.9 + Math.sin(Math.PI * e) * 0.4 },
-        ],
+        transform: [{ translateX: to.x + b * cell * 0.7 }, { translateY: to.y - Math.sin(Math.PI * Math.min(1, b * 1.6)) * cell * 0.6 + b * b * cell * 2.6 }, { rotate: `${b * 240}deg` }, { scale: 1 }],
       };
     }
-    const lift = Math.sin(Math.PI * p) * cell * 1.2;
-    return {
-      transform: [
-        { translateX: from.x + (to.x - from.x) * p },
-        { translateY: from.y + (to.y - from.y) * p - lift },
-        { rotate: `${p * 360}deg` },
-        { scale: 1.9 - p * 0.9 + Math.sin(Math.PI * p) * 0.4 },
-      ],
-    };
+    return { opacity: 1, transform: [{ translateX: base.x }, { translateY: base.y }, { rotate: `${a * 360}deg` }, { scale }] };
+  });
+  // A ring of yellow light behind the stud while it hangs: look here.
+  const glow = useAnimatedStyle(() => {
+    const p = k.value;
+    if (mode === 'out' || p > HANG + 0.05) return { opacity: 0, transform: [{ scale: 1 }] };
+    const g = Math.min(1, p / HANG);
+    return { opacity: 0.55 * (1 - g), transform: [{ scale: 1 + g * 2.2 }] };
   });
   return (
-    <Animated.View
-      style={[
-        { position: 'absolute', left: 0, top: 0, width: 18, height: 18, borderRadius: 5, backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 2px 0 #C9A21F, inset 0 1px 0 rgba(255,255,255,0.8)' },
-        st,
-      ]}
-    />
+    <Animated.View style={[{ position: 'absolute', left: 0, top: 0, width: 18, height: 18 }, st]}>
+      <Animated.View style={[{ position: 'absolute', left: -3, top: -3, width: 24, height: 24, borderRadius: 7, borderWidth: 2, borderColor: '#FFD43B' }, glow]} />
+      <View style={{ width: 18, height: 18, borderRadius: 5, backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 2px 0 #C9A21F, inset 0 1px 0 rgba(255,255,255,0.8)' }} />
+    </Animated.View>
   );
 }
 
