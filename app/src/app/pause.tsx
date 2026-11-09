@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { Overlay } from '@/components/Overlay';
-import { Body, Button, Gear, Heading, IconButton, Page, Panel, SoundIcon } from '@/components/ui';
+import { Body, Button, Gear, Heading, IconButton, Page, Panel, SoundKey } from '@/components/ui';
 import { space } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { useGame } from '@/game/store';
@@ -12,7 +12,7 @@ import { dimMusic } from '@/sound/sfx';
 /* Pause (2026-11-08): a page in the table colour. The sound key at the top,
    then three keys: carry on, start again, back to the menu. */
 export default function Pause() {
-  const { c, sound, setSound } = useTheme();
+  const { c } = useTheme();
   useEffect(() => {
     dimMusic(true);
     return () => dimMusic(false);
@@ -48,9 +48,7 @@ export default function Pause() {
           <IconButton label="Настройки" size={48} onPress={() => router.push('/settings')}>
             <Gear color={c.text} />
           </IconButton>
-          <IconButton label={sound ? 'Выключить звук' : 'Включить звук'} size={48} onPress={() => setSound(!sound)}>
-            <SoundIcon on={sound} color={c.text} />
-          </IconButton>
+          <SoundKey />
         </View>
       }>
       <View style={{ flex: 1, justifyContent: 'center', gap: 12 }}>

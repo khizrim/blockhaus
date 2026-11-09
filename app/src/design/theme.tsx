@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { setFeedback } from '@/sound/sfx';
@@ -23,6 +23,10 @@ type Prefs = {
   setHints: (v: boolean) => void;
   music: boolean;
   setMusic: (v: boolean) => void;
+  /** The sound key: on while any sound or music plays. */
+  audible: boolean;
+  /** The sound key's tap: effects and music together. */
+  setAudible: (v: boolean) => void;
 };
 
 type Theme = Prefs & { c: Palette; isDark: boolean };
@@ -55,10 +59,22 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setFeedback({ sound, haptics, music });
     AsyncStorage.setItem(KEY, JSON.stringify({ mode, sound, haptics, hints, music })).catch(() => {});
   }, [loaded, mode, sound, haptics, hints, music]);
+  /* The key acts inside the tap itself, not a render later: a browser lets
+     audio start only from a tap, and the music must not swell for a moment
+     before it goes quiet. */
+  const setAudible = useCallback(
+    (v: boolean) => {
+      setFeedback({ sound: v, haptics, music: v });
+      setSound(v);
+      setMusic(v);
+    },
+    [haptics],
+  );
+  const audible = sound || music;
   const isDark = mode === 'dark' || (mode === 'system' && system === 'dark');
   const value = useMemo(
-    () => ({ mode, setMode, sound, setSound, haptics, setHaptics, hints, setHints, music, setMusic, isDark, c: isDark ? dark : light }),
-    [mode, sound, haptics, hints, music, isDark],
+    () => ({ mode, setMode, sound, setSound, haptics, setHaptics, hints, setHints, music, setMusic, audible, setAudible, isDark, c: isDark ? dark : light }),
+    [mode, sound, haptics, hints, music, isDark, setAudible],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
