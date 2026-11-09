@@ -15,6 +15,7 @@ import { LESSONS } from '@/game/lessons';
 import { slideMoves, type Move } from '@/game/slide';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
+import { loudOnce, type StudKind } from '@/game/seen';
 import { TileNum } from '@/components/TileNum';
 import { Block, plastic, Socket } from '@/components/Block';
 import { Icon } from '@/components/icons';
@@ -41,6 +42,7 @@ const STUD_FLY = 1050; // ms: pop, hang, fly into the key
 const STUD_BOUNCE = 1500; // ms: pop, hang, fly, knock on a full key, fall
 const STUD_KNOCK = 0.62; // part of STUD_BOUNCE when it hits the full key
 const STUD_OUT = 750; // ms for a spent stud to leave the key and fall
+const STUD_QUIET = 420; // ms for the small hop of a stud the player has seen enough
 const PLATE = 6; // px each sweep layer shows under the board
 const back = (d: number, k = 1.8) => ({ duration: d, easing: Easing.out(Easing.back(k)) });
 
@@ -153,22 +155,35 @@ export default function Game() {
   /** Plastic crumbs thrown off a cascade's merges and a new best tile. */
   const [bursts, setBursts] = useState<{ id: string; at: number; v: number; n: number; power: number }[]>([]);
   /** An earned sweep: a stud flying from the merge that earned it to the sweep key. */
-  const [studFly, setStudFly] = useState<{ id: number; from: { x: number; y: number }; to: { x: number; y: number }; mode: StudMode } | null>(null);
+  const [studFly, setStudFly] = useState<{ id: number; from: { x: number; y: number }; to: { x: number; y: number }; mode: StudMode; loud: boolean } | null>(null);
   const keyRef = useRef<ComponentRef<typeof View>>(null);
   /** The top-left of a stud chip centred on a board cell. */
   const cellPt = (at: number) => ({ x: gap / 2 + (at % N) * cell + cell / 2 - 9, y: gap / 2 + ((at / N) | 0) * cell + cell / 2 - 9 });
   /** Sends a stud between `from` and socket `k` of the sweep key ('out' flies
       from the socket to `from`), all in the board's coordinates. */
-  const flyStud = (from: { x: number; y: number }, k: number, mode: StudMode) => {
+  const flyStud = (from: { x: number; y: number }, k: number, mode: StudMode, loud: boolean) => {
+    /* Quiet, once the player knows it: a stud from a chain or a tray makes
+       a short small hop into its socket; a full key gives a small shake and
+       nothing flies; a spent stud just sinks in its socket as the key ticks. */
+    if (!loud) {
+      if (mode === 'bounce') keyShake.value = withSequence(withTiming(-3, { duration: 40 }), withTiming(3, { duration: 60 }), withTiming(0, { duration: 60 }));
+      if (mode === 'out') keyZoom.value = withSequence(withTiming(1.06, { duration: 80 }), withTiming(1, { duration: 160 }));
+      if (mode !== 'in') return;
+      keyZoom.value = withDelay(STUD_QUIET - 40, withSequence(withTiming(1.1, { duration: 60 }), withTiming(1, back(220, 2))));
+    }
     keyRef.current?.measureInWindow((kx, ky, kw, kh) => {
       const studs = g.cfg.sweepsMax;
       const sock = { x: kx + kw - 24 - (studs - 1 - Math.max(0, Math.min(studs - 1, k))) * 19 - boardAt.current.x, y: ky + kh / 2 - 9 - boardAt.current.y };
-      setStudFly(mode === 'out' ? { id: Date.now(), from: sock, to: from, mode } : { id: Date.now(), from, to: sock, mode });
+      setStudFly(mode === 'out' ? { id: Date.now(), from: sock, to: from, mode, loud } : { id: Date.now(), from, to: sock, mode, loud });
     });
+    if (!loud) return;
     keyMoment(mode);
     // The pop where the stud comes from, on the frame it jumps up.
     if (mode !== 'out') fx.boop(4);
   };
+  /** In the lessons every sweep moment plays in full; in a game, only the
+      first showings of each kind (see seen.ts). */
+  const isLoud = (kind: StudKind) => store.lesson !== null || loudOnce(kind);
   /* The sweep key answers the stud: it grows to meet one coming in and
      kicks as it clicks home; a full key grows, then shakes it off; a key
      that pays for a swipe pulses as the stud leaves. */
@@ -278,9 +293,10 @@ export default function Game() {
            empty: a stud rises out of the tray into the key. */
         later(120, () => fx.learned());
         setBonusHeld(true);
+        loudOnce('tray');
         later(700, () => {
           slotRefs.current[1]?.measureInWindow((sx_, sy_, sw, sh) => {
-            flyStud({ x: sx_ + sw / 2 - 9 - boardAt.current.x, y: sy_ + sh / 2 - 9 - boardAt.current.y }, 0, 'in');
+            flyStud({ x: sx_ + sw / 2 - 9 - boardAt.current.x, y: sy_ + sh / 2 - 9 - boardAt.current.y }, 0, 'in', true);
           });
           later(STUD_FLY, () => {
             setStudFly(null);
@@ -675,9 +691,10 @@ export default function Game() {
     if (res.bonus) {
       setBonusHeld(true);
       const from = cellPt(chainAnchor());
+      const loud = isLoud('chain');
       later(done, () => {
-        flyStud(from, g.sweeps - 1, 'in');
-        later(STUD_FLY, () => {
+        flyStud(from, g.sweeps - 1, 'in', loud);
+        later(loud ? STUD_FLY : STUD_QUIET, () => {
           setStudFly(null);
           setBonusHeld(false);
           fx.bonus();
@@ -687,8 +704,10 @@ export default function Game() {
       /* Earned with the key already full: the stud flies up, knocks on the
          key and drops away. Sweeps keep, but only two of them. */
       const from = cellPt(chainAnchor());
+      const loud = isLoud('full');
       later(done, () => {
-        flyStud(from, g.cfg.sweepsMax - 1, 'bounce');
+        flyStud(from, g.cfg.sweepsMax - 1, 'bounce', loud);
+        if (!loud) return;
         later(STUD_BOUNCE * STUD_KNOCK, () => fx.repel());
         later(STUD_BOUNCE, () => setStudFly(null));
       });
@@ -696,11 +715,12 @@ export default function Game() {
       /* A new tray tops an empty key up to one sweep: the stud rises out of
          the tray with the new pieces and flies up into its socket. */
       setBonusHeld(true);
+      const loud = isLoud('tray');
       later(done + 200, () => {
         slotRefs.current[1]?.measureInWindow((sx_, sy_, sw, sh) => {
-          flyStud({ x: sx_ + sw / 2 - 9 - boardAt.current.x, y: sy_ + sh / 2 - 9 - boardAt.current.y }, g.sweeps - 1, 'in');
+          flyStud({ x: sx_ + sw / 2 - 9 - boardAt.current.x, y: sy_ + sh / 2 - 9 - boardAt.current.y }, g.sweeps - 1, 'in', loud);
         });
-        later(STUD_FLY, () => {
+        later(loud ? STUD_FLY : STUD_QUIET, () => {
           setStudFly(null);
           setBonusHeld(false);
           fx.bonus();
@@ -946,7 +966,7 @@ export default function Game() {
     if (counted) {
       const W = cell * N + gap;
       const [ux, uy] = UNIT[dir];
-      flyStud({ x: W / 2 - 9 + ux * (W / 2 + cell * 0.4), y: W / 2 - 9 + uy * (W / 2 + cell * 0.4) }, g.sweeps, 'out');
+      flyStud({ x: W / 2 - 9 + ux * (W / 2 + cell * 0.4), y: W / 2 - 9 + uy * (W / 2 + cell * 0.4) }, g.sweeps, 'out', isLoud('spend'));
       later(STUD_OUT, () => setStudFly((f) => (f?.mode === 'out' ? null : f)));
     }
     tilt(dir, 3, SLIDE - 90);
@@ -1233,7 +1253,7 @@ export default function Game() {
                 ))}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
                 {/* Above the wave: the stud is what the eye should follow. */}
-                {studFly ? <StudFlight key={studFly.id} from={studFly.from} to={studFly.to} mode={studFly.mode} cell={cell} /> : null}
+                {studFly ? <StudFlight key={studFly.id} from={studFly.from} to={studFly.to} mode={studFly.mode} loud={studFly.loud} cell={cell} /> : null}
               </View>
             </View>
           </Animated.View>
@@ -1625,9 +1645,9 @@ function Chip({ vx, vy, spin, size, delay, cx, cy, v, cell }: { vx: number; vy: 
    same arc, but the key is full: it knocks on it and falls away. 'out': a
    spent sweep leaves its socket and drops off the edge the board went. */
 type StudMode = 'in' | 'bounce' | 'out';
-function StudFlight({ from, to, mode, cell }: { from: { x: number; y: number }; to: { x: number; y: number }; mode: StudMode; cell: number }) {
+function StudFlight({ from, to, mode, loud, cell }: { from: { x: number; y: number }; to: { x: number; y: number }; mode: StudMode; loud: boolean; cell: number }) {
   const k = useSharedValue(0);
-  const total = mode === 'in' ? STUD_FLY : mode === 'bounce' ? STUD_BOUNCE : STUD_OUT;
+  const total = !loud ? STUD_QUIET : mode === 'in' ? STUD_FLY : mode === 'bounce' ? STUD_BOUNCE : STUD_OUT;
   useEffect(() => {
     k.value = withTiming(1, { duration: total, easing: Easing.linear });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1642,6 +1662,11 @@ function StudFlight({ from, to, mode, cell }: { from: { x: number; y: number }; 
   const END = mode === 'in' ? 1 : STUD_KNOCK;
   const st = useAnimatedStyle(() => {
     const p = k.value;
+    if (!loud) {
+      // The small hop: a low arc, a touch bigger than the stud, no hang.
+      const a = ease(p);
+      return { opacity: 1, transform: [{ translateX: from.x + (to.x - from.x) * a }, { translateY: from.y + (to.y - from.y) * a - Math.sin(Math.PI * a) * cell * 0.5 }, { rotate: '0deg' }, { scale: 1.3 - a * 0.3 }] };
+    }
     if (mode === 'out') {
       // Pops up out of the socket, big, then falls away along a short arc.
       const lift = Math.sin(Math.PI * Math.min(1, p * 1.6)) * cell * 0.9;
@@ -1675,7 +1700,7 @@ function StudFlight({ from, to, mode, cell }: { from: { x: number; y: number }; 
   // A ring of yellow light behind the stud while it hangs: look here.
   const glow = useAnimatedStyle(() => {
     const p = k.value;
-    if (mode === 'out' || p > HANG + 0.05) return { opacity: 0, transform: [{ scale: 1 }] };
+    if (!loud || mode === 'out' || p > HANG + 0.05) return { opacity: 0, transform: [{ scale: 1 }] };
     const g = Math.min(1, p / HANG);
     return { opacity: 0.55 * (1 - g), transform: [{ scale: 1 + g * 2.2 }] };
   });
