@@ -37,6 +37,9 @@ const SRC = {
   'knock-1': require('../../assets/sounds/knock-1.wav'),
   'knock-2': require('../../assets/sounds/knock-2.wav'),
   'knock-3': require('../../assets/sounds/knock-3.wav'),
+  'slam-1': require('../../assets/sounds/slam-1.wav'),
+  'slam-2': require('../../assets/sounds/slam-2.wav'),
+  'slam-3': require('../../assets/sounds/slam-3.wav'),
   tray: require('../../assets/sounds/tray.wav'),
   tap: require('../../assets/sounds/tap.wav'),
   'toggle-on': require('../../assets/sounds/toggle-on.wav'),
@@ -209,6 +212,14 @@ export const fx = {
   knock: (moved = 4) => {
     play(moved > 8 ? 'knock-3' : moved > 3 ? 'knock-2' : 'knock-1');
     buzz(() => Haptics.impactAsync(moved > 8 ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Rigid));
+  },
+  /** The last merge of a long chain (3 and more): a low slam under the
+      note, heavier for a longer chain, and a heavy press; a chain of five
+      and more presses twice. */
+  slam: (merges: number) => {
+    play(merges >= 5 ? 'slam-3' : merges === 4 ? 'slam-2' : 'slam-1');
+    buzz(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy));
+    if (merges >= 5) setTimeout(() => buzz(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)), 70);
   },
   tray: () => play('tray'),
   /** A new best of 24 and up: the rung's bell, and a firm tap. */
