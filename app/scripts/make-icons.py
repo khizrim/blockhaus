@@ -198,15 +198,22 @@ def blur(m, r, c): return m.filter(ImageFilter.GaussianBlur(c.u(r))) if r > 0 el
 def sh(box, dy): return (box[0], box[1] + dy, box[2], box[3] + dy)
 
 
-def icon(v, t, S=1024, k=1.0):
+def icon(v, t, S=1024, k=1.0, border=True):
+    """border=False: no tray outline (Android - the launcher's own mask is the edge)."""
     c = Canvas(S, k=k); N = c.N; full = Image.new('L', (N, N), 255)
     # 1. tray top face: lit from above, faint top->bottom falloff
     # 0. front wall of the tray: faces the viewer, away from the key -> darker; seen because the
     #    camera is in front, exactly like the cube's ledge (and thicker: the tray is taller)
     c.grad(full, (0, 1 - TF, 1, 1), t['front_top'], t['front_bot'])
     topface = (0, -0.2, 1, 1 - TF)
-    mt = c.mask(topface, R_ICON)
+    mt = c.mask(topface, R_ICON) if border else full
     c.grad(mt, (0, 0, 1, 1 - TF), t['face'], t['face2'])
+    if border:
+        _rim(c, t, mt, topface, N)
+    return _scene(c, v, t, N)
+
+
+def _rim(c, t, mt, topface, N):
     # rounded edge where the top face turns into the front wall catches a thin light line
     ed = np.clip(arr(c.mask(sh(topface, 0.006), R_ICON)) - arr(mt), 0, 1)
     c.put(t['edge'] + (0,), img(arr(blur(img(ed), 0.002, c)) * t['edgea']))
@@ -216,6 +223,8 @@ def icon(v, t, S=1024, k=1.0):
     y = np.linspace(t['glowa'], t['glowb'], N)[:, None]
     c.put(t['glow'] + (0,), img((1 - arr(inset)) * y * arr(mt)))
 
+
+def _scene(c, v, t, N):
     sock = (T_IN, T_IN, 1 - T_IN, 1 - TF - T_IN)   # rim = T_IN on all four sides of the tray's top face
     M = arr(c.mask(sock, R_SOCK))                       # the opening
     floor_img = sh(sock, WF)                            # floor outline, pushed down by the depth
@@ -295,10 +304,10 @@ MONO = dict(TH['dark'], face='#3A3A3A', face2='#2C2C2C', floor='#1C1C1C', wall_t
             wall_bot='#0C0C0C', glow=(150, 150, 150), lip=(150, 150, 150), bounce=0.0)
 
 
-def mono(S=1024, k=1.0):
+def mono(S=1024, k=1.0, border=True):
     TILE[3], INK[3] = '#F4F4F4', '#0A0A0A'
     try:
-        return icon(3, MONO, S, k).convert('L')
+        return icon(3, MONO, S, k, border).convert('L')
     finally:
         TILE[3], INK[3] = '#FFD43B', '#2A2A2A'
 
@@ -308,13 +317,13 @@ def main():
     icon(3, TH['dark']).convert('RGB').save(f'{OUT}/ios-icon-dark.png')
     mono().convert('RGB').save(f'{OUT}/ios-icon-tinted.png')
     # Android adaptive: the launcher shows the central 72dp of the 108dp layer and
-    # masks it (circle, squircle...). The tray face fills the whole layer so any mask
-    # edge lands on plastic; the scene sits in the window, shrunk so the socket's
+    # masks it (circle, squircle...). No drawn tray outline: the mask is the tray's
+    # edge, and the face fills the whole layer so any mask edge lands on plastic; the scene sits in the window, shrunk so the socket's
     # corners clear the 66dp circle.
     win = 72 / 108 * 0.86
     Image.new('RGBA', (432, 432), rgba(TH['light']['face'])).save(f'{OUT}/android-icon-background.png')
-    icon(3, TH['light'], 432, win).save(f'{OUT}/android-icon-foreground.png')
-    m = mono(432, win)
+    icon(3, TH['light'], 432, win, border=False).save(f'{OUT}/android-icon-foreground.png')
+    m = mono(432, win, border=False)
     white = Image.new('RGBA', (432, 432), (255, 255, 255, 0))
     white.putalpha(m)
     white.save(f'{OUT}/android-icon-monochrome.png')
