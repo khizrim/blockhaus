@@ -175,6 +175,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       // The score runs on through the lessons instead of starting over each step.
       const carry = lesson !== null ? gRef.current.score : 0;
       const g = engine.newGame(rulesConfig(nextRules));
+      // A lesson's tray is never dealt again, so it brings no sweep of its
+      // own: the studs on the sweep key are only the ones a chain earned.
+      g.cfg = { ...g.cfg, sweepsPerTray: 0 };
       g.score = carry;
       g.board = L.board.slice();
       g.tray = L.tray.map((p) => ({ cells: p.cells.map((c) => [...c] as [number, number, number]), used: p.used }));

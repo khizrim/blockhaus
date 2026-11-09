@@ -53,10 +53,13 @@ type Props = {
   look?: (i: number) => CellLook | undefined;
   /** Kept for callers; blocks are always drawn one by one. */
   sameKey?: (i: number) => number | null;
+  /** The part of a board that is a plate, [x0, y0, x1, y1] in cells, inclusive
+      (the lessons' growing board). The plate grows to a new size in a step. */
+  open?: [number, number, number, number];
   style?: ViewStyle;
 };
 
-export const Field = memo(function Field({ w, h, values, cell, gap, variant = 'board', numbers = true, look, style }: Props) {
+export const Field = memo(function Field({ w, h, values, cell, gap, variant = 'board', numbers = true, look, open, style }: Props) {
   const { c } = useTheme();
   const board = variant === 'board';
   const hg = gap / 2;
@@ -78,16 +81,33 @@ export const Field = memo(function Field({ w, h, values, cell, gap, variant = 'b
 
   return (
     <View style={[{ width: w * cell + pad * 2, height: h * cell + pad * 2 }, style]}>
-      {board ? (
-        <View
-          pointerEvents="none"
-          style={[{ position: 'absolute', left: -rim, top: -rim, right: -rim, bottom: -rim }, plateStyle(c, Math.round(cell * 0.26))]}
-        />
-      ) : null}
+      {board ? <Plate open={open ?? [0, 0, w - 1, h - 1]} cell={cell} pad={pad} rim={rim} c={c} /> : null}
       {cells}
     </View>
   );
 });
+
+/* The plate under the sockets. When its size changes it grows ring by ring
+   the way a toy baseplate unfolds: quick, with a small overshoot, while the
+   new sockets come up through it (their cells mount with the plate). */
+function Plate({ open, cell, pad, rim, c }: { open: [number, number, number, number]; cell: number; pad: number; rim: number; c: ReturnType<typeof useTheme>['c'] }) {
+  const box = (o: typeof open) => ({ l: o[0] * cell - rim, t: o[1] * cell - rim, w: (o[2] - o[0] + 1) * cell + pad * 2 + rim * 2, h: (o[3] - o[1] + 1) * cell + pad * 2 + rim * 2 });
+  const b = box(open);
+  const l = useSharedValue(b.l);
+  const t = useSharedValue(b.t);
+  const pw = useSharedValue(b.w);
+  const ph = useSharedValue(b.h);
+  useEffect(() => {
+    const go = { duration: 300, easing: Easing.out(Easing.back(1.4)) };
+    l.value = withTiming(b.l, go);
+    t.value = withTiming(b.t, go);
+    pw.value = withTiming(b.w, go);
+    ph.value = withTiming(b.h, go);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [b.l, b.t, b.w, b.h]);
+  const st = useAnimatedStyle(() => ({ left: l.value, top: t.value, width: pw.value, height: ph.value }));
+  return <Animated.View pointerEvents="none" style={[{ position: 'absolute' }, plateStyle(c, Math.round(cell * 0.26)), st]} />;
+}
 
 type CellProps = {
   v: number;
@@ -146,6 +166,8 @@ const Cell = memo(function Cell({ v, left, top, size, board, numbers, look, c }:
     transform: [{ translateX: lx.value }, { translateY: dy.value + ly.value + (1 - appear.value) * size * 0.3 }, { scaleX: sx.value }, { scaleY: sy.value * (0.6 + appear.value * 0.4) }],
   }));
 
+  // A socket that opens with a growing plate: it sinks in as the plate reaches it.
+  const sockIn = useAnimatedStyle(() => ({ opacity: appear.value, transform: [{ scale: 0.6 + appear.value * 0.4 }] }));
   const box: ViewStyle = { position: 'absolute', left, top, width: size, height: size };
   const r = Math.round(size * RADIUS);
   let block: React.ReactNode = null;
@@ -167,7 +189,15 @@ const Cell = memo(function Cell({ v, left, top, size, board, numbers, look, c }:
 
   return (
     <>
-      {board || v === 0 ? <Socket size={size} style={box} /> : null}
+      {board || v === 0 ? (
+        look?.enterDelay !== undefined ? (
+          <Animated.View pointerEvents="none" style={[box, sockIn]}>
+            <Socket size={size} />
+          </Animated.View>
+        ) : (
+          <Socket size={size} style={box} />
+        )
+      ) : null}
       {/* Where a held piece will land, and what it will make: the socket
           itself lights up in the tile's colour, a ring and the number, so it
           never reads as a block already standing there. */}

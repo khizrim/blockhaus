@@ -43,6 +43,17 @@ const SRC = {
   'toggle-off': require('../../assets/sounds/toggle-off.wav'),
   win: require('../../assets/sounds/win.wav'),
   over: require('../../assets/sounds/over.wav'),
+  hum: require('../../assets/sounds/hum.wav'),
+  repel: require('../../assets/sounds/repel.wav'),
+  boop: require('../../assets/sounds/boop.wav'),
+  grow: require('../../assets/sounds/grow.wav'),
+  'step-0': require('../../assets/sounds/step-0.wav'),
+  'step-1': require('../../assets/sounds/step-1.wav'),
+  'step-2': require('../../assets/sounds/step-2.wav'),
+  'step-3': require('../../assets/sounds/step-3.wav'),
+  'step-4': require('../../assets/sounds/step-4.wav'),
+  'step-5': require('../../assets/sounds/step-5.wav'),
+  learned: require('../../assets/sounds/learned.wav'),
 } as const;
 
 export type SoundName = keyof typeof SRC;
@@ -217,6 +228,38 @@ export const fx = {
   over: () => {
     play('over');
     buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error));
+  },
+  /* The magnets have a voice (2026-11-09). A held piece over a cell beside
+     its partner: the partner hums at its own pitch, a degree higher for each
+     rung, so a 6 sings above a 3. Beside a like pole: two low pushes. */
+  hum: (partner: number) => {
+    const semi = [0, 2, 4, 7, 9];
+    const d = Math.max(0, Math.min(9, rungOf(Math.max(3, partner)) - 3 + (partner < 3 ? 0 : 1)));
+    play('hum', 2 ** ((12 * Math.floor(d / 5) + semi[d % 5]) / 12));
+    buzz(() => Haptics.selectionAsync());
+  },
+  repel: () => {
+    play('repel');
+    buzz(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft));
+  },
+  /* The lessons. A tile pops up onto the board, each one a step higher; the
+     plate grows a ring; a step proved closes on its own figure, higher each
+     step; the end plays all the figures as one phrase. */
+  boop: (k = 0) => {
+    const semi = [0, 2, 4, 7, 9, 12, 14];
+    play('boop', 2 ** (semi[Math.min(k, semi.length - 1)] / 12));
+  },
+  grow: () => {
+    play('grow');
+    buzz(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium));
+  },
+  lessonStep: (k: number) => {
+    play(`step-${Math.max(0, Math.min(5, k))}` as SoundName);
+    buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+  },
+  learned: () => {
+    play('learned');
+    buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
   },
   /* UI */
   tap: () => play('tap'),
