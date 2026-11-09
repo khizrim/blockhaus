@@ -205,10 +205,8 @@ ONLY = set(sys.argv[1:])
 def main():
     os.makedirs(OUT, exist_ok=True)
 
-    # Placing: the plastic thud, a touch heavier for a bigger piece.
-    write('place-1', thud(1.0), 0.55)
-    write('place-2', thud(1.08), 0.6)
-    write('place-3', thud(1.16), 0.65)
+    # Placing, sweeps and the wall knock are the band's wooden kit now:
+    # scripts/music/make-stings.py.
 
     # Picking up: a short breath of noise.
     write('pick', burst(0.05, 1800, 1.2, 0.12), 0.3)
@@ -218,19 +216,6 @@ def main():
 
     # Merges and milestones are played by the music's band now:
     # scripts/music/make-stings.py (vibraphone, FluidR3_GM).
-
-    # Sweep, in two halves on the frames of the animation. The slide plays on
-    # release: the blocks accelerate for 200 ms (ease-in), so the skid swells
-    # and climbs instead of fading, and stops dead where the knock takes over.
-    # sweep-1 for a few blocks, sweep-2 for many.
-    write('sweep-1', slide(0.19, 1.0), 0.32)
-    write('sweep-2', slide(0.19, 1.25), 0.4)
-    # The knock at the wall, on the frame the blocks arrive (with the board's
-    # 2 px bump): a hard plastic clack with a short body. More blocks hit a
-    # hair apart, so the heavier ones are a flam, lower and fuller.
-    write('knock-1', knock(1.0), 0.5)
-    write('knock-2', mix(knock(1.12), layer(np.zeros(0), knock(1.2, 0.6), 0.009)), 0.58)
-    write('knock-3', mix(knock(1.25), layer(np.zeros(0), knock(1.35, 0.7), 0.008), layer(np.zeros(0), knock(1.3, 0.5), 0.017)), 0.65)
 
     # A fresh tray: one soft pop.
     write('tray', osc('triangle', 520, 820, 0.07, 0.1), 0.25)

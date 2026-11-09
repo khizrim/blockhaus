@@ -14,8 +14,9 @@ They are played by the same General MIDI band as the "Blocks" loop
   pizzicato C.
 Each file keeps the loudness (RMS of its first 0.4 s) of the synthesised
 sound it replaces, so the in-game balance stays as tuned.
-Everything else (plastic placements, sweeps, keys, lessons) stays in
-make-sounds.py: that is the physics of the board, not the band.
+The board's moves (placing, sweeps, the wall knock) are played on the
+band's wooden kit too, see board(). Keys, lessons, the tray pop and the
+slam stay in make-sounds.py.
 """
 import importlib.util
 import os
@@ -52,8 +53,11 @@ def render(events, length):
     progs = {}
     msgs = []
     for (t, prog, n, d, v) in events:
-        ch = progs.setdefault(prog, len(progs))
-        msgs.append((t, 0, mido.Message('program_change', program=prog, channel=ch)))
+        if prog is None:  # the GM percussion kit
+            ch = 9
+        else:
+            ch = progs.setdefault(prog, len(progs))
+            msgs.append((t, 0, mido.Message('program_change', program=prog, channel=ch)))
         msgs.append((t, 2, mido.Message('note_on', note=n, velocity=v, channel=ch)))
         msgs.append((t + d, 1, mido.Message('note_off', note=n, velocity=0, channel=ch)))
     msgs.append((length, 3, mido.Message('note_off', note=0, velocity=0, channel=0)))
@@ -85,13 +89,19 @@ def old(name):
         return np.frombuffer(w.readframes(w.getnframes()), '<i2') / 32768
 
 
-def write(name, x, fade=0.12):
+def rms_peak(x):
+    """Loudest 30 ms: the level of a short knock."""
+    w = int(0.03 * SR)
+    return max(np.sqrt((x[i:i + w] ** 2).mean()) for i in range(0, max(1, len(x) - w), 220))
+
+
+def write(name, x, fade=0.12, level=rms_head):
     """Match the loudness of the sound being replaced, fade the tail, write."""
-    ref = rms_head(old(name))
+    ref = level(old(name))
     x = x - x.mean()
     n = int(fade * SR)
     x[-n:] *= np.linspace(1, 0, n) ** 2
-    x = x * ref / (rms_head(x) + 1e-12)
+    x = x * ref / (level(x) + 1e-12)
     peak = np.max(np.abs(x))
     if peak > 0.95:
         x *= 0.95 / peak
@@ -100,10 +110,37 @@ def write(name, x, fade=0.12):
         w.setsampwidth(2)
         w.setframerate(SR)
         w.writeframes((x * 32767).astype('<i2').tobytes())
-    print(f'{name}: rms {rms_head(x):.3f} (was {ref:.3f}) peak {np.max(np.abs(x)):.2f}')
+    print(f'{name}: level {level(x):.3f} (was {ref:.3f}) peak {np.max(np.abs(x)):.2f}')
+
+
+WOOD_HI, WOOD_LO, SIDESTICK, CABASA, MARACAS, CONGA_LO, TOM_LO, TOM_FLOOR = 76, 77, 37, 69, 70, 64, 45, 41
+
+
+def roll(inst, d, n, v0, v1):
+    """A shaker roll that speeds up and swells over d seconds, like the
+    blocks accelerating (ease-in) before they hit the wall."""
+    return [(d * (k / n) ** 0.6, None, inst, 0.05, int(v0 + (v1 - v0) * (k / n) ** 1.5)) for k in range(n)]
+
+
+def board():
+    """The board's moves, played on the band's wooden kit (2026-11-09):
+    placing is a wood block (lower for a bigger piece), a sweep is a cabasa
+    roll swelling on release that stops dead at 190 ms, and the wall hit is
+    a side-stick with a conga or tom body, a flam for many blocks."""
+    write('place-1', render([(0, None, WOOD_HI, 0.1, 96)], 0.14), 0.04, rms_peak)
+    write('place-2', render([(0, None, WOOD_LO, 0.1, 100)], 0.15), 0.04, rms_peak)
+    write('place-3', render([(0, None, WOOD_LO, 0.1, 104), (0.004, None, CONGA_LO, 0.1, 80)], 0.16), 0.04, rms_peak)
+    for name, extra in [('sweep-1', []), ('sweep-2', roll(MARACAS, 0.17, 7, 45, 90))]:
+        x = render(roll(CABASA, 0.17, 9, 50, 105) + extra, 0.25)[:int(0.19 * SR)]
+        write(name, x, 0.003, rms_peak)
+    write('knock-1', render([(0, None, SIDESTICK, 0.1, 100), (0, None, CONGA_LO, 0.1, 70)], 0.16), 0.04, rms_peak)
+    write('knock-2', render([(0, None, SIDESTICK, 0.1, 108), (0.009, None, TOM_LO, 0.15, 80)], 0.2), 0.05, rms_peak)
+    write('knock-3', render([(0, None, SIDESTICK, 0.1, 118), (0.008, None, TOM_FLOOR, 0.2, 95),
+                             (0.017, None, SIDESTICK, 0.1, 80)], 0.24), 0.06, rms_peak)
 
 
 def main():
+    board()
     # Merges: merge-3 … merge-11 are the 1st … 9th merge of a cascade.
     for k in range(9):
         write(f'merge-{k + 3}', render([(0, VIBES, note(1 + k), 0.4, 96)], 0.6))
