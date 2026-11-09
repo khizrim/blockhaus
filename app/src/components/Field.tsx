@@ -1,5 +1,5 @@
 import { memo, useEffect } from 'react';
-import { View, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { enter } from '@/design/system';
+import { enter, layer } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { mix, rank } from '@/design/tokens';
 import { Block, numSize, plateStyle, RADIUS, Socket } from './Block';
@@ -68,20 +68,31 @@ export const Field = memo(function Field({ w, h, values, cell, gap, variant = 'b
   // The plate reaches past the outer sockets by a rim wider than half a gap.
   const rim = board ? Math.max(0, Math.round(cell * 0.14) - hg) : 0;
 
+  /* The plate and the sockets are one still layer under everything that
+     moves (see `layer`): drawn first, so a block that squashes or lifts
+     past its cell is never covered by the next cell's socket. */
+  const sockets = [];
   const cells = [];
   for (let i = 0; i < w * h; i++) {
     const v = values[i];
     if (v === null || v === undefined) continue;
     const x = i % w;
     const y = (i / w) | 0;
-    cells.push(
-      <Cell key={i} v={v} left={pad + x * cell + hg} top={pad + y * cell + hg} size={size} board={board} numbers={numbers} look={look?.(i)} c={c} />,
-    );
+    const left = pad + x * cell + hg;
+    const top = pad + y * cell + hg;
+    const lk = look?.(i);
+    if (board || v === 0) sockets.push(<SocketCell key={i} left={left} top={top} size={size} enterDelay={lk?.enterDelay} />);
+    cells.push(<Cell key={i} v={v} left={left} top={top} size={size} numbers={numbers} look={lk} c={c} />);
   }
 
   return (
     <View style={[{ width: w * cell + pad * 2, height: h * cell + pad * 2 }, style]}>
-      {board ? <Plate open={open ?? [0, 0, w - 1, h - 1]} cell={cell} pad={pad} rim={rim} c={c} /> : null}
+      {board || sockets.length ? (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, board ? layer : null]}>
+          {board ? <Plate open={open ?? [0, 0, w - 1, h - 1]} cell={cell} pad={pad} rim={rim} c={c} /> : null}
+          {sockets}
+        </View>
+      ) : null}
       {cells}
     </View>
   );
@@ -109,18 +120,48 @@ function Plate({ open, cell, pad, rim, c }: { open: [number, number, number, num
   return <Animated.View pointerEvents="none" style={[{ position: 'absolute' }, plateStyle(c, Math.round(cell * 0.26)), st]} />;
 }
 
+/* A socket that opens with a growing plate sinks in as the plate reaches it;
+   every other socket simply is there. Memoised on its place alone, so the
+   still layer is not redrawn while the game re-renders around it. */
+const SocketCell = memo(function SocketCell({ left, top, size, enterDelay }: { left: number; top: number; size: number; enterDelay?: number }) {
+  const appear = useSharedValue(enterDelay !== undefined ? 0 : 1);
+  useEffect(() => {
+    if (enterDelay !== undefined) appear.value = withDelay(enterDelay, withTiming(1, enter()));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const sockIn = useAnimatedStyle(() => ({ opacity: appear.value, transform: [{ scale: 0.6 + appear.value * 0.4 }] }));
+  const box: ViewStyle = { position: 'absolute', left, top, width: size, height: size };
+  if (enterDelay === undefined) return <Socket size={size} style={box} />;
+  return (
+    <Animated.View pointerEvents="none" style={[box, sockIn]}>
+      <Socket size={size} />
+    </Animated.View>
+  );
+});
+
+/* The game hands every cell a fresh look object on each render; compare
+   what is in it, so a held piece moving over the board re-renders only the
+   cells whose look changed, not all 36. */
+const sameLook = (a?: CellLook, b?: CellLook) =>
+  a === b ||
+  (!!a && !!b &&
+    a.dim === b.dim && a.ghost === b.ghost && a.absorb === b.absorb && a.pop === b.pop && a.land === b.land &&
+    a.shadow === b.shadow && a.enterDelay === b.enterDelay &&
+    (a.lean?.[0] ?? 0) === (b.lean?.[0] ?? 0) && (a.lean?.[1] ?? 0) === (b.lean?.[1] ?? 0));
+const sameCell = (a: CellProps, b: CellProps) =>
+  a.v === b.v && a.left === b.left && a.top === b.top && a.size === b.size && a.numbers === b.numbers && a.c === b.c && sameLook(a.look, b.look);
+
 type CellProps = {
   v: number;
   left: number;
   top: number;
   size: number;
-  board: boolean;
   numbers: boolean;
   look?: CellLook;
   c: ReturnType<typeof useTheme>['c'];
 };
 
-const Cell = memo(function Cell({ v, left, top, size, board, numbers, look, c }: CellProps) {
+const Cell = memo(function Cell({ v, left, top, size, numbers, look, c }: CellProps) {
   const rk = rank(v);
   const appear = useSharedValue(look?.enterDelay !== undefined ? 0 : 1);
   const sx = useSharedValue(1);
@@ -166,8 +207,6 @@ const Cell = memo(function Cell({ v, left, top, size, board, numbers, look, c }:
     transform: [{ translateX: lx.value }, { translateY: dy.value + ly.value + (1 - appear.value) * size * 0.3 }, { scaleX: sx.value }, { scaleY: sy.value * (0.6 + appear.value * 0.4) }],
   }));
 
-  // A socket that opens with a growing plate: it sinks in as the plate reaches it.
-  const sockIn = useAnimatedStyle(() => ({ opacity: appear.value, transform: [{ scale: 0.6 + appear.value * 0.4 }] }));
   const box: ViewStyle = { position: 'absolute', left, top, width: size, height: size };
   const r = Math.round(size * RADIUS);
   let block: React.ReactNode = null;
@@ -189,15 +228,6 @@ const Cell = memo(function Cell({ v, left, top, size, board, numbers, look, c }:
 
   return (
     <>
-      {board || v === 0 ? (
-        look?.enterDelay !== undefined ? (
-          <Animated.View pointerEvents="none" style={[box, sockIn]}>
-            <Socket size={size} />
-          </Animated.View>
-        ) : (
-          <Socket size={size} style={box} />
-        )
-      ) : null}
       {/* Where a held piece will land, and what it will make: the socket
           itself lights up in the tile's colour, a ring and the number, so it
           never reads as a block already standing there. */}
@@ -225,4 +255,4 @@ const Cell = memo(function Cell({ v, left, top, size, board, numbers, look, c }:
       ) : null}
     </>
   );
-});
+}, sameCell);

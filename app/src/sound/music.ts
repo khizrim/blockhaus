@@ -2,6 +2,8 @@ import { Asset } from 'expo-asset';
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { Platform } from 'react-native';
 
+import { assetBytes, audioContext, decode } from './webAudio';
+
 /* The background loop, without a seam.
 
    music.wav is LOOP seconds of music plus the first TAIL seconds again
@@ -24,10 +26,8 @@ type Music = { setVolume: (v: number, ms: number) => void; stop: () => void; res
 /* ---------- web: Web Audio ---------- */
 
 function webMusic(): Music {
-  const AC = (globalThis as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext
-    ?? (globalThis as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AC) return { setVolume: () => {}, stop: () => {}, resume: () => {} };
-  const ctx = new AC();
+  const ctx = audioContext();
+  if (!ctx) return { setVolume: () => {}, stop: () => {}, resume: () => {} };
   const gain = ctx.createGain();
   gain.gain.value = 0;
   gain.connect(ctx.destination);
@@ -35,23 +35,11 @@ function webMusic(): Music {
   let buffer: AudioBuffer | null = null;
   let wanted = false;
 
-  const bytes = async (uri: string) => {
-    // A packed single-file build carries the sound as a data URI; decode it
-    // by hand, since a sandboxed page may not fetch data URIs.
-    if (uri.startsWith('data:')) {
-      const bin = atob(uri.slice(uri.indexOf(',') + 1));
-      const u = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-      return u.buffer;
-    }
-    return (await fetch(uri)).arrayBuffer();
-  };
-
   const start = async () => {
     if (src || !wanted) return;
     if (!buffer) {
       const uri = Asset.fromModule(SRC).uri;
-      buffer = await ctx.decodeAudioData(await bytes(uri));
+      buffer = await decode(ctx, await assetBytes(uri));
     }
     if (src || !wanted) return;
     src = ctx.createBufferSource();
