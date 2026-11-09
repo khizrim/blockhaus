@@ -201,6 +201,9 @@ export default function Game() {
   /** An earned sweep: a stud flying from the merge that earned it to the sweep key. */
   const [studFly, setStudFly] = useState<{ id: number; from: { x: number; y: number }; to: { x: number; y: number }; mode: StudMode; loud: boolean } | null>(null);
   const keyRef = useRef<ComponentRef<typeof View>>(null);
+  /** ms a loud stud earned by this move will take: a lesson's proved step
+      waits for it, so its wave does not drown the stud. */
+  const studMs = useRef(0);
   /** The top-left of a stud chip centred on a board cell. */
   const cellPt = (at: number) => ({ x: gap / 2 + (at % N) * cell + cell / 2 - 9, y: gap / 2 + ((at / N) | 0) * cell + cell / 2 - 9 });
   /** Sends a stud between `from` and socket `k` of the sweep key ('out' flies
@@ -399,6 +402,7 @@ export default function Game() {
   /** After the animation of a move: the win, or the end, if either happened. */
   const afterMove = (ms: number) => {
     if (store.lesson !== null) return lessonCheck(ms);
+    studMs.current = 0;
     later(ms + 250, () => {
       if (g.won && !store.winSeen) router.push('/win');
       else if (g.over) router.push('/over');
@@ -417,7 +421,12 @@ export default function Game() {
     // The engine refills a spent tray at random; a lesson keeps it empty.
     if (pieceStep) g.tray = g.tray.map((p) => ({ ...p, used: true }));
     const milestoneFired = moveHadMilestone.current;
-    later(ms + 150, () => {
+    /* A stud on its way has the stage: the wave, the bell and the formula
+       come once it has clicked into the key (2026-11-09, Khizri: the stud
+       looked lost in the real game under the step's orange wave). */
+    const studWait = studMs.current;
+    studMs.current = 0;
+    later(ms + 150 + studWait, () => {
       if (L.goal(g)) {
         /* The step is proved: its result tile rises and turns over, a wave
            of its colour runs out over the board, and a bell rings, a step
@@ -765,6 +774,7 @@ export default function Game() {
       setBonusHeld(true);
       const from = cellPt(chainAnchor());
       const loud = isLoud('chain');
+      if (loud) studMs.current = STUD_FLY;
       later(done, () => {
         flyStud(from, g.sweeps - 1, 'in', loud);
         later(loud ? STUD_FLY : STUD_QUIET, () => {
@@ -778,6 +788,7 @@ export default function Game() {
          key and drops away. Sweeps keep, but only two of them. */
       const from = cellPt(chainAnchor());
       const loud = isLoud('full');
+      if (loud) studMs.current = STUD_BOUNCE;
       later(done, () => {
         flyStud(from, g.cfg.sweepsMax - 1, 'bounce', loud);
         /* Its own sound on the frame it taps the key (a tick and two bars
@@ -793,6 +804,7 @@ export default function Game() {
          the tray with the new pieces and flies up into its socket. */
       setBonusHeld(true);
       const loud = isLoud('tray');
+      if (loud) studMs.current = STUD_FLY + 200;
       later(done + 200, () => {
         slotRefs.current[1]?.measureInWindow((sx_, sy_, sw, sh) => {
           flyStud({ x: sx_ + sw / 2 - 9 - boardAt.current.x, y: sy_ + sh / 2 - 9 - boardAt.current.y }, g.sweeps - 1, 'in', loud);
@@ -1708,7 +1720,8 @@ function StudFlight({ from, to, mode, loud, cell }: { from: { x: number; y: numb
         transform: [{ translateX: from.x + (to.x - from.x) * p }, { translateY: from.y + (to.y - from.y) * p * p - lift }, { rotate: `${p * 270}deg` }, { scale: 1 + Math.sin(Math.PI * Math.min(1, p * 1.4)) * 1.2 }],
       };
     }
-    const rise = cell * 0.7;
+    // High enough to stand clear of the tile it came out of, not sit on it.
+    const rise = cell * 1.05;
     const up = Math.min(1, p / POP);
     const popScale = 1 + (1 - Math.pow(1 - up, 3)) * 1.6 + (up >= 1 && p < HANG ? Math.sin(((p - POP) / (HANG - POP)) * Math.PI) * 0.12 : 0);
     if (p < HANG) {
