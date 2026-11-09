@@ -15,6 +15,7 @@ import { assetBytes, audioContext, decode } from './webAudio';
 
 const SRC = {
   pick: require('../../assets/sounds/pick.wav'),
+  putback: require('../../assets/sounds/putback.wav'),
   'place-1': require('../../assets/sounds/place-1.wav'),
   'place-2': require('../../assets/sounds/place-2.wav'),
   'place-3': require('../../assets/sounds/place-3.wav'),
@@ -98,7 +99,7 @@ function initWeb() {
   sfxOut.connect(c.destination);
   // The game's own notes first, the rest after; one at a time, so the
   // decoding never fights the first frames of the board.
-  const order = [...SOUND_NAMES].sort((a, b) => Number(!/^(pick|place|merge|sweep|knock)/.test(a)) - Number(!/^(pick|place|merge|sweep|knock)/.test(b)));
+  const order = [...SOUND_NAMES].sort((a, b) => Number(!/^(pick|putback|place|merge|sweep|knock)/.test(a)) - Number(!/^(pick|putback|place|merge|sweep|knock)/.test(b)));
   (async () => {
     for (const name of order) {
       try {
@@ -130,16 +131,35 @@ export function setFeedback(o: { sound: boolean; haptics: boolean; music: boolea
 }
 
 /* ---------- background music ----------
-   One quiet loop (scripts/make-music.py), in the same key as the merge notes.
+   One quiet loop (scripts/music/run.py), in the same key as the merge notes.
    It fades in and out instead of starting or stopping dead, and drops to a
    murmur on the pause screen. */
 
 const MUSIC_LEVEL = 0.35;
 let dimmed = false;
 let away = false;
+let ducked = false;
+let duckTimer: ReturnType<typeof setTimeout> | null = null;
 
-function syncMusic() {
-  getMusic().setVolume(musicOn && !away ? (dimmed ? MUSIC_LEVEL * 0.35 : MUSIC_LEVEL) : 0, away ? 150 : 600);
+function syncMusic(ms?: number) {
+  const level = (dimmed ? MUSIC_LEVEL * 0.35 : MUSIC_LEVEL) * (ducked ? 0.5 : 1);
+  getMusic().setVolume(musicOn && !away ? level : 0, ms ?? (away ? 150 : 600));
+}
+
+/* The music steps back for the big moments (a long chain, a new best, the
+   win), so they are heard over the band, and comes back once they ring out.
+   Each call keeps it down a little longer. */
+function duck(holdMs: number) {
+  if (!musicOn) return;
+  if (!ducked) {
+    ducked = true;
+    syncMusic(100);
+  }
+  if (duckTimer) clearTimeout(duckTimer);
+  duckTimer = setTimeout(() => {
+    ducked = false;
+    syncMusic(900);
+  }, holdMs);
 }
 
 /* Silent while the app is in the background or the browser tab is hidden,
@@ -245,7 +265,7 @@ export const fx = {
     buzz(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
   },
   /** A piece let go off the board goes home: not a mistake, so no warning. */
-  putBack: () => play('pick'),
+  putBack: () => play('putback'),
   invalid: () => {
     play('invalid');
     buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));
@@ -257,6 +277,7 @@ export const fx = {
   merge: (value: number, step = 0) => {
     const r = rungOf(value);
     play(`merge-${3 + Math.min(8, step)}` as SoundName);
+    if (step >= 2) duck(700);
     const style = step >= 4 ? Haptics.ImpactFeedbackStyle.Heavy : step >= 2 || r >= 6 ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Soft;
     buzz(() => Haptics.impactAsync(style));
   },
@@ -288,6 +309,7 @@ export const fx = {
   milestone: (value: number) => {
     const r = Math.max(6, rungOf(value));
     play(`milestone-${r}` as SoundName);
+    duck(1100);
     buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
   },
   /** A chain earned a sweep. */
@@ -302,6 +324,7 @@ export const fx = {
   },
   win: () => {
     play('win');
+    duck(1500);
     buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
   },
   over: () => {

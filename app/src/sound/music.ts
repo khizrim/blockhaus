@@ -7,7 +7,7 @@ import { assetBytes, audioContext, decode } from './webAudio';
 /* The background loop, without a seam.
 
    music.wav is LOOP seconds of music plus the first TAIL seconds again
-   (scripts/make-music.py). Media players leave a small gap when they wrap a
+   (scripts/music/run.py, the "Blocks" loop). Media players leave a small gap when they wrap a
    file, so the file is never wrapped:
 
    - On the web, Web Audio loops the first LOOP seconds of the decoded buffer
@@ -17,8 +17,8 @@ import { assetBytes, audioContext, decode } from './webAudio';
      one fades out while the other fades in. */
 
 const SRC = require('../../assets/sounds/music.wav');
-const BPM = 72;
-const LOOP = (16 * 4 * 60) / BPM; // 16 bars of 4/4
+const BPM = 108;
+const LOOP = (32 * 4 * 60) / BPM; // 32 bars of 4/4
 const TAIL = 2;
 
 type Music = { setVolume: (v: number, ms: number) => void; stop: () => void; resume: () => void };
