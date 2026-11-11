@@ -42,14 +42,18 @@ const paceOf = (merges: number) => (merges <= SHORT ? SHORT_PACE : LONG_PACE);
 /** In the lessons every merge is a beat of its own, long enough to read
     its pair on the board (2026-11-11: a newcomer asked why 6 comes right
     after 3; at game pace 1 + 2 and 3 + 3 blur into one). */
-const LESSON_PACE: Pace = { base: 120, fly: 1150, gaps: [2300] };
+const LESSON_PACE: Pace = { base: 120, fly: 760, gaps: [1900] };
 /* A lesson's merge under a lens (2026-11-11, Khizri: stop, make the tiles
    bigger in the animation and show what happens to them). The pair comes up
    big over the merge, side by side with a plus; they hold, slide into one
    another, and on the frame they meet (the board's land, its note and tap)
    they become the result, which holds and then sinks back into its tile. */
-const LENS_MEET = 1150; // = LESSON_PACE.fly: the pair meets as the board lands
-const LENS_MS = 2150; // the lens's whole life
+/* Not slowed down (2026-11-11, Khizri: no slow motion, rather a hang to
+   read): every move is at game speed, and the stops between them are holds.
+   The pair hangs to be read, the merge itself is quick, the result hangs. */
+const LENS_MEET = 760; // = LESSON_PACE.fly: the pair meets as the board lands
+const LENS_SLIDE = 240; // ms of the pull itself, on the board and in the line
+const LENS_MS = 1800; // the lens's whole life
 const chainAt = (k: number, gaps: number[]) => gaps.slice(0, k).reduce((a, b) => a + b, 0) + Math.max(0, k - gaps.length) * gaps[gaps.length - 1];
 const sweepStep = (merges: number) => (merges <= SHORT ? STEP_SHORT : STEP);
 const BURST_MS = 620; // ms the crumbs of a merge fly and fall
@@ -881,7 +885,13 @@ export default function Game() {
       quicker than a long one (paceOf). `frame` is the board with the piece
       laid. Returns when the last merge has landed. */
   const playChain = (frame: number[], steps: Step[], marks: boolean[], base: number) => {
-    const pc = lessonNow.current !== null ? LESSON_PACE : paceOf(steps.length);
+    /* A lesson's merges play slow under the lens only when the move proves
+       the step (or leads on to its next move). A wrong one plays at game pace
+       and is pushed back: no lesson for a move that teaches the wrong thing
+       (2026-11-11, Khizri). The board is already the move's end here. */
+    const L = lessonNow.current !== null ? LESSONS[lessonNow.current] : null;
+    const slow = !!L && (L.goal(g) || (!!L.moves && g.moves < L.moves.length));
+    const pc = slow ? LESSON_PACE : paceOf(steps.length);
     steps.forEach((st, k) => {
       const t0 = base + pc.base + chainAt(k, pc.gaps);
       const value = frame[st.absorbed[0]];
@@ -897,20 +907,26 @@ export default function Game() {
       expect(t0 + pc.fly, st.anchor, k, last ? steps.length : 0);
       later(t0, () => {
         // A lesson's merge comes up under the lens as it starts.
-        if (lessonNow.current !== null && pair.every((v) => v > 0)) {
+        if (slow && pair.every((v) => v > 0)) {
           const id = `${t0}-${k}`;
           setLens({ id, at: st.anchor, from: st.absorbed[0], pair, r: st.level });
           later(LENS_MS, () => setLens((l) => (l?.id === id ? null : l)));
         }
-        setShown(mid);
-        setFlights((f) => [...f, ...st.absorbed.map((a) => ({ id: `${t0}-${a}-${Date.now()}`, m: { from: a, to: st.anchor, value, merges: true }, ms: pc.fly }))]);
+        // Under the lens the board holds still too and moves at game speed
+        // with the line: the flight starts so it lands as the pair meets.
+        const fly = () => {
+          setShown(mid);
+          setFlights((f) => [...f, ...st.absorbed.map((a) => ({ id: `${t0}-${a}-${Date.now()}`, m: { from: a, to: st.anchor, value, merges: true }, ms: slow ? LENS_SLIDE : pc.fly }))]);
+        };
+        if (slow) later(pc.fly - LENS_SLIDE, fly);
+        else fly();
       });
       later(t0 + pc.fly, () => {
         setShown(snap);
         setFlights((f) => f.filter((x) => !st.absorbed.some((a) => x.m.from === a)));
         land(st.anchor, st.level, marks[k], snap, st.pts, k, last ? steps.length : 0);
         // A lesson writes each merge above the board on the frame it lands.
-        if (lessonNow.current !== null && pair.every((v) => v > 0)) {
+        if (slow && pair.every((v) => v > 0)) {
           const id = `${t0}-${k}-${Date.now()}`;
           setEq({ id, terms });
           kickLine();
@@ -1951,22 +1967,51 @@ function LineLens({ pair, r, tile, gap }: { pair: number[]; r: number; tile: num
   const size = tile - gap;
   const step = size + Math.round(tile * 0.6);
   const xs = pair.map((_, k) => (k - (pair.length - 1) / 2) * step - size / 2);
-  const SLIDE0 = LENS_MEET - 450;
+  /* Physics, drawn with time alone (no springs): the tiles drop in and
+     settle, lean back a touch before they go (the pull winding up), fall
+     into each other faster and faster as magnets do, and squash on the
+     frame they hit; the result is born squashed from the hit and wobbles
+     out of it, damped, into its square. */
+  const SLIDE0 = LENS_MEET - LENS_SLIDE;
+  const WIND = 140; // ms of leaning back before the pull
   const tileSt = (k: number) =>
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useAnimatedStyle(() => {
       const v = t.value;
-      const a = Math.min(1, Math.max(0, (v - k * 120) / 200));
+      // In: a drop from above that lands and gives a little.
+      const a = Math.min(1, Math.max(0, (v - k * 70) / 180));
+      const drop = a < 1 ? (1 - a) * (1 - a) * -size * 0.5 : 0;
+      const land = v - k * 70 - 180;
+      const give = land > 0 && land < 160 ? Math.sin((land / 160) * Math.PI) : 0;
+      // Out from the middle is the sign of this tile's side.
+      const side = xs[k] + size / 2 < 0 ? -1 : 1;
+      const wind = v > SLIDE0 - WIND && v < SLIDE0 ? Math.sin(((v - (SLIDE0 - WIND)) / WIND) * Math.PI) : 0;
       const go = v < SLIDE0 ? 0 : Math.min(1, (v - SLIDE0) / (LENS_MEET - SLIDE0));
-      const e = go * go;
-      return { opacity: v < LENS_MEET ? a : 0, transform: [{ translateX: -(xs[k] + size / 2) * e }, { translateY: (1 - a) * 10 }] };
+      const e = go * go * go;
+      // The last stretch before the hit: squashed along the way they meet.
+      const q = go > 0.8 ? (go - 0.8) / 0.2 : 0;
+      return {
+        opacity: v < LENS_MEET ? Math.min(1, a * 2) : 0,
+        transform: [
+          { translateX: -(xs[k] + size / 2) * e + side * wind * size * 0.08 },
+          { translateY: drop },
+          { scaleX: 1 - q * 0.22 - wind * 0.04 + give * 0.06 },
+          { scaleY: 1 + q * 0.12 - give * 0.08 },
+        ],
+      };
     });
   const st = pair.map((_, k) => tileSt(k));
   const resSt = useAnimatedStyle(() => {
     const v = t.value;
-    if (v < LENS_MEET) return { opacity: 0, transform: [{ scale: 1.3 }] };
-    const p = Math.min(1, (v - LENS_MEET) / 260);
-    return { opacity: 1, transform: [{ scale: 1.3 - 0.3 * (1 - (1 - p) * (1 - p)) }] };
+    if (v < LENS_MEET) return { opacity: 0, transform: [{ scaleX: 1 }, { scaleY: 1 }, { translateY: 0 }] };
+    const dt = v - LENS_MEET;
+    // A damped wobble: wide and flat from the hit, then tall, then square.
+    const w = Math.exp(-dt / 130) * Math.cos((dt / 300) * 2 * Math.PI);
+    const grow = 1 + 0.12 * Math.exp(-dt / 90);
+    return {
+      opacity: 1,
+      transform: [{ translateY: -Math.max(0, -w) * size * 0.12 }, { scaleX: grow * (1 + w * 0.3) }, { scaleY: grow * (1 - w * 0.24) }],
+    };
   });
   return (
     <View pointerEvents="none" style={{ position: 'absolute', left: '50%', top: '50%', width: 0, height: 0 }}>
