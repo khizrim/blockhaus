@@ -25,11 +25,11 @@ function useBeat(ms = 600) {
 }
 
 function Eq({ a, b, w, h, cell = 40 }: { a: (number | null)[]; b: (number | null)[]; w: number; h: number; cell?: number }) {
-  const { c } = useTheme();
+  const { c, t } = useTheme();
   const [beat, replay] = useBeat();
   const changed = (i: number) => a[i] !== b[i] && (b[i] ?? 0) > 0;
   return (
-    <Pressable onPress={replay} accessibilityRole="button" accessibilityLabel="Показать ещё раз"
+    <Pressable onPress={replay} accessibilityRole="button" accessibilityLabel={t.replay}
       style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.lg }}>
       <Field w={w} h={h} values={a} cell={cell} gap={6} />
       <Arrow dir="right" color={c.muted} s={16} />
@@ -38,40 +38,22 @@ function Eq({ a, b, w, h, cell = 40 }: { a: (number | null)[]; b: (number | null
   );
 }
 
-const PAGES: { title: string; text: string; art: () => ReactNode }[] = [
-  {
-    title: 'Ставьте фигуры',
-    text: 'Перетащите фигуру из лотка на свободные клетки. В лотке три фигуры, ставить можно в любом порядке.',
-    art: () => <Eq w={3} h={2} a={[0, 0, 2, 0, 0, 0]} b={[1, 0, 2, 1, 0, 0]} />,
-  },
-  {
-    title: '1 + 2 = 3',
-    text: 'Клетка, вставшая рядом с парой, сливается с ней, и большая плитка забирает меньшую: 1 у двойки даёт 3 там, где была двойка. Из двух равных остаётся та, что уже лежала. Две единицы или две двойки просто стоят рядом.',
-    art: () => <Eq w={2} h={2} a={[1, 2, 1, 1]} b={[0, 3, 1, 1]} cell={44} />,
-  },
-  {
-    title: 'Равные удваиваются',
-    text: 'Начиная с тройки, равные плитки сливаются в следующую: 3 и 3 дают 6, 6 и 6 дают 12. Слияния идут цепочкой, и длинная цепочка дороже: третье и четвёртое слияние приносят очки вдвое, пятое и дальше втрое.',
-    art: () => <Eq w={3} h={1} a={[3, 3, 6]} b={[0, 0, 12]} cell={44} />,
-  },
-  {
-    title: 'Сдвиг',
-    text: 'Смахните доску, и всё съедет в одну сторону, а пары по пути сольются. Сдвиги лежат жёлтыми фишками на клавише справа вверху: один даётся на каждый лоток и ещё один за каскад из пяти слияний, больше двух не накопить.',
-    art: () => <Eq w={3} h={3} a={[1, 0, 2, 0, 12, 0, 6, 0, 0]} b={[3, 0, 0, 12, 0, 0, 6, 0, 0]} cell={34} />,
-  },
-  {
-    title: `Соберите ${GOAL}`,
-    text: `Дойдите по лесенке до ${GOAL}, чтобы победить. Игра кончается, когда ни одна фигура не встаёт на доску и ни один сдвиг ничего не сливает. После ${GOAL} можно играть дальше на очки.`,
-    art: () => (
-      <View style={{ alignItems: 'center' }}>
-        <Ladder best={GOAL} size={28} animate />
-      </View>
-    ),
-  },
+/** Each card's art; its title and text come from the strings, in order. */
+const ART: (() => ReactNode)[] = [
+  () => <Eq w={3} h={2} a={[0, 0, 2, 0, 0, 0]} b={[1, 0, 2, 1, 0, 0]} />,
+  () => <Eq w={2} h={2} a={[1, 2, 1, 1]} b={[0, 3, 1, 1]} cell={44} />,
+  () => <Eq w={3} h={1} a={[3, 3, 6]} b={[0, 0, 12]} cell={44} />,
+  () => <Eq w={3} h={3} a={[1, 0, 2, 0, 12, 0, 6, 0, 0]} b={[3, 0, 0, 12, 0, 0, 6, 0, 0]} cell={34} />,
+  () => (
+    <View style={{ alignItems: 'center' }}>
+      <Ladder best={GOAL} size={28} animate />
+    </View>
+  ),
 ];
 
 export default function HowTo() {
-  const { c } = useTheme();
+  const { c, t } = useTheme();
+  const PAGES = t.rulesPages(GOAL).map((p, k) => ({ ...p, art: ART[k] }));
   const { width } = useWindowDimensions();
   const pageW = Math.min(width, 440) - 32;
   const [page, setPage] = useState(0);
@@ -84,7 +66,7 @@ export default function HowTo() {
 
   return (
     <Screen>
-      <TopBar title="Как играть" close onBack={() => router.back()} />
+      <TopBar title={t.howto} close onBack={() => router.back()} />
       <ScrollView
         ref={ref}
         horizontal
@@ -93,7 +75,7 @@ export default function HowTo() {
         onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / pageW))}
         style={{ flexGrow: 0 }}>
         {PAGES.map((p, k) => (
-          <View key={p.title} style={{ width: pageW, paddingTop: space.sm }}>
+          <View key={k} style={{ width: pageW, paddingTop: space.sm }}>
             <View style={{ height: 208, alignItems: 'center', justifyContent: 'center', backgroundColor: c.plate, borderRadius: 20, boxShadow: `0 6px 0 ${c.plateEdge}`, marginBottom: space.xl }}>
               {/* Only the visible card animates. */}
               {Math.abs(page - k) <= 0 ? p.art() : null}
@@ -105,7 +87,7 @@ export default function HowTo() {
       </ScrollView>
 
       <View style={{ marginTop: 'auto', gap: space.lg }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.sm }} accessibilityLabel={`Шаг ${page + 1} из ${PAGES.length}`}>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.sm }} accessibilityLabel={t.step(page + 1, PAGES.length)}>
           {PAGES.map((_, k) => (
             <View key={k} style={{ width: k === page ? 24 : 8, height: 8, borderRadius: 4, backgroundColor: k === page ? '#356BFF' : c.canvas, boxShadow: k === page ? 'none' : 'inset 0 1px 2px rgba(0,0,0,0.12)' }} />
           ))}
@@ -113,7 +95,7 @@ export default function HowTo() {
         <Button
           kind="primary"
           size="lg"
-          label={last ? 'Понятно' : 'Дальше'}
+          label={last ? t.gotIt : t.next}
           onPress={() => (last ? router.back() : go(page + 1))}
         />
       </View>

@@ -22,11 +22,11 @@ import { fx } from '@/sound/sfx';
 let splashed = false;
 
 export function Home() {
-  const { c } = useTheme();
+  const { c, t } = useTheme();
   const { game, stats, inProgress, newGame, learned } = useGame();
   const [confirm, setConfirm] = useState(false);
   const [splash, setSplash] = useState(!splashed);
-  const score = game.score.toLocaleString('ru-RU');
+  const score = game.score.toLocaleString(t.locale);
   const play = () => router.push('/game');
   const fresh = () => {
     if (!learned) return router.push({ pathname: '/game', params: { learn: '1' } });
@@ -43,7 +43,7 @@ export function Home() {
       <Page
         top={
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <IconButton label="Настройки" size={48} onPress={() => router.push('/settings')}>
+            <IconButton label={t.settings} size={48} onPress={() => router.push('/settings')}>
               <Gear color={c.text} />
             </IconButton>
             <SoundKey />
@@ -53,16 +53,16 @@ export function Home() {
           {/* The plate is there from the first frame, so nothing moves when the splash lifts; it plays once the splash is gone. */}
           <Demo play={!splash} />
           <Logo />
-          {stats.best > 0 ? <Chip>{`Рекорд ${stats.best.toLocaleString('ru-RU')}`}</Chip> : <View style={{ height: 32 }} />}
+          {stats.best > 0 ? <Chip>{t.record(stats.best.toLocaleString(t.locale))}</Chip> : <View style={{ height: 32 }} />}
         </View>
         <View style={{ gap: 12 }}>
           {inProgress ? (
             <>
-              <Button kind="primary" size="lg" label="Продолжить" trailing={score} accessibilityLabel={`Продолжить партию, ${score} очков`} onPress={play} />
-              <Button size="lg" label="Новая игра" onPress={() => setConfirm(true)} />
+              <Button kind="primary" size="lg" label={t.resume} trailing={score} accessibilityLabel={t.resumeLabel(score, game.score)} onPress={play} />
+              <Button size="lg" label={t.newGame} onPress={() => setConfirm(true)} />
             </>
           ) : (
-            <Button kind="primary" size="lg" label="Играть" onPress={fresh} />
+            <Button kind="primary" size="lg" label={t.play} onPress={fresh} />
           )}
         </View>
       </Page>
@@ -72,20 +72,20 @@ export function Home() {
         <View style={[StyleSheet.absoluteFill, { zIndex: 2 }]}>
           <Overlay onDismiss={() => setConfirm(false)}>
             <Panel>
-              <Heading>Начать новую игру?</Heading>
+              <Heading>{t.newGameAsk}</Heading>
               <Body muted style={{ marginTop: space.sm }}>
-                Текущая партия на {score} очков пропадёт.
+                {t.lostGame(score, game.score)}
               </Body>
               <View style={{ gap: space.md, marginTop: space.xl }}>
                 <Button
                   kind="primary"
-                  label="Начать новую"
+                  label={t.newGameYes}
                   onPress={() => {
                     setConfirm(false);
                     fresh();
                   }}
                 />
-                <Button label="Вернуться" onPress={() => setConfirm(false)} />
+                <Button label={t.goBack} onPress={() => setConfirm(false)} />
               </View>
             </Panel>
           </Overlay>
@@ -214,7 +214,7 @@ const SP = { two: 200, fall: 170, one: 560, lean: 780, pull: 960, travel: 170, h
 const MERGE = SP.pull + SP.travel;
 
 function Splash({ onDone }: { onDone: () => void }) {
-  const { c } = useTheme();
+  const { c, t } = useTheme();
   const { width } = useWindowDimensions();
   const sz = Math.floor((Math.min(width, 440) - 32) / 6.75);
   const step = sz + Math.round(sz * 0.1);
@@ -278,7 +278,7 @@ function Splash({ onDone }: { onDone: () => void }) {
   return (
     <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.bg, zIndex: 5 }, pageSt]}>
       <Pressable
-        accessibilityLabel="Пропустить заставку"
+        accessibilityLabel={t.skipSplash}
         onPress={() => {
           live.current = false;
           onDone();

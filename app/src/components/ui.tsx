@@ -225,10 +225,10 @@ export function TextLink({ label, onPress }: { label: string; onPress: () => voi
    brings both back. Settings keep them apart. Quiet going off, so the tap
    sound does not wake the music it is turning off. */
 export function SoundKey() {
-  const { c, audible, setAudible } = useTheme();
+  const { c, t, audible, setAudible } = useTheme();
   return (
     <IconButton
-      label={audible ? 'Выключить звук' : 'Включить звук'}
+      label={audible ? t.soundOff : t.soundOn}
       size={48}
       quiet
       onPress={() => {
@@ -301,8 +301,9 @@ export function CloseIcon({ color, s = 24 }: { color: string; s?: number }) {
 /* ---------- ladder: the legend of rungs ---------- */
 
 export function Ladder({ best, size = 24, animate }: { best: number; size?: number; animate?: boolean }) {
+  const { t } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: space.xs }} accessibilityLabel="Лесенка плиток">
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: space.xs }} accessibilityLabel={t.ladder}>
       {LADDER.map((v, k) => (
         <Rung key={v} delay={animate ? k * 50 : undefined}>
           {v <= 2 || v <= best ? <Block v={v} size={size} /> : <Socket size={size} />}
@@ -530,10 +531,10 @@ export function SoundIcon({ on, color }: { on: boolean; color: string }) {
 /* ---------- top bar for pushed screens ---------- */
 
 export function TopBar({ title, onBack, close }: { title: string; onBack: () => void; close?: boolean }) {
-  const { c } = useTheme();
+  const { c, t } = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.lg }}>
-      <IconButton label={close ? 'Закрыть' : 'Назад'} size={48} onPress={onBack}>
+      <IconButton label={close ? t.close : t.back} size={48} onPress={onBack}>
         <Icon name={close ? 'close' : 'back'} color={c.text} />
       </IconButton>
       <Heading level="heading" style={{ marginBottom: 4 }}>{title}</Heading>
