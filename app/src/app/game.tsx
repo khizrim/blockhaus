@@ -887,7 +887,8 @@ export default function Game() {
       const value = frame[st.absorbed[0]];
       // The pair, small first: what flew in and what took it in.
       const pair = [...st.absorbed.map((a) => frame[a]), frame[st.anchor]].sort((a, b) => a - b);
-      const terms: Term[] = [...pair.flatMap((v, j) => (j ? ['+' as const, v] : [v])), '=', st.level];
+      // What the line keeps once the merge has played: the one tile it made.
+      const terms: Term[] = [st.level];
       for (const a of st.absorbed) frame[a] = 0;
       const mid = frame.slice();
       frame[st.anchor] = st.level;
@@ -1421,7 +1422,7 @@ export default function Game() {
                     above (2026-11-11, Khizri: very small). While a merge
                     plays it is the lens instead. */}
                 <View style={{ opacity: lens ? 0 : 1 }}>
-                  <Formula key={eq ? eq.id : 'task'} terms={eq ? eq.terms : (lesson.task ?? lesson.formula)} cell={lineTile} gap={gap} open={!eq && coach === 'task'} fit={col} />
+                  <Formula key={eq ? eq.id : 'task'} terms={eq ? eq.terms : lessonLine(lesson)} cell={lineTile} gap={gap} open={!eq && coach === 'task' && !lesson.task} fit={col} />
                 </View>
                 {lens ? <LineLens key={lens.id} pair={lens.pair} r={lens.r} tile={lineTile} gap={gap} /> : null}
               </Animated.View>
@@ -1902,6 +1903,14 @@ function TrayPiece({ delay, opacity, rise, children }: { delay: number; opacity:
   return <Animated.View style={st}>{children}</Animated.View>;
 }
 
+/** A lesson's line at rest, without signs: the two tiles the move brings
+    together, side by side (the sweep and square steps keep their own). */
+const lessonLine = (L: (typeof LESSONS)[number]): Term[] => {
+  if (!L.task) return L.formula;
+  const tiles = L.task.slice(0, -1).filter((t) => typeof t === 'number');
+  return tiles.flatMap((v, k) => (k ? [' ' as const, v] : [v])) as Term[];
+};
+
 /** While a lesson's merge plays in the line above, the plate dims, so the
     eye goes up to it. */
 function PlateDim({ plate = [0, 0, N - 1, N - 1], cell, gap }: { plate?: [number, number, number, number]; cell: number; gap: number }) {
@@ -1928,95 +1937,45 @@ function PlateDim({ plate = [0, 0, N - 1, N - 1], cell, gap }: { plate?: [number
 }
 
 /** A lesson's merge in the line above the board, step by step, no magic
-    (2026-11-11, Khizri: stop, make the tiles big, show what happens to
-    them; up in the formula's line, with a pause). The line comes in as
-    a + b = [ ], holds, the two tiles slide into the empty cell and on the
-    frame they meet (the board's land, its note and tap) it fills with the
-    result, which holds before the next merge. */
+    and no signs (2026-11-11, Khizri: stop, make the tiles big, show what
+    happens to them; then: no symbols, just two pieces that merge into one).
+    The two tiles come in side by side, hold, slide into one another in the
+    middle, and on the frame they meet (the board's land, its note and tap)
+    they are one tile, the result, which holds before the next merge. */
 function LineLens({ pair, r, tile, gap }: { pair: number[]; r: number; tile: number; gap: number }) {
-  const { c } = useTheme();
   const t = useSharedValue(0);
   useEffect(() => {
     t.value = withTiming(LENS_MS, { duration: LENS_MS, easing: Easing.linear });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const size = tile - gap;
-  const sign = Math.round(tile * 0.5);
-  const sp = Math.round(tile * 0.25);
-  // Terms left to right: tile, (sign, tile)..., sign, slot.
-  const items: { kind: 'tile' | '+' | '='; v?: number }[] = [];
-  pair.forEach((v, k) => {
-    if (k) items.push({ kind: '+' });
-    items.push({ kind: 'tile', v });
-  });
-  items.push({ kind: '=' });
-  const widths = items.map((it) => (it.kind === 'tile' ? size : sign));
-  const total = widths.reduce((a, b) => a + b, 0) + size + sp * items.length;
-  const xs: number[] = [];
-  let x = -total / 2;
-  for (const w of widths) {
-    xs.push(x);
-    x += w + sp;
-  }
-  const slotX = x;
-  const SLIDE0 = LENS_MEET - 400;
-  const appear = (k: number) =>
+  const step = size + Math.round(tile * 0.6);
+  const xs = pair.map((_, k) => (k - (pair.length - 1) / 2) * step - size / 2);
+  const SLIDE0 = LENS_MEET - 450;
+  const tileSt = (k: number) =>
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useAnimatedStyle(() => {
       const v = t.value;
-      const a = Math.min(1, Math.max(0, (v - k * 90) / 180));
-      return { opacity: a, transform: [{ translateY: (1 - a) * 8 }] };
-    });
-  const st = items.map((_, k) => appear(k));
-  /* Copies of the tiles lift off and slide into the empty cell, so the
-     line ends reading the whole sum: a + b = c. */
-  const fly = (k: number) =>
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useAnimatedStyle(() => {
-      const v = t.value;
+      const a = Math.min(1, Math.max(0, (v - k * 120) / 200));
       const go = v < SLIDE0 ? 0 : Math.min(1, (v - SLIDE0) / (LENS_MEET - SLIDE0));
       const e = go * go;
-      return { opacity: v < SLIDE0 || v >= LENS_MEET ? 0 : 1, transform: [{ translateX: (slotX - xs[k]) * e }, { translateY: -Math.sin(go * Math.PI) * size * 0.35 }, { scale: 1 - e * 0.1 }] };
+      return { opacity: v < LENS_MEET ? a : 0, transform: [{ translateX: -(xs[k] + size / 2) * e }, { translateY: (1 - a) * 10 }] };
     });
-  const flySt = items.map((_, k) => fly(k));
-  const slotSt = useAnimatedStyle(() => ({ opacity: Math.min(1, t.value / 300) }));
+  const st = pair.map((_, k) => tileSt(k));
   const resSt = useAnimatedStyle(() => {
     const v = t.value;
     if (v < LENS_MEET) return { opacity: 0, transform: [{ scale: 1.3 }] };
     const p = Math.min(1, (v - LENS_MEET) / 260);
     return { opacity: 1, transform: [{ scale: 1.3 - 0.3 * (1 - (1 - p) * (1 - p)) }] };
   });
-  const sw = Math.max(2.4, sign * 0.12);
   return (
     <View pointerEvents="none" style={{ position: 'absolute', left: '50%', top: '50%', width: 0, height: 0 }}>
-      {items.map((it, k) => (
-        <Animated.View key={k} style={[{ position: 'absolute', left: xs[k], top: -size / 2, width: widths[k], height: size, alignItems: 'center', justifyContent: 'center' }, st[k]]}>
-          {it.kind === 'tile' ? (
-            <Block v={it.v!} size={size} />
-          ) : it.kind === '+' ? (
-            <>
-              <View style={{ position: 'absolute', width: sign * 0.8, height: sw, borderRadius: sw, backgroundColor: c.text }} />
-              <View style={{ position: 'absolute', height: sign * 0.8, width: sw, borderRadius: sw, backgroundColor: c.text }} />
-            </>
-          ) : (
-            <>
-              <View style={{ position: 'absolute', width: sign * 0.8, height: sw, borderRadius: sw, backgroundColor: c.text, transform: [{ translateY: -sign * 0.15 }] }} />
-              <View style={{ position: 'absolute', width: sign * 0.8, height: sw, borderRadius: sw, backgroundColor: c.text, transform: [{ translateY: sign * 0.15 }] }} />
-            </>
-          )}
+      {pair.map((v, k) => (
+        <Animated.View key={k} style={[{ position: 'absolute', left: xs[k], top: -size / 2 }, st[k]]}>
+          <Block v={v} size={size} />
         </Animated.View>
       ))}
-      <Animated.View style={[{ position: 'absolute', left: slotX, top: -size / 2 }, slotSt]}>
-        <Socket size={size} />
-      </Animated.View>
-      {items.map((it, k) =>
-        it.kind === 'tile' ? (
-          <Animated.View key={`f${k}`} style={[{ position: 'absolute', left: xs[k], top: -size / 2 }, flySt[k]]}>
-            <Block v={it.v!} size={size} />
-          </Animated.View>
-        ) : null,
-      )}
-      <Animated.View style={[{ position: 'absolute', left: slotX, top: -size / 2 }, resSt]}>
+      <Animated.View style={[{ position: 'absolute', left: -size / 2, top: -size / 2 }, resSt]}>
         <Block v={r} size={size} />
       </Animated.View>
     </View>
