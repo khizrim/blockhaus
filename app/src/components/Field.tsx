@@ -7,6 +7,7 @@ import Animated, {
   withDelay,
   withSequence,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 
 import { enter, layer } from '@/design/system';
@@ -56,10 +57,22 @@ type Props = {
   /** The part of a board that is a plate, [x0, y0, x1, y1] in cells, inclusive
       (the lessons' growing board). The plate grows to a new size in a step. */
   open?: [number, number, number, number];
+  /** A milestone's wave across the board (see Wave). */
+  wave?: Wave;
   style?: ViewStyle;
 };
 
-export const Field = memo(function Field({ w, h, values, cell, gap, variant = 'board', numbers = true, look, open, style }: Props) {
+/** A milestone's wave: the cell it starts from and the ms since it started.
+    Played on shared values alone, so starting it re-renders nothing: the
+    frame a long chain ends on mounted some 300 views when every block was
+    copied over the board to lift it, and that was the drop players felt. */
+export type Wave = { at: SharedValue<number>; t: SharedValue<number> };
+/** ms the wave takes per cell of distance from where it starts. */
+export const WAVE_STEP = 55;
+/** The wave's clock at rest: past every cell's lift. */
+export const WAVE_IDLE = 100000;
+
+export const Field = memo(function Field({ w, h, values, cell, gap, variant = 'board', numbers = true, look, open, wave, style }: Props) {
   const { c } = useTheme();
   const board = variant === 'board';
   const hg = gap / 2;
@@ -82,7 +95,7 @@ export const Field = memo(function Field({ w, h, values, cell, gap, variant = 'b
     const top = pad + y * cell + hg;
     const lk = look?.(i);
     if (board || v === 0) sockets.push(<SocketCell key={i} left={left} top={top} size={size} enterDelay={lk?.enterDelay} />);
-    cells.push(<Cell key={i} v={v} left={left} top={top} size={size} numbers={numbers} look={lk} c={c} />);
+    cells.push(<Cell key={i} i={i} w={w} v={v} left={left} top={top} size={size} numbers={numbers} look={lk} c={c} wave={wave} />);
   }
 
   return (
@@ -149,9 +162,13 @@ const sameLook = (a?: CellLook, b?: CellLook) =>
     a.shadow === b.shadow && a.enterDelay === b.enterDelay &&
     (a.lean?.[0] ?? 0) === (b.lean?.[0] ?? 0) && (a.lean?.[1] ?? 0) === (b.lean?.[1] ?? 0));
 const sameCell = (a: CellProps, b: CellProps) =>
+  a.wave === b.wave && a.i === b.i && a.w === b.w &&
   a.v === b.v && a.left === b.left && a.top === b.top && a.size === b.size && a.numbers === b.numbers && a.c === b.c && sameLook(a.look, b.look);
 
 type CellProps = {
+  i: number;
+  w: number;
+  wave?: Wave;
   v: number;
   left: number;
   top: number;
@@ -161,7 +178,7 @@ type CellProps = {
   c: ReturnType<typeof useTheme>['c'];
 };
 
-const Cell = memo(function Cell({ v, left, top, size, numbers, look, c }: CellProps) {
+const Cell = memo(function Cell({ i, w, wave, v, left, top, size, numbers, look, c }: CellProps) {
   const rk = rank(v);
   const appear = useSharedValue(look?.enterDelay !== undefined ? 0 : 1);
   const sx = useSharedValue(1);
@@ -202,10 +219,23 @@ const Cell = memo(function Cell({ v, left, top, size, numbers, look, c }: CellPr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [look?.land]);
 
-  const anim = useAnimatedStyle(() => ({
-    opacity: Math.min(1, appear.value * 1.5),
-    transform: [{ translateX: lx.value }, { translateY: dy.value + ly.value + (1 - appear.value) * size * 0.3 }, { scaleX: sx.value }, { scaleY: sy.value * (0.6 + appear.value * 0.4) }],
-  }));
+  /* A milestone's wave reaching this block lifts it out of its socket
+     (scaled about its centre, the rest about its foot), a shadow falls under
+     it and a glint crosses its face. */
+  const anim = useAnimatedStyle(() => {
+    const k = wave ? waveLift(wave, i, w) : 0;
+    const up = 1 + k * WAVE_RISE;
+    return {
+      opacity: Math.min(1, appear.value * 1.5),
+      transform: [
+        { translateX: lx.value },
+        { translateY: dy.value + ly.value + (1 - appear.value) * size * 0.3 - k * size * 0.1 + ((up - 1) * size) / 2 },
+        { scaleX: sx.value * up },
+        { scaleY: sy.value * (0.6 + appear.value * 0.4) * up },
+      ],
+    };
+  });
+  const waves = !!wave && v > 0 && !look?.shadow;
 
   const box: ViewStyle = { position: 'absolute', left, top, width: size, height: size };
   const r = Math.round(size * RADIUS);
@@ -221,8 +251,9 @@ const Cell = memo(function Cell({ v, left, top, size, numbers, look, c }: CellPr
         numbers={numbers}
         fill={dim ? mix(c.tile[rk], c.canvas, 0.3) : undefined}
         ink={dim ? c.faint : undefined}
-        style={look?.absorb ? { opacity: 0.85 } : undefined}
-      />
+        style={look?.absorb ? { opacity: 0.85 } : undefined}>
+        {waves ? <Glint wave={wave!} i={i} w={w} size={size} /> : null}
+      </Block>
     );
   }
 
@@ -248,6 +279,7 @@ const Cell = memo(function Cell({ v, left, top, size, numbers, look, c }: CellPr
           {numbers && look.ghost > 0 ? <TileNum v={look.ghost} size={numSize(size)} color={c.tile[rank(look.ghost)]} /> : null}
         </View>
       ) : null}
+      {waves ? <WaveShadow wave={wave!} i={i} w={w} left={left} top={top} size={size} r={r} /> : null}
       {block ? (
         <Animated.View pointerEvents="none" style={[box, { transformOrigin: 'bottom' }, anim]}>
           {block}
@@ -256,3 +288,51 @@ const Cell = memo(function Cell({ v, left, top, size, numbers, look, c }: CellPr
     </>
   );
 }, sameCell);
+
+const WAVE_RISE = 0.12;
+
+/** ms since the wave reached cell `i`; negative before it has. The cell it
+    starts from is the hero's, drawn over the board, so it never lifts here. */
+function waveLocal(wave: Wave, i: number, w: number) {
+  'worklet';
+  const at = wave.at.value;
+  if (at < 0 || at === i) return -1;
+  const d = Math.abs((i % w) - (at % w)) + Math.abs(Math.floor(i / w) - Math.floor(at / w));
+  return wave.t.value - d * WAVE_STEP;
+}
+
+/** How high the block is: up in 150 ms (ease out), back in 380 ms with a
+    small bounce (ease out back 2.2). */
+function waveLift(wave: Wave, i: number, w: number) {
+  'worklet';
+  const t = waveLocal(wave, i, w);
+  if (t <= 0) return 0;
+  if (t < 150) return 1 - Math.pow(1 - t / 150, 3);
+  if (t < 530) {
+    const q = 1 - (t - 150) / 380;
+    return q * q * (3.2 * q - 2.2);
+  }
+  return 0;
+}
+
+const WaveShadow = memo(function WaveShadow({ wave, i, w, left, top, size, r }: { wave: Wave; i: number; w: number; left: number; top: number; size: number; r: number }) {
+  const { isDark } = useTheme();
+  const st = useAnimatedStyle(() => {
+    const k = waveLift(wave, i, w);
+    return { opacity: k * (isDark ? 0.6 : 0.28), transform: [{ translateY: k * size * 0.08 }, { scale: 1 + k * WAVE_RISE * 0.6 }] };
+  });
+  return <Animated.View pointerEvents="none" style={[{ position: 'absolute', left, top, width: size, height: size, borderRadius: r, backgroundColor: '#000000' }, st]} />;
+});
+
+/** The glint: a bar of light crossing the face in 300 ms, from 40 ms after
+    the wave arrives. */
+const Glint = memo(function Glint({ wave, i, w, size }: { wave: Wave; i: number; w: number; size: number }) {
+  const st = useAnimatedStyle(() => {
+    const t = waveLocal(wave, i, w) - 40;
+    if (t <= 0 || t >= 300) return { opacity: 0, transform: [{ translateX: -size }, { rotate: '20deg' }] };
+    const p = t / 300;
+    const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    return { opacity: 0.55, transform: [{ translateX: -size + e * size * 2 }, { rotate: '20deg' }] };
+  });
+  return <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: -size * 0.3, bottom: -size * 0.3, width: size * 0.28, backgroundColor: '#FFFFFF' }, st]} />;
+});

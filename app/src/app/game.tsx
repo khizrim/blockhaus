@@ -1,9 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { cancelAnimation, Easing, type SharedValue, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
-import { Field, type CellLook } from '@/components/Field';
+import { Field, WAVE_IDLE, WAVE_STEP, type CellLook, type Wave } from '@/components/Field';
 import { IconButton, Key, Screen } from '@/components/ui';
 import { pieceGrid } from '@/design/mock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -254,7 +254,6 @@ export default function Game() {
   const [aim, setAim] = useState<{ id: string; piece: Piece; ox: number; oy: number; dir: Dir } | null>(null);
   const aimDir = useRef<Dir | null>(null);
   const [incoming, setIncoming] = useState<{ id: number; piece: Piece; ox: number; oy: number; dir: Dir; delay: number } | null>(null);
-  const [floats, setFloats] = useState<{ id: string; at: number; v: number; times: number }[]>([]);
   const [returning, setReturning] = useState<number | null>(null);
   const [pops, setPops] = useState<Record<number, number>>({});
   const [lands, setLands] = useState<Record<number, number>>({});
@@ -262,19 +261,32 @@ export default function Game() {
   /** The best tile before the move now playing: a merge above it is a new milestone. */
   const peak = useRef(g.bestTile);
   /** A milestone's wave across the board, from the cell that made it. */
-  const [ripple, setRipple] = useState<{ at: number; v: number; id: number; board: number[]; primaries?: boolean } | null>(null);
+  const [ripple, setRippleState] = useState<{ at: number; v: number; id: number; board: number[]; primaries?: boolean } | null>(null);
+  /* The wave of a milestone lifts the board's own blocks in turn, on shared
+     values (Field's Wave); only the tile that made it is drawn over the
+     board, by Ripple, with the floor's flashes. */
+  const waveAt = useSharedValue(-1);
+  const waveT = useSharedValue(WAVE_IDLE);
+  const wave = useMemo<Wave>(() => ({ at: waveAt, t: waveT }), [waveAt, waveT]);
+  const setRipple = (r: typeof ripple) => {
+    setRippleState(r);
+    cancelAnimation(waveT);
+    if (!r) {
+      waveT.value = WAVE_IDLE;
+      return;
+    }
+    waveAt.value = r.at;
+    waveT.value = 0;
+    waveT.value = withTiming(RIPPLE_MS, { duration: RIPPLE_MS, easing: Easing.linear });
+  };
   /** The best milestone earned during the lessons: the track keeps it from step to step. */
   const lessonPeak = useRef(0);
   /** The move now playing made a milestone (it gets the full show already). */
   const moveHadMilestone = useRef(false);
-  /** Bumps when the track should assemble itself square by square (the start of the first game). */
-  const [trackIntro, setTrackIntro] = useState(0);
   /** Bumps when the lesson line changes, so it kicks in. */
   const lineKick = useSharedValue(1);
   /** The lesson line coming in (1, from the right) or going out (-1, to the left); 0 at rest. */
   const lineIn = useSharedValue(0);
-  /** A milestone whose copy is still flying to the track: its square waits. */
-  const [trackHold, setTrackHold] = useState(0);
   const lastDir = useRef<Dir>('down');
   // A new tray gets new keys so its pieces spring in; a spent piece keeps its key.
   const trayId = useRef(0);
@@ -294,16 +306,12 @@ export default function Game() {
      a piece flying home) is cleared here too, or it stays stuck on the board. */
   /** An earned sweep waits under the board until its chain has played out. */
   const [bonusHeld, setBonusHeld] = useState(false);
-  /** How far the cascade on the board has got toward an earned sweep. */
-  const [chain, setChain] = useState(0);
   const settle = () => {
     clearTimers();
     pending.current = [];
     setBonusHeld(false);
-    setChain(0);
     setFlights([]);
     setIncoming(null);
-    setFloats([]);
     setBursts([]);
     setStudFly(null);
     setSliding(null);
@@ -314,7 +322,6 @@ export default function Game() {
        timer, so they go here too, or the copies stay on the board as tiles
        that never move, even into a new game. */
     setRipple(null);
-    setTrackHold(0);
     setAim(null);
     aimDir.current = null;
   };
@@ -507,7 +514,6 @@ export default function Game() {
     setCarried(true);
     trayId.current++;
     skipLessons(true);
-    setTrackIntro(Date.now());
   };
 
   const skipLessons = (carry = false) => {
@@ -543,12 +549,7 @@ export default function Game() {
       else fx.milestone(level);
       setRipple({ at, v: level, id: Date.now(), board: board.slice() });
       if (store.lesson !== null) lessonPeak.current = Math.max(lessonPeak.current, level);
-      // Its square on the track fills when the flying copy lands there.
-      setTrackHold(level);
-      later(FLIP + 120 + FLY_HOME, () => {
-        setTrackHold(0);
-        fx.bonus();
-      });
+      later(FLIP + 120 + FLY_HOME, () => fx.bonus());
       later(RIPPLE_MS, () => setRipple(null));
     } else fx.merge(level, step);
     /* A merge that a merge made: the tile sends out one square wave per
@@ -568,7 +569,6 @@ export default function Game() {
       burstClear.current = setTimeout(() => setBursts([]), BURST_MS + 80);
       if (!milestone) scoreKick.value = withSequence(withTiming(1 + 0.04 * power, { duration: 60 }), withTiming(1, back(260, 2.4)));
     }
-    float(at, pts, Math.round(pts / level));
     thump(milestone ? Math.max(level, 192) : level, step);
     if (chainLen >= 3) slam(chainLen);
   };
@@ -627,12 +627,6 @@ export default function Game() {
   const stampStyle = useAnimatedStyle(() => ({ opacity: stamp.value, transform: [{ scaleX: 0.6 + stamp.value * 0.4 }] }));
   const scoreStyle = useAnimatedStyle(() => ({ transform: [{ scale: scoreKick.value }], transformOrigin: 'center' }));
 
-  /** Points rise from where a merge happened. */
-  const float = (at: number, v: number, times = 1) => {
-    const id = `${at}-${Date.now()}-${Math.random()}`;
-    setFloats((f) => [...f, { id, at, v, times }]);
-    later(800, () => setFloats((f) => f.filter((x) => x.id !== id)));
-  };
   /** Big merges move the board: a small press, bigger for higher rungs. */
   const bump = useSharedValue(1);
   const thump = (v: number, step = 0) => {
@@ -757,15 +751,6 @@ export default function Game() {
     if (res.refilled) later(done + 120, () => fx.tray());
     // A chain of two or more earns a sweep: its layer slides in under the
     // board as the last merge lands, with its own two rising ticks.
-    /* The empty layer under the board is cut into as many segments as a
-       cascade needs merges to earn it. Each merge of this chain fills one on
-       the frame it lands, so a chain of three shows how far it got: three of
-       five. A full layer becomes the earned sweep. */
-    if (counted && g.cfg.chainBonus && res.steps.length) {
-      const pc = paceOf(res.steps.length);
-      res.steps.slice(0, g.cfg.chainBonus).forEach((_, k) => later(pc.base + chainAt(k, pc.gaps) + pc.fly, () => setChain(k + 1)));
-      later(done + (res.bonus ? 0 : 700), () => setChain(0));
-    }
     /* An earned sweep is seen being earned: a yellow stud pops out of the
        merge that completed the cascade and flies in an arc into its socket on
        the sweep key, and clicks in on the frame it lands. */
@@ -1339,7 +1324,7 @@ export default function Game() {
                 { name: 'down', label: 'Сдвиг вниз' },
               ]}
               onAccessibilityAction={(e) => sweep(e.nativeEvent.actionName as Dir)}>
-              <Field w={N} h={N} values={plateValues} cell={cell} gap={gap} look={look} open={lesson?.open} />
+              <Field w={N} h={N} values={plateValues} cell={cell} gap={gap} look={look} open={lesson?.open} wave={wave} />
               {sliding ? (
                 <View pointerEvents="none" style={StyleSheet.absoluteFill}>
                   {sliding.moves.map((m) => (
@@ -1435,7 +1420,7 @@ export default function Game() {
 /** A tile in flight during a sweep: drawn the way an isolated tile sits on the
     board (its own fill inside the thick line), moving from its old cell to its
     new one. */
-function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap: number; ms?: number }) {
+const SlidingTile = memo(function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap: number; ms?: number }) {
   const pad = gap / 2;
   const at = (i: number) => ({ x: pad + (i % N) * cell, y: pad + ((i / N) | 0) * cell });
   const a = at(m.from);
@@ -1458,7 +1443,7 @@ function SlidingTile({ m, cell, gap, ms = SLIDE }: { m: Move; cell: number; gap:
       <Block v={m.value} size={cell - gap} />
     </Animated.View>
   );
-}
+});
 
 
 /** The best tile, drawn as a tile of the board: its fill inside the line. */
@@ -1484,7 +1469,7 @@ function BestTile({ v, size }: { v: number; size: number; frame?: number }) {
 const RIPPLE_MS = 1400;
 /** The score milestone: the year the Bauhaus opened. */
 const BAUHAUS = 1919;
-const WAVE = 55; // ms per cell of distance from the milestone
+const WAVE = WAVE_STEP; // ms per cell of distance from the milestone
 const FLIP = 460; // ms the milestone tile turns over in the air
 const FLY_HOME = 380; // ms its copy flies into the track
 
@@ -1494,7 +1479,7 @@ const FLY_HOME = 380; // ms its copy flies into the track
     with a glint on its enamel, while the empty floor flashes the new colour.
     Then a copy of the tile drops into its square on the track under the
     board, which pops as it lands. */
-function Ripple({ at, v, board, cell, gap, home, primaries }: { at: number; v: number; board: number[]; cell: number; gap: number; home: { x: number; y: number; w: number; h: number } | null; primaries?: boolean }) {
+const Ripple = memo(function Ripple({ at, v, board, cell, gap, home, primaries }: { at: number; v: number; board: number[]; cell: number; gap: number; home: { x: number; y: number; w: number; h: number } | null; primaries?: boolean }) {
   const { c } = useTheme();
   const pad = gap / 2;
   const ax = at % N;
@@ -1509,7 +1494,7 @@ function Ripple({ at, v, board, cell, gap, home, primaries }: { at: number; v: n
           <FloorFlash key={`f${i}`} d={dist(i)} color={primaries ? c.tile[1 + (dist(i) % 3)] : c.tile[rank(v)]} style={{ left: pos(i).x + pad, top: pos(i).y + pad, width: cell - gap, height: cell - gap }} />
         ),
       )}
-      {cells.map((i) => (board[i] > 0 && i !== at ? <LiftTile key={`t${i}`} v={board[i]} d={dist(i)} at={pos(i)} cell={cell} gap={gap} /> : null))}
+      {/* The other blocks lift in their own cells (Field's Wave). */}
       {primaries ? (
         board[at] > 0 ? <LiftTile key="hero" v={board[at]} d={0} at={pos(at)} cell={cell} gap={gap} hero home={null} /> : null
       ) : (
@@ -1517,7 +1502,7 @@ function Ripple({ at, v, board, cell, gap, home, primaries }: { at: number; v: n
       )}
     </>
   );
-}
+});
 
 function FloorFlash({ d, color, style }: { d: number; color: string; style: { width: number; left: number; top: number; height: number } }) {
   const o = useSharedValue(0);
@@ -1635,7 +1620,7 @@ function NextShape({ cells, cell, gap }: { cells: [number, number][]; cell: numb
 /** Plastic crumbs off a merge: small blocks in the new tile's colour burst
     out of the cell, spin, and fall under gravity off the board. `power` 1-5
     sets how many and how far. Seeded by the cell, so a replay looks alike. */
-function Burst({ at, v, n, power, cell, gap }: { at: number; v: number; n: number; power: number; cell: number; gap: number }) {
+const Burst = memo(function Burst({ at, v, n, power, cell, gap }: { at: number; v: number; n: number; power: number; cell: number; gap: number }) {
   const pad = gap / 2;
   const cx = pad + (at % N) * cell + cell / 2;
   const cy = pad + ((at / N) | 0) * cell + cell / 2;
@@ -1646,27 +1631,29 @@ function Burst({ at, v, n, power, cell, gap }: { at: number; v: number; n: numbe
     const speed = cell * (0.9 + power * 0.32) * (0.6 + rnd() * 0.6);
     return { vx: Math.cos(a) * speed, vy: Math.sin(a) * speed - cell * (0.6 + power * 0.15), spin: (rnd() - 0.5) * 720, size: Math.round(cell * (0.13 + rnd() * 0.08)), delay: Math.round(rnd() * 40) };
   });
-  return (
-    <>
-      {chips.map((ch, k) => (
-        <Chip key={k} {...ch} cx={cx} cy={cy} v={v} cell={cell} />
-      ))}
-    </>
-  );
-}
-
-function Chip({ vx, vy, spin, size, delay, cx, cy, v, cell }: { vx: number; vy: number; spin: number; size: number; delay: number; cx: number; cy: number; v: number; cell: number }) {
+  /* One clock for the whole burst: each chip reads it from its own small
+     delay, so a burst of fifteen runs one animation, not fifteen. */
+  const clock = useSharedValue(0);
+  useEffect(() => {
+    clock.value = withTiming(BURST_MS, { duration: BURST_MS, easing: Easing.linear });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const { c } = useTheme();
   const color = c.tile[rank(v)];
   const ledge = plastic(color).ledge;
-  const t = useSharedValue(0);
-  useEffect(() => {
-    t.value = withDelay(delay, withTiming(1, { duration: BURST_MS - delay, easing: Easing.linear }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  return (
+    <>
+      {chips.map((ch, k) => (
+        <Chip key={k} {...ch} cx={cx} cy={cy} color={color} ledge={ledge} cell={cell} clock={clock} />
+      ))}
+    </>
+  );
+});
+
+function Chip({ vx, vy, spin, size, delay, cx, cy, color, ledge, cell, clock }: { vx: number; vy: number; spin: number; size: number; delay: number; cx: number; cy: number; color: string; ledge: string; cell: number; clock: SharedValue<number> }) {
   const g = cell * 3.2; // gravity, in cells per (burst time)^2
   const st = useAnimatedStyle(() => {
-    const k = t.value;
+    const k = Math.max(0, Math.min(1, (clock.value - delay) / (BURST_MS - delay)));
     // Thrown out fast, slowed by the air, pulled down.
     const d = 1 - Math.pow(1 - k, 2.2);
     return {
@@ -1690,7 +1677,7 @@ function Chip({ vx, vy, spin, size, delay, cx, cy, v, cell }: { vx: number; vy: 
    same arc, but the key is full: it knocks on it and falls away. 'out': a
    spent sweep leaves its socket and drops off the edge the board went. */
 type StudMode = 'in' | 'bounce' | 'out';
-function StudFlight({ from, to, mode, loud, cell }: { from: { x: number; y: number }; to: { x: number; y: number }; mode: StudMode; loud: boolean; cell: number }) {
+const StudFlight = memo(function StudFlight({ from, to, mode, loud, cell }: { from: { x: number; y: number }; to: { x: number; y: number }; mode: StudMode; loud: boolean; cell: number }) {
   const k = useSharedValue(0);
   const total = !loud ? STUD_QUIET : mode === 'in' ? STUD_FLY : mode === 'bounce' ? STUD_BOUNCE : STUD_OUT;
   useEffect(() => {
@@ -1756,40 +1743,12 @@ function StudFlight({ from, to, mode, loud, cell }: { from: { x: number; y: numb
       <View style={{ width: 18, height: 18, borderRadius: 5, backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 2px 0 #C9A21F, inset 0 1px 0 rgba(255,255,255,0.8)' }} />
     </Animated.View>
   );
-}
-
-function Float({ at, v, times = 1, cell, gap }: { at: number; v: number; times?: number; cell: number; gap: number }) {
-  const { c } = useTheme();
-  const k = useSharedValue(0);
-  useEffect(() => {
-    k.value = withTiming(1, { duration: 760, easing: Easing.out(Easing.cubic) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const pad = gap / 2;
-  const st = useAnimatedStyle(() => ({
-    opacity: k.value < 0.6 ? 1 : 1 - (k.value - 0.6) / 0.4,
-    transform: [{ translateY: -k.value * cell * 0.7 }, { scale: 0.8 + Math.min(1, k.value * 4) * 0.2 }],
-  }));
-  return (
-    <Animated.View
-      style={[
-        { position: 'absolute', left: pad + (at % N) * cell - cell / 2, top: pad + ((at / N) | 0) * cell - cell * 0.3, width: cell * 2, alignItems: 'center' },
-        st,
-      ]}>
-      <Text
-        allowFontScaling={false}
-        style={{ fontFamily: font.tile, fontSize: Math.round(cell * (v >= 24 ? 0.34 : 0.28)), color: c.text, textShadowColor: c.canvas, textShadowRadius: 4 }}>
-        {`+${v}`}
-        {times > 1 ? <Text style={{ fontSize: Math.round(cell * 0.22), color: c.muted }}>{` ×${times}`}</Text> : null}
-      </Text>
-    </Animated.View>
-  );
-}
+});
 
 /** The pushed piece: it rides in from beyond the far edge of the board,
     fading up as it crosses the frame, and stops on its cells with a small
     overshoot, the way the board itself meets a wall. */
-function Incoming({ piece, ox, oy, dir, delay, cell, gap }: { piece: Piece; ox: number; oy: number; dir: Dir; delay: number; cell: number; gap: number }) {
+const Incoming = memo(function Incoming({ piece, ox, oy, dir, delay, cell, gap }: { piece: Piece; ox: number; oy: number; dir: Dir; delay: number; cell: number; gap: number }) {
   const { w, h } = pieceGrid(piece);
   // It comes from the side the tiles moved away from.
   const [ux, uy] = { left: [1, 0], right: [-1, 0], up: [0, 1], down: [0, -1] }[dir];
@@ -1808,7 +1767,7 @@ function Incoming({ piece, ox, oy, dir, delay, cell, gap }: { piece: Piece; ox: 
       <Field variant="piece" {...pieceGrid(piece)} cell={cell} gap={gap} />
     </Animated.View>
   );
-}
+});
 
 /** A tray piece. New ones spring in one after another. Own shared values, not
     `entering`, so Safari keeps their size. */

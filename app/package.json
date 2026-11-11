@@ -2,6 +2,12 @@
   "name": "blockhaus-app",
   "version": "1.0.0",
   "main": "expo-router/entry",
+  "reanimated": {
+    "staticFeatureFlags": {
+      "IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS": true,
+      "ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS": true
+    }
+  },
   "dependencies": {
     "@expo-google-fonts/archivo": "^0.4.2",
     "@expo-google-fonts/dela-gothic-one": "^0.4.1",
