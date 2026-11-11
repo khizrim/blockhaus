@@ -9,7 +9,7 @@ import { useTheme } from '@/design/theme';
 
 /** One part of a formula: a tile, a piece of several tiles side by side, or
     a sign. 'no' closes a pair that does not merge; 'swipe' is the gesture. */
-export type Term = number | number[] | { grid: number[][] } | '+' | '=' | '→' | 'no' | 'swipe' | 'swipeV' | 'stud';
+export type Term = number | number[] | { grid: number[][] } | '+' | '=' | '→' | 'no' | 'swipe' | 'swipeV' | 'stud' | ' ';
 type Sym = '+' | '=' | '→' | 'no' | 'swipe' | 'swipeV';
 
 /* A rule written in tiles instead of words: [1] + [2] = [3]. The tiles are
@@ -38,6 +38,8 @@ export function Formula({ terms, cell: want, gap, open = false, fit }: { terms: 
         if (typeof term === 'object') return <Tiles key={k} vs={term.grid} cell={Math.round(cell / 2)} gap={Math.max(2, Math.round(gap / 2))} empty={last} />;
         // The sweep a chain earns: the yellow stud of the sweep key, at tile size.
         if (term === 'stud') return <StudTerm key={k} cell={cell} gap={gap} empty={last} />;
+        // A blank: room between two tiles, no sign.
+        if (term === ' ') return <View key={k} style={{ width: s }} />;
         return <Sign key={k} kind={term as Sym} s={s} t={t} color={term === 'no' ? c.tile[2] : c.text} />;
       })}
     </View>

@@ -19,7 +19,7 @@ import { loudOnce, type StudKind } from '@/game/seen';
 import { TileNum } from '@/components/TileNum';
 import { Block, plastic, Socket } from '@/components/Block';
 import { Icon } from '@/components/icons';
-import { Formula } from '@/components/Formula';
+import { Formula, type Term } from '@/components/Formula';
 import { milestonesFor } from '@/components/Track';
 
 /* The game. The rules are the engine the prototype and the balance simulator
@@ -39,6 +39,36 @@ type Pace = { base: number; fly: number; gaps: number[] };
 const LONG_PACE: Pace = { base: 90, fly: 110, gaps: [180, 160, 140, 120, 110] };
 const SHORT_PACE: Pace = { base: 50, fly: 80, gaps: [120] };
 const paceOf = (merges: number) => (merges <= SHORT ? SHORT_PACE : LONG_PACE);
+/** In the lessons every merge is a beat of its own, long enough to read
+    its pair on the board (2026-11-11: a newcomer asked why 6 comes right
+    after 3; at game pace 1 + 2 and 3 + 3 blur into one). */
+const LESSON_PACE: Pace = { base: 100, fly: 520, gaps: [1250] };
+/* A lesson's merge under a lens (2026-11-11, Khizri: stop, make the tiles
+   bigger in the animation and show what happens to them). The pair comes up
+   big over the merge, side by side with a plus; they hold, slide into one
+   another, and on the frame they meet (the board's land, its note and tap)
+   they become the result, which holds and then sinks back into its tile. */
+/* Not slowed down (2026-11-11, Khizri: no slow motion, rather a hang to
+   read): every move is at game speed, and the stops between them are holds.
+   The pair hangs to be read, the merge itself is quick, the result hangs. */
+const LENS_MEET = 520; // = LESSON_PACE.fly: the pair meets as the board lands
+const LENS_SLIDE = 190; // ms of the pull itself, on the board and in the line
+const LENS_MS = 1200; // the lens's whole life
+/** The lens's times in lesson k: quicker as the lessons go on (2026-11-11,
+    Khizri), the holds most of all; the pull itself stays near game speed.
+    The last steps run at about half the first one's hang. */
+type LensTimes = { meet: number; slide: number; ms: number; gap: number };
+const LENS_SPEED = [1, 0.85, 0.72, 0.6, 0.52, 0.45];
+/** Within a chain each merge comes quicker than the one before, like notes
+    running up a scale (2026-11-11, Khizri: inside a step it was linear). */
+const LENS_RUN = 0.72;
+const lensTimes = (k: number, merge = 0): LensTimes => {
+  const f = Math.max(0.28, LENS_SPEED[Math.min(k, LENS_SPEED.length - 1)] * Math.pow(LENS_RUN, merge));
+  const slide = Math.round(LENS_SLIDE * Math.sqrt(f));
+  const meet = slide + Math.round((LENS_MEET - LENS_SLIDE) * f);
+  const ms = meet + Math.round((LENS_MS - LENS_MEET) * f);
+  return { meet, slide, ms, gap: meet + Math.round((LESSON_PACE.gaps[0] - LENS_MEET) * f) };
+};
 const chainAt = (k: number, gaps: number[]) => gaps.slice(0, k).reduce((a, b) => a + b, 0) + Math.max(0, k - gaps.length) * gaps[gaps.length - 1];
 const sweepStep = (merges: number) => (merges <= SHORT ? STEP_SHORT : STEP);
 const BURST_MS = 620; // ms the crumbs of a merge fly and fall
@@ -138,7 +168,7 @@ export default function Game() {
   const lastLaid = useRef<number[]>([]);
   const mv = useMemo(() => {
     if (!mvRaw) return null;
-    if (mvRaw.at !== 'best') return { slot: mvRaw.slot, at: mvRaw.at };
+    if (mvRaw.at !== 'best') return { slot: mvRaw.slot, at: mvRaw.at, right: mvRaw.right };
     // The free cell beside the last piece where this one runs longest.
     const p = g.tray[mvRaw.slot];
     let best = -1;
@@ -153,10 +183,25 @@ export default function Game() {
           cellAt = n;
         }
       }
-    return { slot: mvRaw.slot, at: cellAt >= 0 ? [cellAt] : [] };
+    return { slot: mvRaw.slot, at: cellAt >= 0 ? [cellAt] : [], right: undefined as number | undefined };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mvRaw, store.version]);
   const [coach, setCoach] = useState<'task' | 'done'>('task');
+  /** In a lesson, the merge that just landed, written as a pair: a + b = c. */
+  const [eq, setEq] = useState<{ id: string; terms: Term[] } | null>(null);
+  /** The same pairs, each over the tile it made, for a moment. */
+  const [lens, setLens] = useState<{ id: string; at: number; from: number; pair: number[]; r: number; start: LineShown | null; tm: LensTimes } | null>(null);
+  /** What a pair step's line shows at rest: the move's two tiles, or the
+      one tile the last merge made. Null for the sweep and square steps. */
+  const lineNow: LineShown | null = !lesson?.task ? null : eq ? { one: eq.terms[0] as number } : { pair: lesson.task.slice(0, -1).filter((t): t is number => typeof t === 'number') };
+  const lineRef = useRef(lineNow);
+  if (!lens) lineRef.current = lineNow;
+  /** The lesson whose choice the player last missed. */
+  const [missed, setMissed] = useState<number | null>(null);
+  /** A choice stood over too long without a try. */
+  const [stuck, setStuck] = useState(false);
+  /** Bumps to start the lesson's own move over at once, after a miss. */
+  const [demoRun, setDemoRun] = useState(0);
   /** The first game, gone on from the lessons' board: it keeps their line's
       room above the board (so the board does not jump) and lights its first
       move (FIRST_MOVES) as a hint the player may ignore. */
@@ -182,6 +227,8 @@ export default function Game() {
   }, [store.ready, learn]);
   useEffect(() => {
     setCoach('task');
+    setMissed(null);
+    setEq(null);
     if (store.lesson === 0) lessonPeak.current = 0;
     lineIn.value = 1;
     lineIn.value = withTiming(0, { duration: dur.slow, easing: Easing.out(Easing.cubic) });
@@ -398,6 +445,8 @@ export default function Game() {
   /* One column for the whole screen: the header, the lesson, the board and
      the tray share the board's left and right edges. */
   const col = cell * N + gap;
+  // A term of the lesson's line: as big as a board tile, five to the column.
+  const lineTile = Math.min(Math.round(cell * 1.1), Math.floor(col / 5.4));
   // Tray pieces at 0.7 of a board cell, as large as three slots of three cells allow.
   const trayCell = Math.min(Math.round(cell * 0.7), Math.floor(col / 9));
   /* The interface unit: the header squares are one board cell, the score is
@@ -448,6 +497,9 @@ export default function Game() {
         // a milestone's bell it waits for the bell to ring out.
         later(milestoneFired ? 520 : 0, () => fx.lessonStep(k));
         setCoach('done');
+        // A step that ends on a stud closes on its own line (square = stud).
+        const goalTerm = (L.task ?? L.formula)[(L.task ?? L.formula).length - 1];
+        if (typeof goalTerm !== 'number') setEq(null);
         kickLine();
         // The formula stays up to be read, then the next step slides in.
         later(milestoneFired ? RIPPLE_MS + 200 + LESSON_READ - 1100 : LESSON_READ, () => advance(k));
@@ -462,6 +514,9 @@ export default function Game() {
         later(1300, () => {
           if (lessonNow.current !== k) return;
           prevEnd.current = g.board.slice();
+          // Missed once: the next try shows the move that proves the step.
+          setMissed(k);
+          setEq(null);
           store.startLesson(k);
         });
       }
@@ -652,12 +707,37 @@ export default function Game() {
 
   // Where the held piece's top-left cell sits on the board, if it fits there.
   const fitAt = useCallback(
-    (p: Piece, px: number, py: number) => {
+    (p: Piece, px: number, py: number, fingerX?: number, fingerY?: number) => {
       const pad = gap / 2;
-      const gx = Math.round((px - boardAt.current.x - pad) / cell);
-      const gy = Math.round((py - boardAt.current.y - pad) / cell);
-      // In a lesson the piece goes in only where the lesson puts it.
-      if (mv && !mv.at.includes(gy * N + gx)) return null;
+      const fx_ = (px - boardAt.current.x - pad) / cell;
+      const fy_ = (py - boardAt.current.y - pad) / cell;
+      const gx = Math.round(fx_);
+      const gy = Math.round(fy_);
+      /* In a lesson the piece goes in only where the lesson puts it, and
+         those cells pull it in (2026-11-11, a newbie's walk-through: on a
+         phone the piece rides above the finger, so a newcomer who puts the
+         finger on the lit cell holds the piece a row too high, lets go and
+         sees it slide back with no word why). A lit cell takes the piece
+         when the piece or the finger is within a cell and a half of it. */
+      if (mv) {
+        const { w, h } = pieceGrid(p);
+        const fingerAt =
+          fingerX === undefined || fingerY === undefined
+            ? null
+            : { x: (fingerX - boardAt.current.x - pad) / cell - w / 2, y: (fingerY - boardAt.current.y - pad) / cell - h / 2 };
+        let best: { gx: number; gy: number } | null = null;
+        let bestD = 1.5;
+        for (const a of mv.at) {
+          const ax = a % N;
+          const ay = (a / N) | 0;
+          const d = Math.min(Math.hypot(fx_ - ax, fy_ - ay), fingerAt ? Math.hypot(fingerAt.x - ax, fingerAt.y - ay) : Infinity);
+          if (d < bestD && engine.fits(g.board, p, ax, ay)) {
+            bestD = d;
+            best = { gx: ax, gy: ay };
+          }
+        }
+        return best;
+      }
       return engine.fits(g.board, p, gx, gy) ? { gx, gy } : null;
     },
     [g, cell, gap, lesson, mv],
@@ -674,8 +754,18 @@ export default function Game() {
   const start = (slot: number, pageX: number, pageY: number) => {
     const p = g.tray[slot];
     if (!p || p.used || g.over) return;
-    // In a lesson only the piece of the move now taught lifts.
-    if (mv && mv.slot !== slot) return;
+    /* In a lesson only the piece of the move now taught lifts. Touching
+       another is answered (2026-11-11, Khizri: with a 1 and a 2 in the tray
+       a touch on the 1 did nothing): it shakes its head, and the piece whose
+       turn it is hops, then the lesson shows its move again. */
+    if (mv && mv.slot !== slot) {
+      fx.repel();
+      lockedShake.value = withSequence(withTiming(-4, { duration: 50 }), withTiming(4, { duration: 80 }), withTiming(-2, { duration: 80 }), withTiming(0, enter(dur.fast)));
+      setLockedSlot(slot);
+      turnHop.value = withSequence(withDelay(150, withTiming(-trayCell * 0.4, enter(dur.fast))), withTiming(0, back(300, 2.4)));
+      setDemoRun((n) => n + 1);
+      return;
+    }
     measureBoard();
     const { ox, oy } = pieceOffset(p);
     dx.value = pageX - ox;
@@ -693,7 +783,7 @@ export default function Game() {
     const { ox, oy } = pieceOffset(holdRef.current.piece);
     dx.value = pageX - ox;
     dy.value = pageY - oy;
-    const t = fitAt(holdRef.current.piece, pageX - ox, pageY - oy);
+    const t = fitAt(holdRef.current.piece, pageX - ox, pageY - oy, pageX, pageY);
     setTarget((prev) => (prev?.gx === t?.gx && prev?.gy === t?.gy ? prev : t));
   };
 
@@ -713,6 +803,9 @@ export default function Game() {
       const overBoard = px > -w && py > -hgt && px < N && py < N;
       if (overBoard && store.lesson === null) fx.invalid();
       else fx.putBack();
+      // In a lesson a piece let go in the wrong place is answered: as it
+      // gets back to its slot the lesson shows its move again, from the start.
+      if (store.lesson !== null) later(dur.base, () => setDemoRun((n) => n + 1));
       setReturning(h.slot);
       setHeld(h.piece);
       dx.value = withTiming(origin.current.x, enter(dur.base));
@@ -812,27 +905,64 @@ export default function Game() {
       quicker than a long one (paceOf). `frame` is the board with the piece
       laid. Returns when the last merge has landed. */
   const playChain = (frame: number[], steps: Step[], marks: boolean[], base: number) => {
-    const pc = paceOf(steps.length);
+    /* A lesson's merges play slow under the lens only when the move proves
+       the step (or leads on to its next move). A wrong one plays at game pace
+       and is pushed back: no lesson for a move that teaches the wrong thing
+       (2026-11-11, Khizri). The board is already the move's end here. */
+    const L = lessonNow.current !== null ? LESSONS[lessonNow.current] : null;
+    const slow = !!L && (L.goal(g) || (!!L.moves && g.moves < L.moves.length));
+    const tms = steps.map((_, k) => lensTimes(lessonNow.current ?? 0, k));
+    const pc = slow ? { base: LESSON_PACE.base, fly: 0, gaps: tms.map((x) => x.gap) } : paceOf(steps.length);
+    // When merge k lands: under the lens each has its own (quicker) beat.
+    const flyOf = (k: number) => (slow ? tms[k].meet : pc.fly);
     steps.forEach((st, k) => {
       const t0 = base + pc.base + chainAt(k, pc.gaps);
+      const tm = tms[k];
       const value = frame[st.absorbed[0]];
+      // The pair, small first: what flew in and what took it in.
+      const pair = [...st.absorbed.map((a) => frame[a]), frame[st.anchor]].sort((a, b) => a - b);
+      // What the line keeps once the merge has played: the one tile it made.
+      const terms: Term[] = [st.level];
       for (const a of st.absorbed) frame[a] = 0;
       const mid = frame.slice();
       frame[st.anchor] = st.level;
       const snap = frame.slice();
       const last = k === steps.length - 1;
-      expect(t0 + pc.fly, st.anchor, k, last ? steps.length : 0);
+      expect(t0 + flyOf(k), st.anchor, k, last ? steps.length : 0);
       later(t0, () => {
-        setShown(mid);
-        setFlights((f) => [...f, ...st.absorbed.map((a) => ({ id: `${t0}-${a}-${Date.now()}`, m: { from: a, to: st.anchor, value, merges: true }, ms: pc.fly }))]);
+        // A lesson's merge comes up under the lens as it starts.
+        if (slow && pair.every((v) => v > 0)) {
+          const id = `${t0}-${k}`;
+          // The pair takes up from what the line shows: the same two tiles
+          // stay where they are; the tile the last merge made is one of them.
+          const was = lineRef.current;
+          let order = pair;
+          if (was && 'pair' in was && was.pair.slice().sort((a, b) => a - b).join() === pair.join()) order = was.pair;
+          setLens({ id, at: st.anchor, from: st.absorbed[0], pair: order, r: st.level, start: was, tm });
+          later(tm.ms, () => setLens((l) => (l?.id === id ? null : l)));
+        }
+        // Under the lens the board holds still too and moves at game speed
+        // with the line: the flight starts so it lands as the pair meets.
+        const fly = () => {
+          setShown(mid);
+          setFlights((f) => [...f, ...st.absorbed.map((a) => ({ id: `${t0}-${a}-${Date.now()}`, m: { from: a, to: st.anchor, value, merges: true }, ms: slow ? tm.slide : pc.fly }))]);
+        };
+        if (slow) later(tm.meet - tm.slide, fly);
+        else fly();
       });
-      later(t0 + pc.fly, () => {
+      later(t0 + flyOf(k), () => {
         setShown(snap);
         setFlights((f) => f.filter((x) => !st.absorbed.some((a) => x.m.from === a)));
         land(st.anchor, st.level, marks[k], snap, st.pts, k, last ? steps.length : 0);
+        // A lesson writes each merge above the board on the frame it lands.
+        if (slow && pair.every((v) => v > 0)) {
+          const id = `${t0}-${k}-${Date.now()}`;
+          setEq({ id, terms });
+          kickLine();
+        }
       });
     });
-    return steps.length ? base + pc.base + chainAt(steps.length - 1, pc.gaps) + pc.fly : base;
+    return steps.length ? base + pc.base + chainAt(steps.length - 1, pc.gaps) + flyOf(steps.length - 1) : base;
   };
 
   const holdRef = useRef<Hold | null>(null);
@@ -897,8 +1027,9 @@ export default function Game() {
       }
       // The step's cells, hatched in the piece's colour: one place, or the
       // places to choose between.
+      // They stay lit while the piece is held, till it is over one of them.
       const guide = mv && coach === 'task' ? mv : hintMv;
-      if (!hold && guide && shown[i] === 0) {
+      if ((!hold || !target) && guide && shown[i] === 0) {
         const p = g.tray[guide.slot];
         for (const a of guide.at) {
           const m = p?.cells.find(([cx, cy]) => ((a / N) | 0) * N + cy * N + (a % N) + cx === i);
@@ -1023,8 +1154,15 @@ export default function Game() {
     sx.value = withTiming(0, enter(dur.fast));
     sy.value = withTiming(0, enter(dur.fast));
     if (g.over) return;
-    // A lesson's board slides only the way it teaches; other swipes do nothing.
-    if (lesson?.dirs && !lesson.dirs.includes(dir)) return;
+    /* A lesson's board slides only the way it teaches. Another way is not
+       silence: the board tips that way and springs back with the lesson's
+       soft push, and the finger shows the right way again. */
+    if (lesson?.dirs && !lesson.dirs.includes(dir)) {
+      tilt(dir, 1.5, 0);
+      fx.repel();
+      setDemoRun((n) => n + 1);
+      return;
+    }
     if (!g.cfg.freeSweeps && g.sweeps === 0) {
       fx.invalid();
       tilt(dir, 1.5, 0);
@@ -1190,6 +1328,12 @@ export default function Game() {
   const stuckPulse = useSharedValue(1);
   const [stuckSlot, setStuckSlot] = useState<number | null>(null);
   const stuckStyle = useAnimatedStyle(() => ({ transform: [{ scale: stuckPulse.value }] }));
+  // A lesson's tray: the piece touched out of turn shakes, the one whose turn it is hops.
+  const lockedShake = useSharedValue(0);
+  const turnHop = useSharedValue(0);
+  const [lockedSlot, setLockedSlot] = useState<number | null>(null);
+  const lockedStyle = useAnimatedStyle(() => ({ transform: [{ translateX: lockedShake.value }] }));
+  const turnStyle = useAnimatedStyle(() => ({ transform: [{ translateY: turnHop.value }] }));
   useEffect(() => {
     if (!hints || store.lesson !== null || g.over || hold || sliding) return;
     const free = g.tray.filter((p): p is Piece => !!p && !p.used);
@@ -1250,8 +1394,12 @@ export default function Game() {
   const slotRefs = useRef<(ComponentRef<typeof View> | null)[]>([]);
   type Geo = { board: { x: number; y: number; w: number }; slot?: { x: number; y: number } };
   const [geo, setGeo] = useState<Geo | null>(null);
-  // A choice is not shown: the player weighs the hatched cells themselves.
-  const demoSlot = mv && mv.at.length === 1 ? mv.slot : -1;
+  /* A choice is not shown: the player weighs the hatched cells themselves,
+     until they have missed it once or have stood still for a while; then
+     the lesson shows the move that proves the step (2026-11-11, a newbie's
+     walk-through: a choice missed came back with no help, again and again). */
+  const demoAt = !mv ? -1 : mv.at.length === 1 ? mv.at[0] : mv.right !== undefined && (missed === store.lesson || stuck) ? mv.right : -1;
+  const demoSlot = demoAt >= 0 && mv ? mv.slot : -1;
   useEffect(() => {
     setGeo(null);
     if (!lesson || coach !== 'task') return;
@@ -1265,7 +1413,16 @@ export default function Game() {
     }, 400);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store.lesson, store.version, coach, width, height]);
+  }, [store.lesson, store.version, coach, width, height, demoSlot]);
+
+  // Nine seconds over a choice without a try: show the way.
+  const choiceRight = mv && mv.at.length > 1 && mv.right !== undefined;
+  useEffect(() => {
+    setStuck(false);
+    if (!choiceRight || coach !== 'task' || hold) return;
+    const id = setTimeout(() => setStuck(true), 9000);
+    return () => clearTimeout(id);
+  }, [store.lesson, store.version, coach, !!hold, choiceRight]);
 
   const lineStyle = useAnimatedStyle(() => ({ opacity: 1 - Math.abs(lineIn.value), transform: [{ translateX: lineIn.value * 40 }, { scale: lineKick.value }], transformOrigin: 'center' }));
 
@@ -1304,7 +1461,23 @@ export default function Game() {
                 accessibilityRole="header"
                 accessibilityLabel={lesson.title}
                 style={[{ height: LESSON_H, justifyContent: 'center', alignItems: 'center' }, lineStyle]}>
-                <Formula terms={lesson.formula} cell={trayCell} gap={gap} open={coach === 'task'} fit={col} />
+                {/* One pair at a time: the merge the move starts with, then
+                    each merge of the chain as it lands (see Lesson.task). */}
+                {/* Big, a board tile a term, out of the row into the slack
+                    above (2026-11-11, Khizri: very small). While a merge
+                    plays it is the lens instead. */}
+                {/* A pair step's line is drawn by one hand at rest and in
+                    play, on one layout, so nothing jumps or swaps between
+                    them (2026-11-11, Khizri: tiles jumped, sometimes
+                    changed places). The sweep and square steps keep their
+                    formula. */}
+                {lens ? (
+                  <LineLens key={lens.id} pair={lens.pair} r={lens.r} start={lens.start} tm={lens.tm} tile={lineTile} gap={gap} />
+                ) : lineNow ? (
+                  <PairLine tiles={'one' in lineNow ? [lineNow.one] : lineNow.pair} tile={lineTile} gap={gap} />
+                ) : (
+                  <Formula key={eq ? eq.id : 'task'} terms={lesson.formula} cell={lineTile} gap={gap} open={coach === 'task'} fit={col} />
+                )}
               </Animated.View>
             </View>
           ) : carried ? (
@@ -1341,6 +1514,7 @@ export default function Game() {
                   <Burst key={b.id} at={b.at} v={b.v} n={b.n} power={b.power} cell={cell} gap={gap} />
                 ))}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
+                {lens ? <PlateDim key={lens.id} plate={lesson?.open} tm={lens.tm} cell={cell} gap={gap} /> : null}
                 {/* Above the wave: the stud is what the eye should follow. */}
                 {studFly ? <StudFlight key={studFly.id} from={studFly.from} to={studFly.to} mode={studFly.mode} loud={studFly.loud} cell={cell} /> : null}
               </View>
@@ -1378,12 +1552,12 @@ export default function Game() {
                 <NextShape cells={g.next[slot]} cell={trayCell} gap={gap} />
               ) : null}
               {p ? (
-                <Animated.View style={slot === stuckSlot ? stuckStyle : undefined}>
+                <Animated.View style={slot === stuckSlot ? stuckStyle : mv && slot === mv.slot ? turnStyle : mv && slot === lockedSlot ? lockedStyle : undefined}>
                 <TrayPiece
                   key={`${trayId.current}-${slot}-${JSON.stringify(p.cells)}`}
                   delay={slot * 60}
                   rise={trayCell}
-                  opacity={p.used || hold?.slot === slot || returning === slot ? 0 : g.over || !fitsSomewhere(g.board, p) ? 0.35 : 1}>
+                  opacity={p.used || hold?.slot === slot || returning === slot ? 0 : g.over || !fitsSomewhere(g.board, p) || (mv && mv.slot !== slot) ? 0.35 : 1}>
                   <Field variant="piece" {...pieceGrid(p)} cell={trayCell} gap={gap} />
                 </TrayPiece>
                 </Animated.View>
@@ -1396,15 +1570,15 @@ export default function Game() {
       {lesson && coach === 'task' && !hold && !held && !sliding && geo ? (
         demoSlot >= 0 && geo.slot && mv ? (
           <Demo
-            key={`demo-${store.lesson}-${store.version}`}
+            key={`demo-${store.lesson}-${store.version}-${demoRun}-${demoAt}`}
             piece={g.tray[demoSlot]!}
             from={geo.slot}
-            to={{ x: geo.board.x + gap / 2 + (mv.at[0] % N) * cell, y: geo.board.y + gap / 2 + ((mv.at[0] / N) | 0) * cell }}
+            to={{ x: geo.board.x + gap / 2 + (demoAt % N) * cell, y: geo.board.y + gap / 2 + ((demoAt / N) | 0) * cell }}
             cell={cell}
             gap={gap}
           />
         ) : lesson.dirs && g.sweeps === lesson.sweeps ? (
-          <Finger key={`finger-${store.lesson}`} board={geo.board} vertical={!!lesson.dirs?.includes('up')} />
+          <Finger key={`finger-${store.lesson}-${demoRun}`} board={geo.board} vertical={!!lesson.dirs?.includes('up')} />
         ) : null
       ) : null}
 
@@ -1780,6 +1954,138 @@ function TrayPiece({ delay, opacity, rise, children }: { delay: number; opacity:
   }, []);
   const st = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - k.value) * rise * 0.35 }, { scale: 0.92 + k.value * 0.08 }], opacity: Math.min(1, k.value * 2) * opacity }));
   return <Animated.View style={st}>{children}</Animated.View>;
+}
+
+type LineShown = { pair: number[] } | { one: number };
+
+/** The line's layout, shared at rest and in play: tile size and where each
+    of n tiles stands, from the middle. */
+const lineGeo = (n: number, tile: number, gap: number) => {
+  const size = tile - gap;
+  const step = size + Math.round(tile * 0.6);
+  return { size, xs: Array.from({ length: n }, (_, k) => (k - (n - 1) / 2) * step - size / 2) };
+};
+
+/** A pair step's line at rest: its tiles on the shared layout. */
+function PairLine({ tiles, tile, gap }: { tiles: number[]; tile: number; gap: number }) {
+  const { size, xs } = lineGeo(tiles.length, tile, gap);
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', left: '50%', top: '50%', width: 0, height: 0 }}>
+      {tiles.map((v, k) => (
+        <View key={k} style={{ position: 'absolute', left: xs[k], top: -size / 2 }}>
+          <Block v={v} size={size} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** While a lesson's merge plays in the line above, the plate dims, so the
+    eye goes up to it. */
+function PlateDim({ plate = [0, 0, N - 1, N - 1], tm, cell, gap }: { plate?: [number, number, number, number]; tm: LensTimes; cell: number; gap: number }) {
+  const { meet: LENS_MEET, ms: LENS_MS } = tm;
+  const { c } = useTheme();
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.value = withTiming(LENS_MS, { duration: LENS_MS, easing: Easing.linear });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const st = useAnimatedStyle(() => {
+    const v = t.value;
+    // Lighter as the pair meets, so the land on the board is seen too.
+    return { opacity: v < 150 ? (v / 150) * 0.5 : v < LENS_MEET - 150 ? 0.5 : v < LENS_MS - 250 ? 0.25 : Math.max(0, (LENS_MS - v) / 250) * 0.25 };
+  });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        { position: 'absolute', left: plate[0] * cell, top: plate[1] * cell, width: (plate[2] - plate[0] + 1) * cell + gap, height: (plate[3] - plate[1] + 1) * cell + gap, backgroundColor: c.canvas, borderRadius: 8 },
+        st,
+      ]}
+    />
+  );
+}
+
+/** A lesson's merge in the line above the board, step by step, no signs
+    (2026-11-11, Khizri). It takes up from what the line shows: the same two
+    tiles stay put; the tile the last merge made slides out of the middle to
+    become one of the pair while its partner drops in. The pair hangs to be
+    read, leans back, and the two jump into each other on an arc, faster and
+    faster, squashing on the hit (the board's land, its note and tap); the
+    result is born flat and wobbles, damped, into its square, and hangs.
+    Every curve eases; nothing moves at a constant speed (Khizri: the
+    linearity grates). */
+function LineLens({ pair, r, start, tm, tile, gap }: { pair: number[]; r: number; start: LineShown | null; tm: LensTimes; tile: number; gap: number }) {
+  const { meet: LENS_MEET, slide: LENS_SLIDE, ms: LENS_MS } = tm;
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.value = withTiming(LENS_MS, { duration: LENS_MS, easing: Easing.linear });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const { size, xs } = lineGeo(pair.length, tile, gap);
+  const center = -size / 2;
+  // How each tile enters: 'stay' where it stands, 'out' of the middle, or 'drop' in.
+  const samePair = !!start && 'pair' in start;
+  const carried = start && 'one' in start ? pair.indexOf(start.one) : -1;
+  const enter = pair.map((_, k) => (samePair ? 'stay' : k === carried ? 'out' : 'drop'));
+  const SLIDE0 = LENS_MEET - LENS_SLIDE;
+  // The entry and the lean back share the hang before the pull.
+  const IN = Math.min(200, Math.round(SLIDE0 * 0.55));
+  const WIND = Math.min(90, Math.round(SLIDE0 * 0.3));
+  const tileSt = (k: number) =>
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useAnimatedStyle(() => {
+      const v = t.value;
+      const how = enter[k];
+      const p = Math.min(1, v / IN);
+      const ease = 1 - (1 - p) * (1 - p) * (1 - p); // out-cubic
+      // Entering: from the middle, or from above with a landing give.
+      const enterX = how === 'out' ? (center - xs[k]) * (1 - ease) : 0;
+      const enterY = how === 'drop' ? -(1 - ease) * size * 0.6 : 0;
+      const give = how === 'drop' && v > IN && v < IN + 140 ? Math.sin(((v - IN) / 140) * Math.PI) : 0;
+      // Out from the middle is this tile's side.
+      const side = xs[k] + size / 2 < 0 ? -1 : 1;
+      const w = v > SLIDE0 - WIND && v < SLIDE0 ? (v - (SLIDE0 - WIND)) / WIND : 0;
+      const wind = Math.sin(w * Math.PI) * (1 - w * 0.3);
+      const go = v < SLIDE0 ? 0 : Math.min(1, (v - SLIDE0) / LENS_SLIDE);
+      const e = go * go * (2.2 - 1.2 * go); // eases in hard, a touch of out at the end
+      const arc = Math.sin(go * Math.PI) * size * 0.28; // both jump up a little and meet
+      const q = go > 0.75 ? (go - 0.75) / 0.25 : 0;
+      return {
+        opacity: v < LENS_MEET ? (how === 'drop' ? Math.min(1, ease * 1.6) : 1) : 0,
+        transform: [
+          { translateX: enterX + -(xs[k] + size / 2) * e + side * wind * size * 0.07 },
+          { translateY: enterY - arc },
+          { rotate: `${-side * Math.sin(go * Math.PI) * 6}deg` },
+          { scaleX: 1 - q * q * 0.25 - wind * 0.04 + give * 0.07 },
+          { scaleY: 1 + q * q * 0.14 - give * 0.09 },
+        ],
+      };
+    });
+  const st = pair.map((_, k) => tileSt(k));
+  const resSt = useAnimatedStyle(() => {
+    const v = t.value;
+    if (v < LENS_MEET) return { opacity: 0, transform: [{ translateY: 0 }, { scaleX: 1 }, { scaleY: 1 }] };
+    const dt = v - LENS_MEET;
+    const w = Math.exp(-dt / 120) * Math.cos((dt / 280) * 2 * Math.PI);
+    const grow = 1 + 0.14 * Math.exp(-dt / 80);
+    return {
+      opacity: 1,
+      transform: [{ translateY: -Math.max(0, -w) * size * 0.14 }, { scaleX: grow * (1 + w * 0.3) }, { scaleY: grow * (1 - w * 0.24) }],
+    };
+  });
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', left: '50%', top: '50%', width: 0, height: 0 }}>
+      {pair.map((v, k) => (
+        <Animated.View key={k} style={[{ position: 'absolute', left: xs[k], top: -size / 2 }, st[k]]}>
+          <Block v={v} size={size} />
+        </Animated.View>
+      ))}
+      <Animated.View style={[{ position: 'absolute', left: center, top: -size / 2 }, resSt]}>
+        <Block v={r} size={size} />
+      </Animated.View>
+    </View>
+  );
 }
 
 /** The lesson's own move: a see-through copy of the piece goes from its slot
