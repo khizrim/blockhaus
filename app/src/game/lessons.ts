@@ -54,8 +54,10 @@ export type Lesson = {
   /** The moves of the step, in order: the tray slot to play and the cells
       its top-left may go to. More than one cell is a choice. 'best': the
       free cell beside the piece just placed where this one runs the longest
-      chain (so it follows wherever the player built). */
-  moves?: { slot: number; at: number[] | 'best' }[];
+      chain (so it follows wherever the player built). `right`: of a
+      choice, the cell that proves the step; the lesson shows the move there
+      once the player has missed it or has stood still too long. */
+  moves?: { slot: number; at: number[] | 'best'; right?: number }[];
   /** Sweep steps: the only directions the board answers. */
   dirs?: Dir[];
   goal: (g: Game) => boolean;
@@ -111,7 +113,7 @@ export const LESSONS: Lesson[] = [
     board: board(MID, [[2, 2, 6], [3, 2, 3], [3, 3, 2], [1, 4, 2]]),
     tray: [none(), piece([[0, 0, 1]]), none()],
     sweeps: 0,
-    moves: [{ slot: 1, at: [at(1, 3), at(4, 3)] }],
+    moves: [{ slot: 1, at: [at(1, 3), at(4, 3)], right: at(4, 3) }],
     goal: has(12),
   },
   {
@@ -125,7 +127,7 @@ export const LESSONS: Lesson[] = [
     tray: [piece([[0, 0, 2]]), none(), piece([[0, 0, 1]])],
     sweeps: 1,
     moves: [
-      { slot: 0, at: [at(1, 1), at(4, 3), at(3, 4)] },
+      { slot: 0, at: [at(1, 1), at(4, 3), at(3, 4)], right: at(4, 3) },
       { slot: 2, at: 'best' },
     ],
     goal: has(24),

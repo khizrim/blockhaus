@@ -138,7 +138,7 @@ export default function Game() {
   const lastLaid = useRef<number[]>([]);
   const mv = useMemo(() => {
     if (!mvRaw) return null;
-    if (mvRaw.at !== 'best') return { slot: mvRaw.slot, at: mvRaw.at };
+    if (mvRaw.at !== 'best') return { slot: mvRaw.slot, at: mvRaw.at, right: mvRaw.right };
     // The free cell beside the last piece where this one runs longest.
     const p = g.tray[mvRaw.slot];
     let best = -1;
@@ -153,10 +153,16 @@ export default function Game() {
           cellAt = n;
         }
       }
-    return { slot: mvRaw.slot, at: cellAt >= 0 ? [cellAt] : [] };
+    return { slot: mvRaw.slot, at: cellAt >= 0 ? [cellAt] : [], right: undefined as number | undefined };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mvRaw, store.version]);
   const [coach, setCoach] = useState<'task' | 'done'>('task');
+  /** The lesson whose choice the player last missed. */
+  const [missed, setMissed] = useState<number | null>(null);
+  /** A choice stood over too long without a try. */
+  const [stuck, setStuck] = useState(false);
+  /** Bumps to start the lesson's own move over at once, after a miss. */
+  const [demoRun, setDemoRun] = useState(0);
   /** The first game, gone on from the lessons' board: it keeps their line's
       room above the board (so the board does not jump) and lights its first
       move (FIRST_MOVES) as a hint the player may ignore. */
@@ -182,6 +188,7 @@ export default function Game() {
   }, [store.ready, learn]);
   useEffect(() => {
     setCoach('task');
+    setMissed(null);
     if (store.lesson === 0) lessonPeak.current = 0;
     lineIn.value = 1;
     lineIn.value = withTiming(0, { duration: dur.slow, easing: Easing.out(Easing.cubic) });
@@ -462,6 +469,8 @@ export default function Game() {
         later(1300, () => {
           if (lessonNow.current !== k) return;
           prevEnd.current = g.board.slice();
+          // Missed once: the next try shows the move that proves the step.
+          setMissed(k);
           store.startLesson(k);
         });
       }
@@ -652,12 +661,37 @@ export default function Game() {
 
   // Where the held piece's top-left cell sits on the board, if it fits there.
   const fitAt = useCallback(
-    (p: Piece, px: number, py: number) => {
+    (p: Piece, px: number, py: number, fingerX?: number, fingerY?: number) => {
       const pad = gap / 2;
-      const gx = Math.round((px - boardAt.current.x - pad) / cell);
-      const gy = Math.round((py - boardAt.current.y - pad) / cell);
-      // In a lesson the piece goes in only where the lesson puts it.
-      if (mv && !mv.at.includes(gy * N + gx)) return null;
+      const fx_ = (px - boardAt.current.x - pad) / cell;
+      const fy_ = (py - boardAt.current.y - pad) / cell;
+      const gx = Math.round(fx_);
+      const gy = Math.round(fy_);
+      /* In a lesson the piece goes in only where the lesson puts it, and
+         those cells pull it in (2026-11-11, a newbie's walk-through: on a
+         phone the piece rides above the finger, so a newcomer who puts the
+         finger on the lit cell holds the piece a row too high, lets go and
+         sees it slide back with no word why). A lit cell takes the piece
+         when the piece or the finger is within a cell and a half of it. */
+      if (mv) {
+        const { w, h } = pieceGrid(p);
+        const fingerAt =
+          fingerX === undefined || fingerY === undefined
+            ? null
+            : { x: (fingerX - boardAt.current.x - pad) / cell - w / 2, y: (fingerY - boardAt.current.y - pad) / cell - h / 2 };
+        let best: { gx: number; gy: number } | null = null;
+        let bestD = 1.5;
+        for (const a of mv.at) {
+          const ax = a % N;
+          const ay = (a / N) | 0;
+          const d = Math.min(Math.hypot(fx_ - ax, fy_ - ay), fingerAt ? Math.hypot(fingerAt.x - ax, fingerAt.y - ay) : Infinity);
+          if (d < bestD && engine.fits(g.board, p, ax, ay)) {
+            bestD = d;
+            best = { gx: ax, gy: ay };
+          }
+        }
+        return best;
+      }
       return engine.fits(g.board, p, gx, gy) ? { gx, gy } : null;
     },
     [g, cell, gap, lesson, mv],
@@ -693,7 +727,7 @@ export default function Game() {
     const { ox, oy } = pieceOffset(holdRef.current.piece);
     dx.value = pageX - ox;
     dy.value = pageY - oy;
-    const t = fitAt(holdRef.current.piece, pageX - ox, pageY - oy);
+    const t = fitAt(holdRef.current.piece, pageX - ox, pageY - oy, pageX, pageY);
     setTarget((prev) => (prev?.gx === t?.gx && prev?.gy === t?.gy ? prev : t));
   };
 
@@ -713,6 +747,9 @@ export default function Game() {
       const overBoard = px > -w && py > -hgt && px < N && py < N;
       if (overBoard && store.lesson === null) fx.invalid();
       else fx.putBack();
+      // In a lesson a piece let go in the wrong place is answered: as it
+      // gets back to its slot the lesson shows its move again, from the start.
+      if (store.lesson !== null) later(dur.base, () => setDemoRun((n) => n + 1));
       setReturning(h.slot);
       setHeld(h.piece);
       dx.value = withTiming(origin.current.x, enter(dur.base));
@@ -897,8 +934,9 @@ export default function Game() {
       }
       // The step's cells, hatched in the piece's colour: one place, or the
       // places to choose between.
+      // They stay lit while the piece is held, till it is over one of them.
       const guide = mv && coach === 'task' ? mv : hintMv;
-      if (!hold && guide && shown[i] === 0) {
+      if ((!hold || !target) && guide && shown[i] === 0) {
         const p = g.tray[guide.slot];
         for (const a of guide.at) {
           const m = p?.cells.find(([cx, cy]) => ((a / N) | 0) * N + cy * N + (a % N) + cx === i);
@@ -1023,8 +1061,15 @@ export default function Game() {
     sx.value = withTiming(0, enter(dur.fast));
     sy.value = withTiming(0, enter(dur.fast));
     if (g.over) return;
-    // A lesson's board slides only the way it teaches; other swipes do nothing.
-    if (lesson?.dirs && !lesson.dirs.includes(dir)) return;
+    /* A lesson's board slides only the way it teaches. Another way is not
+       silence: the board tips that way and springs back with the lesson's
+       soft push, and the finger shows the right way again. */
+    if (lesson?.dirs && !lesson.dirs.includes(dir)) {
+      tilt(dir, 1.5, 0);
+      fx.repel();
+      setDemoRun((n) => n + 1);
+      return;
+    }
     if (!g.cfg.freeSweeps && g.sweeps === 0) {
       fx.invalid();
       tilt(dir, 1.5, 0);
@@ -1250,8 +1295,12 @@ export default function Game() {
   const slotRefs = useRef<(ComponentRef<typeof View> | null)[]>([]);
   type Geo = { board: { x: number; y: number; w: number }; slot?: { x: number; y: number } };
   const [geo, setGeo] = useState<Geo | null>(null);
-  // A choice is not shown: the player weighs the hatched cells themselves.
-  const demoSlot = mv && mv.at.length === 1 ? mv.slot : -1;
+  /* A choice is not shown: the player weighs the hatched cells themselves,
+     until they have missed it once or have stood still for a while; then
+     the lesson shows the move that proves the step (2026-11-11, a newbie's
+     walk-through: a choice missed came back with no help, again and again). */
+  const demoAt = !mv ? -1 : mv.at.length === 1 ? mv.at[0] : mv.right !== undefined && (missed === store.lesson || stuck) ? mv.right : -1;
+  const demoSlot = demoAt >= 0 && mv ? mv.slot : -1;
   useEffect(() => {
     setGeo(null);
     if (!lesson || coach !== 'task') return;
@@ -1265,7 +1314,16 @@ export default function Game() {
     }, 400);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store.lesson, store.version, coach, width, height]);
+  }, [store.lesson, store.version, coach, width, height, demoSlot]);
+
+  // Nine seconds over a choice without a try: show the way.
+  const choiceRight = mv && mv.at.length > 1 && mv.right !== undefined;
+  useEffect(() => {
+    setStuck(false);
+    if (!choiceRight || coach !== 'task' || hold) return;
+    const id = setTimeout(() => setStuck(true), 9000);
+    return () => clearTimeout(id);
+  }, [store.lesson, store.version, coach, !!hold, choiceRight]);
 
   const lineStyle = useAnimatedStyle(() => ({ opacity: 1 - Math.abs(lineIn.value), transform: [{ translateX: lineIn.value * 40 }, { scale: lineKick.value }], transformOrigin: 'center' }));
 
@@ -1396,15 +1454,15 @@ export default function Game() {
       {lesson && coach === 'task' && !hold && !held && !sliding && geo ? (
         demoSlot >= 0 && geo.slot && mv ? (
           <Demo
-            key={`demo-${store.lesson}-${store.version}`}
+            key={`demo-${store.lesson}-${store.version}-${demoRun}-${demoAt}`}
             piece={g.tray[demoSlot]!}
             from={geo.slot}
-            to={{ x: geo.board.x + gap / 2 + (mv.at[0] % N) * cell, y: geo.board.y + gap / 2 + ((mv.at[0] / N) | 0) * cell }}
+            to={{ x: geo.board.x + gap / 2 + (demoAt % N) * cell, y: geo.board.y + gap / 2 + ((demoAt / N) | 0) * cell }}
             cell={cell}
             gap={gap}
           />
         ) : lesson.dirs && g.sweeps === lesson.sweeps ? (
-          <Finger key={`finger-${store.lesson}`} board={geo.board} vertical={!!lesson.dirs?.includes('up')} />
+          <Finger key={`finger-${store.lesson}-${demoRun}`} board={geo.board} vertical={!!lesson.dirs?.includes('up')} />
         ) : null
       ) : null}
 
