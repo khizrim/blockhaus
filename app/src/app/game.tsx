@@ -39,6 +39,11 @@ type Pace = { base: number; fly: number; gaps: number[] };
 const LONG_PACE: Pace = { base: 90, fly: 110, gaps: [180, 160, 140, 120, 110] };
 const SHORT_PACE: Pace = { base: 50, fly: 80, gaps: [120] };
 const paceOf = (merges: number) => (merges <= SHORT ? SHORT_PACE : LONG_PACE);
+/** In the lessons every merge is a beat of its own, long enough to read
+    its pair on the board (2026-11-11: a newcomer asked why 6 comes right
+    after 3; at game pace 1 + 2 and 3 + 3 blur into one). */
+const LESSON_PACE: Pace = { base: 120, fly: 220, gaps: [820] };
+const NOTE_MS = 1100; // ms a lesson's merge pair stays over its tile
 const chainAt = (k: number, gaps: number[]) => gaps.slice(0, k).reduce((a, b) => a + b, 0) + Math.max(0, k - gaps.length) * gaps[gaps.length - 1];
 const sweepStep = (merges: number) => (merges <= SHORT ? STEP_SHORT : STEP);
 const BURST_MS = 620; // ms the crumbs of a merge fly and fall
@@ -159,6 +164,8 @@ export default function Game() {
   const [coach, setCoach] = useState<'task' | 'done'>('task');
   /** In a lesson, the merge that just landed, written as a pair: a + b = c. */
   const [eq, setEq] = useState<{ id: string; terms: Term[] } | null>(null);
+  /** The same pairs, each over the tile it made, for a moment. */
+  const [notes, setNotes] = useState<{ id: string; at: number; terms: Term[]; below: boolean }[]>([]);
   /** The lesson whose choice the player last missed. */
   const [missed, setMissed] = useState<number | null>(null);
   /** A choice stood over too long without a try. */
@@ -866,7 +873,7 @@ export default function Game() {
       quicker than a long one (paceOf). `frame` is the board with the piece
       laid. Returns when the last merge has landed. */
   const playChain = (frame: number[], steps: Step[], marks: boolean[], base: number) => {
-    const pc = paceOf(steps.length);
+    const pc = lessonNow.current !== null ? LESSON_PACE : paceOf(steps.length);
     steps.forEach((st, k) => {
       const t0 = base + pc.base + chainAt(k, pc.gaps);
       const value = frame[st.absorbed[0]];
@@ -889,8 +896,16 @@ export default function Game() {
         land(st.anchor, st.level, marks[k], snap, st.pts, k, last ? steps.length : 0);
         // A lesson writes each merge above the board on the frame it lands.
         if (lessonNow.current !== null && pair.every((v) => v > 0)) {
-          setEq({ id: `${t0}-${k}-${Date.now()}`, terms });
+          const id = `${t0}-${k}-${Date.now()}`;
+          setEq({ id, terms });
           kickLine();
+          // ...and over the tile it made, where the eye is.
+          // On the side away from the next merge, so it hides nothing coming.
+          const nx = steps[k + 1];
+          const y0 = (st.anchor / N) | 0;
+          const below = y0 === 0 || (!!nx && [nx.anchor, ...nx.absorbed].some((i) => ((i / N) | 0) < y0));
+          setNotes((n) => [...n, { id, at: st.anchor, terms, below }]);
+          later(NOTE_MS, () => setNotes((n) => n.filter((x) => x.id !== id)));
         }
       });
     });
@@ -1432,6 +1447,9 @@ export default function Game() {
                   <Burst key={b.id} at={b.at} v={b.v} n={b.n} power={b.power} cell={cell} gap={gap} />
                 ))}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
+                {notes.map((n) => (
+                  <MergeNote key={n.id} at={n.at} terms={n.terms} below={n.below} cell={cell} gap={gap} />
+                ))}
                 {/* Above the wave: the stud is what the eye should follow. */}
                 {studFly ? <StudFlight key={studFly.id} from={studFly.from} to={studFly.to} mode={studFly.mode} loud={studFly.loud} cell={cell} /> : null}
               </View>
@@ -1871,6 +1889,44 @@ function TrayPiece({ delay, opacity, rise, children }: { delay: number; opacity:
   }, []);
   const st = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - k.value) * rise * 0.35 }, { scale: 0.92 + k.value * 0.08 }], opacity: Math.min(1, k.value * 2) * opacity }));
   return <Animated.View style={st}>{children}</Animated.View>;
+}
+
+/** A lesson's merge written over the tile it made: a + b = c on a white
+    card, rising a little and fading. Above the tile, or under it (top row,
+    or the next merge comes from above). */
+function MergeNote({ at, terms, below, cell, gap }: { at: number; terms: Term[]; below: boolean; cell: number; gap: number }) {
+  const { c } = useTheme();
+  const k = useSharedValue(0);
+  useEffect(() => {
+    k.value = withSequence(withTiming(1, back(220, 2)), withDelay(NOTE_MS - 520, withTiming(2, { duration: 300 })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const x = at % N;
+  const y = (at / N) | 0;
+  const tile = Math.round(cell * 0.46);
+  const h = tile + 12;
+  const st = useAnimatedStyle(() => ({
+    opacity: k.value <= 1 ? k.value : 2 - k.value,
+    transform: [{ translateY: (below ? 1 : -1) * (Math.min(k.value, 1) * 6 + Math.max(0, k.value - 1) * 6) }, { scale: 0.85 + Math.min(k.value, 1) * 0.15 }],
+  }));
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: 'absolute',
+          left: gap / 2 + x * cell + cell / 2 - cell * 2,
+          width: cell * 4,
+          top: below ? gap / 2 + (y + 1) * cell + 2 : gap / 2 + y * cell - h - 2,
+          alignItems: 'center',
+        },
+        st,
+      ]}>
+      <View style={{ height: h, paddingHorizontal: 8, borderRadius: 10, justifyContent: 'center', backgroundColor: c.surface, boxShadow: '0 2px 8px rgba(0,0,0,0.18)' }}>
+        <Formula terms={terms} cell={tile} gap={Math.max(2, Math.round(gap / 2))} />
+      </View>
+    </Animated.View>
+  );
 }
 
 /** The lesson's own move: a see-through copy of the piece goes from its slot
