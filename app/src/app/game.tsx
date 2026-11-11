@@ -175,7 +175,12 @@ export default function Game() {
   /** In a lesson, the merge that just landed, written as a pair: a + b = c. */
   const [eq, setEq] = useState<{ id: string; terms: Term[] } | null>(null);
   /** The same pairs, each over the tile it made, for a moment. */
-  const [lens, setLens] = useState<{ id: string; at: number; from: number; pair: number[]; r: number } | null>(null);
+  const [lens, setLens] = useState<{ id: string; at: number; from: number; pair: number[]; r: number; start: LineShown | null } | null>(null);
+  /** What a pair step's line shows at rest: the move's two tiles, or the
+      one tile the last merge made. Null for the sweep and square steps. */
+  const lineNow: LineShown | null = !lesson?.task ? null : eq ? { one: eq.terms[0] as number } : { pair: lesson.task.slice(0, -1).filter((t): t is number => typeof t === 'number') };
+  const lineRef = useRef(lineNow);
+  if (!lens) lineRef.current = lineNow;
   /** The lesson whose choice the player last missed. */
   const [missed, setMissed] = useState<number | null>(null);
   /** A choice stood over too long without a try. */
@@ -909,7 +914,12 @@ export default function Game() {
         // A lesson's merge comes up under the lens as it starts.
         if (slow && pair.every((v) => v > 0)) {
           const id = `${t0}-${k}`;
-          setLens({ id, at: st.anchor, from: st.absorbed[0], pair, r: st.level });
+          // The pair takes up from what the line shows: the same two tiles
+          // stay where they are; the tile the last merge made is one of them.
+          const was = lineRef.current;
+          let order = pair;
+          if (was && 'pair' in was && was.pair.slice().sort((a, b) => a - b).join() === pair.join()) order = was.pair;
+          setLens({ id, at: st.anchor, from: st.absorbed[0], pair: order, r: st.level, start: was });
           later(LENS_MS, () => setLens((l) => (l?.id === id ? null : l)));
         }
         // Under the lens the board holds still too and moves at game speed
@@ -1437,10 +1447,18 @@ export default function Game() {
                 {/* Big, a board tile a term, out of the row into the slack
                     above (2026-11-11, Khizri: very small). While a merge
                     plays it is the lens instead. */}
-                <View style={{ opacity: lens ? 0 : 1 }}>
-                  <Formula key={eq ? eq.id : 'task'} terms={eq ? eq.terms : lessonLine(lesson)} cell={lineTile} gap={gap} open={!eq && coach === 'task' && !lesson.task} fit={col} />
-                </View>
-                {lens ? <LineLens key={lens.id} pair={lens.pair} r={lens.r} tile={lineTile} gap={gap} /> : null}
+                {/* A pair step's line is drawn by one hand at rest and in
+                    play, on one layout, so nothing jumps or swaps between
+                    them (2026-11-11, Khizri: tiles jumped, sometimes
+                    changed places). The sweep and square steps keep their
+                    formula. */}
+                {lens ? (
+                  <LineLens key={lens.id} pair={lens.pair} r={lens.r} start={lens.start} tile={lineTile} gap={gap} />
+                ) : lineNow ? (
+                  <PairLine tiles={'one' in lineNow ? [lineNow.one] : lineNow.pair} tile={lineTile} gap={gap} />
+                ) : (
+                  <Formula key={eq ? eq.id : 'task'} terms={lesson.formula} cell={lineTile} gap={gap} open={coach === 'task'} fit={col} />
+                )}
               </Animated.View>
             </View>
           ) : carried ? (
@@ -1919,13 +1937,29 @@ function TrayPiece({ delay, opacity, rise, children }: { delay: number; opacity:
   return <Animated.View style={st}>{children}</Animated.View>;
 }
 
-/** A lesson's line at rest, without signs: the two tiles the move brings
-    together, side by side (the sweep and square steps keep their own). */
-const lessonLine = (L: (typeof LESSONS)[number]): Term[] => {
-  if (!L.task) return L.formula;
-  const tiles = L.task.slice(0, -1).filter((t) => typeof t === 'number');
-  return tiles.flatMap((v, k) => (k ? [' ' as const, v] : [v])) as Term[];
+type LineShown = { pair: number[] } | { one: number };
+
+/** The line's layout, shared at rest and in play: tile size and where each
+    of n tiles stands, from the middle. */
+const lineGeo = (n: number, tile: number, gap: number) => {
+  const size = tile - gap;
+  const step = size + Math.round(tile * 0.6);
+  return { size, xs: Array.from({ length: n }, (_, k) => (k - (n - 1) / 2) * step - size / 2) };
 };
+
+/** A pair step's line at rest: its tiles on the shared layout. */
+function PairLine({ tiles, tile, gap }: { tiles: number[]; tile: number; gap: number }) {
+  const { size, xs } = lineGeo(tiles.length, tile, gap);
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', left: '50%', top: '50%', width: 0, height: 0 }}>
+      {tiles.map((v, k) => (
+        <View key={k} style={{ position: 'absolute', left: xs[k], top: -size / 2 }}>
+          <Block v={v} size={size} />
+        </View>
+      ))}
+    </View>
+  );
+}
 
 /** While a lesson's merge plays in the line above, the plate dims, so the
     eye goes up to it. */
@@ -1952,65 +1986,70 @@ function PlateDim({ plate = [0, 0, N - 1, N - 1], cell, gap }: { plate?: [number
   );
 }
 
-/** A lesson's merge in the line above the board, step by step, no magic
-    and no signs (2026-11-11, Khizri: stop, make the tiles big, show what
-    happens to them; then: no symbols, just two pieces that merge into one).
-    The two tiles come in side by side, hold, slide into one another in the
-    middle, and on the frame they meet (the board's land, its note and tap)
-    they are one tile, the result, which holds before the next merge. */
-function LineLens({ pair, r, tile, gap }: { pair: number[]; r: number; tile: number; gap: number }) {
+/** A lesson's merge in the line above the board, step by step, no signs
+    (2026-11-11, Khizri). It takes up from what the line shows: the same two
+    tiles stay put; the tile the last merge made slides out of the middle to
+    become one of the pair while its partner drops in. The pair hangs to be
+    read, leans back, and the two jump into each other on an arc, faster and
+    faster, squashing on the hit (the board's land, its note and tap); the
+    result is born flat and wobbles, damped, into its square, and hangs.
+    Every curve eases; nothing moves at a constant speed (Khizri: the
+    linearity grates). */
+function LineLens({ pair, r, start, tile, gap }: { pair: number[]; r: number; start: LineShown | null; tile: number; gap: number }) {
   const t = useSharedValue(0);
   useEffect(() => {
     t.value = withTiming(LENS_MS, { duration: LENS_MS, easing: Easing.linear });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const size = tile - gap;
-  const step = size + Math.round(tile * 0.6);
-  const xs = pair.map((_, k) => (k - (pair.length - 1) / 2) * step - size / 2);
-  /* Physics, drawn with time alone (no springs): the tiles drop in and
-     settle, lean back a touch before they go (the pull winding up), fall
-     into each other faster and faster as magnets do, and squash on the
-     frame they hit; the result is born squashed from the hit and wobbles
-     out of it, damped, into its square. */
+  const { size, xs } = lineGeo(pair.length, tile, gap);
+  const center = -size / 2;
+  // How each tile enters: 'stay' where it stands, 'out' of the middle, or 'drop' in.
+  const samePair = !!start && 'pair' in start;
+  const carried = start && 'one' in start ? pair.indexOf(start.one) : -1;
+  const enter = pair.map((_, k) => (samePair ? 'stay' : k === carried ? 'out' : 'drop'));
+  const IN = 200;
   const SLIDE0 = LENS_MEET - LENS_SLIDE;
-  const WIND = 100; // ms of leaning back before the pull
+  const WIND = 90;
   const tileSt = (k: number) =>
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useAnimatedStyle(() => {
       const v = t.value;
-      // In: a drop from above that lands and gives a little.
-      const a = Math.min(1, Math.max(0, (v - k * 70) / 180));
-      const drop = a < 1 ? (1 - a) * (1 - a) * -size * 0.5 : 0;
-      const land = v - k * 70 - 180;
-      const give = land > 0 && land < 160 ? Math.sin((land / 160) * Math.PI) : 0;
-      // Out from the middle is the sign of this tile's side.
+      const how = enter[k];
+      const p = Math.min(1, v / IN);
+      const ease = 1 - (1 - p) * (1 - p) * (1 - p); // out-cubic
+      // Entering: from the middle, or from above with a landing give.
+      const enterX = how === 'out' ? (center - xs[k]) * (1 - ease) : 0;
+      const enterY = how === 'drop' ? -(1 - ease) * size * 0.6 : 0;
+      const give = how === 'drop' && v > IN && v < IN + 140 ? Math.sin(((v - IN) / 140) * Math.PI) : 0;
+      // Out from the middle is this tile's side.
       const side = xs[k] + size / 2 < 0 ? -1 : 1;
-      const wind = v > SLIDE0 - WIND && v < SLIDE0 ? Math.sin(((v - (SLIDE0 - WIND)) / WIND) * Math.PI) : 0;
-      const go = v < SLIDE0 ? 0 : Math.min(1, (v - SLIDE0) / (LENS_MEET - SLIDE0));
-      const e = go * go * go;
-      // The last stretch before the hit: squashed along the way they meet.
-      const q = go > 0.8 ? (go - 0.8) / 0.2 : 0;
+      const w = v > SLIDE0 - WIND && v < SLIDE0 ? (v - (SLIDE0 - WIND)) / WIND : 0;
+      const wind = Math.sin(w * Math.PI) * (1 - w * 0.3);
+      const go = v < SLIDE0 ? 0 : Math.min(1, (v - SLIDE0) / LENS_SLIDE);
+      const e = go * go * (2.2 - 1.2 * go); // eases in hard, a touch of out at the end
+      const arc = Math.sin(go * Math.PI) * size * 0.28; // both jump up a little and meet
+      const q = go > 0.75 ? (go - 0.75) / 0.25 : 0;
       return {
-        opacity: v < LENS_MEET ? Math.min(1, a * 2) : 0,
+        opacity: v < LENS_MEET ? (how === 'drop' ? Math.min(1, ease * 1.6) : 1) : 0,
         transform: [
-          { translateX: -(xs[k] + size / 2) * e + side * wind * size * 0.08 },
-          { translateY: drop },
-          { scaleX: 1 - q * 0.22 - wind * 0.04 + give * 0.06 },
-          { scaleY: 1 + q * 0.12 - give * 0.08 },
+          { translateX: enterX + -(xs[k] + size / 2) * e + side * wind * size * 0.07 },
+          { translateY: enterY - arc },
+          { rotate: `${-side * Math.sin(go * Math.PI) * 6}deg` },
+          { scaleX: 1 - q * q * 0.25 - wind * 0.04 + give * 0.07 },
+          { scaleY: 1 + q * q * 0.14 - give * 0.09 },
         ],
       };
     });
   const st = pair.map((_, k) => tileSt(k));
   const resSt = useAnimatedStyle(() => {
     const v = t.value;
-    if (v < LENS_MEET) return { opacity: 0, transform: [{ scaleX: 1 }, { scaleY: 1 }, { translateY: 0 }] };
+    if (v < LENS_MEET) return { opacity: 0, transform: [{ translateY: 0 }, { scaleX: 1 }, { scaleY: 1 }] };
     const dt = v - LENS_MEET;
-    // A damped wobble: wide and flat from the hit, then tall, then square.
-    const w = Math.exp(-dt / 130) * Math.cos((dt / 300) * 2 * Math.PI);
-    const grow = 1 + 0.12 * Math.exp(-dt / 90);
+    const w = Math.exp(-dt / 120) * Math.cos((dt / 280) * 2 * Math.PI);
+    const grow = 1 + 0.14 * Math.exp(-dt / 80);
     return {
       opacity: 1,
-      transform: [{ translateY: -Math.max(0, -w) * size * 0.12 }, { scaleX: grow * (1 + w * 0.3) }, { scaleY: grow * (1 - w * 0.24) }],
+      transform: [{ translateY: -Math.max(0, -w) * size * 0.14 }, { scaleX: grow * (1 + w * 0.3) }, { scaleY: grow * (1 - w * 0.24) }],
     };
   });
   return (
@@ -2020,7 +2059,7 @@ function LineLens({ pair, r, tile, gap }: { pair: number[]; r: number; tile: num
           <Block v={v} size={size} />
         </Animated.View>
       ))}
-      <Animated.View style={[{ position: 'absolute', left: -size / 2, top: -size / 2 }, resSt]}>
+      <Animated.View style={[{ position: 'absolute', left: center, top: -size / 2 }, resSt]}>
         <Block v={r} size={size} />
       </Animated.View>
     </View>
