@@ -39,11 +39,11 @@ import engine, { type Dir, type Game, type Piece } from './engine';
    engine stones, so nothing goes there and a sweep stops at the edge of the
    plate as at a wall; the board draws them as no socket at all. There is no
    text on screen: above the board the move waits as a formula in tiles with
-   an empty last cell, and the cell fills when the board proves it. `title`
-   is for screen readers only. */
+   an empty last cell, and the cell fills when the board proves it. Each step's
+   sentence, for screen readers only, is in the strings (i18n, `lessons`),
+   in the same order. */
 
 export type Lesson = {
-  title: string;
   /** The step as a formula in tiles; the last term is what the move makes. */
   formula: Term[];
   /** What the line above the board asks before the move: the first merge
@@ -88,7 +88,7 @@ const FULL: Lesson['open'] = [0, 0, 5, 5];
 
 export const LESSONS: Lesson[] = [
   {
-    title: 'Поставьте 1 рядом с 2',
+    // Поставьте 1 рядом с 2
     formula: [1, '+', 2, '=', 3],
     task: [1, '+', 2, '=', 3],
     open: TINY,
@@ -101,7 +101,7 @@ export const LESSONS: Lesson[] = [
     goal: has(3),
   },
   {
-    title: 'Поставьте 2 к единице, и тройки сольются',
+    // Поставьте 2 к единице, и тройки сольются
     formula: [2, '+', 1, '→', 3, '→', 6],
     task: [2, '+', 1, '=', 3],
     open: TINY,
@@ -113,7 +113,7 @@ export const LESSONS: Lesson[] = [
     goal: has(6),
   },
   {
-    title: 'Выберите клетку, где цепочка длиннее: три слияния дают сдвиг',
+    // Выберите клетку, где цепочка длиннее: три слияния дают сдвиг
     formula: [1, '→', 3, '→', 6, '→', 12],
     task: [1, '+', 2, '=', 3],
     open: MID,
@@ -126,7 +126,7 @@ export const LESSONS: Lesson[] = [
     goal: has(12),
   },
   {
-    title: 'Достройте лесенку двойкой, потом запустите её единицей',
+    // Достройте лесенку двойкой, потом запустите её единицей
     formula: [1, '→', 3, '→', 6, '→', 12, '→', 24],
     task: [2, '+', 1, '=', 3],
     open: MID,
@@ -143,7 +143,7 @@ export const LESSONS: Lesson[] = [
     goal: has(24),
   },
   {
-    title: 'Смахните доску влево',
+    // Смахните доску влево
     formula: ['swipe', 24, '+', 24, '=', 48],
     open: FULL,
     // A 24 comes in with the last ring, across the row from the other.
@@ -154,7 +154,7 @@ export const LESSONS: Lesson[] = [
     goal: has(48),
   },
   {
-    title: 'Квадрат ставит четыре блока сразу и возвращает сдвиг',
+    // Квадрат ставит четыре блока сразу и возвращает сдвиг
     formula: [{ grid: [[1, 1], [1, 1]] }, '=', 'stud'],
     open: FULL,
     // A 2 and a 3 come in under the 48. Two of the square's 1s find the

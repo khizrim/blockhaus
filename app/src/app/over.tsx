@@ -5,6 +5,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSequence, wi
 
 import { Field } from '@/components/Field';
 import { Button, Chip, CountUp, Page } from '@/components/ui';
+import { useTheme } from '@/design/theme';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
 
@@ -13,6 +14,7 @@ import { fx } from '@/sound/sfx';
    one). Then again, or the menu. */
 export default function Over() {
   const { game: final, stats, newGame } = useGame();
+  const { t } = useTheme();
   const { width } = useWindowDimensions();
   const target = final.score;
   // The first game is always a record, so it is not called one.
@@ -30,7 +32,7 @@ export default function Over() {
 
   return (
     <Page>
-      <View accessible accessibilityLabel={`Места нет. ${target} очков.`} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18 }}>
+      <View accessible accessibilityLabel={t.noRoom(target)} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18 }}>
         <View style={{ opacity: 0.6 }}>
           <Field w={6} h={6} values={final.board} cell={cell} gap={Math.max(3, Math.round(cell * 0.1))} />
         </View>
@@ -38,9 +40,9 @@ export default function Over() {
         <CountUp to={target} />
         <Animated.View style={chipSt}>
           {record ? (
-            <Chip yellow>Новый рекорд</Chip>
+            <Chip yellow>{t.newRecord}</Chip>
           ) : stats.played > 1 ? (
-            <Chip>{`Рекорд ${stats.best.toLocaleString('ru-RU')}`}</Chip>
+            <Chip>{t.record(stats.best.toLocaleString(t.locale))}</Chip>
           ) : null}
         </Animated.View>
       </View>
@@ -48,13 +50,13 @@ export default function Over() {
         <Button
           kind="primary"
           size="lg"
-          label="Ещё раз"
+          label={t.again}
           onPress={() => {
             newGame();
             router.back();
           }}
         />
-        <Button kind="secondary" size="lg" label="В меню" onPress={() => router.dismissTo('/')} />
+        <Button kind="secondary" size="lg" label={t.toMenu} onPress={() => router.dismissTo('/')} />
       </View>
     </Page>
   );

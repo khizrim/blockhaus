@@ -12,7 +12,7 @@ import { dimMusic } from '@/sound/sfx';
 /* Pause (2026-11-08): a page in the table colour. The sound key at the top,
    then three keys: carry on, start again, back to the menu. */
 export default function Pause() {
-  const { c } = useTheme();
+  const { c, t } = useTheme();
   useEffect(() => {
     dimMusic(true);
     return () => dimMusic(false);
@@ -28,13 +28,13 @@ export default function Pause() {
     return (
       <Overlay onDismiss={() => setConfirm(false)}>
         <Panel>
-          <Heading>Начать заново?</Heading>
+          <Heading>{t.restartAsk}</Heading>
           <Body muted style={{ marginTop: space.sm }}>
-            Текущая партия на {game.score.toLocaleString('ru-RU')} очков пропадёт.
+            {t.lostGame(game.score.toLocaleString(t.locale), game.score)}
           </Body>
           <View style={{ gap: space.md, marginTop: space.xl }}>
-            <Button kind="primary" label="Начать заново" onPress={restart} />
-            <Button label="Вернуться" onPress={() => setConfirm(false)} />
+            <Button kind="primary" label={t.restartYes} onPress={restart} />
+            <Button label={t.goBack} onPress={() => setConfirm(false)} />
           </View>
         </Panel>
       </Overlay>
@@ -45,20 +45,20 @@ export default function Pause() {
     <Page
       top={
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <IconButton label="Настройки" size={48} onPress={() => router.push('/settings')}>
+          <IconButton label={t.settings} size={48} onPress={() => router.push('/settings')}>
             <Gear color={c.text} />
           </IconButton>
           <SoundKey />
         </View>
       }>
       <View style={{ flex: 1, justifyContent: 'center', gap: 12 }}>
-        <Button kind="primary" size="lg" label="Продолжить" onPress={() => router.back()} />
-        <Button size="lg" label="Заново" onPress={() => (game.moves > 0 ? setConfirm(true) : restart())} />
-        <Button size="lg" label="В меню" onPress={() => router.dismissTo('/')} />
+        <Button kind="primary" size="lg" label={t.resume} onPress={() => router.back()} />
+        <Button size="lg" label={t.restart} onPress={() => (game.moves > 0 ? setConfirm(true) : restart())} />
+        <Button size="lg" label={t.toMenu} onPress={() => router.dismissTo('/')} />
         {lesson !== null ? (
           <Button
             kind="ghost"
-            label="Пропустить обучение"
+            label={t.skipLessons}
             onPress={() => {
               finishLessons();
               router.back();

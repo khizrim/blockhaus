@@ -7,11 +7,11 @@ import { useTheme } from '@/design/theme';
 
 /** A scrim over the screen with a dialog card. The card fades up 8pt, ease-out. */
 export function Overlay({ children, onDismiss }: { children: ReactNode; onDismiss?: () => void }) {
-  const { c } = useTheme();
+  const { c, t } = useTheme();
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.lg }}>
       <Animated.View entering={FadeIn.duration(dur.base)} style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} accessibilityLabel="Закрыть" disabled={!onDismiss} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} accessibilityLabel={t.close} disabled={!onDismiss} />
       </Animated.View>
       <Animated.View
         accessibilityViewIsModal

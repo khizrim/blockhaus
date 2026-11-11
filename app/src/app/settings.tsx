@@ -6,71 +6,85 @@ import { Overlay } from '@/components/Overlay';
 import { Body, Button, Card, Heading, Label, Panel, Row, Screen, Segmented, Toggle, TopBar } from '@/components/ui';
 import { space, type } from '@/design/system';
 import { useTheme, type ThemeMode } from '@/design/theme';
+import type { LangPref } from '@/i18n';
 import { useGame } from '@/game/store';
 
 /* Settings, the minimum (2026-11-08): the theme, sound and touch, the way
    back to the lesson and the rules, the record and a way to wipe it. */
 export default function Settings() {
-  const t = useTheme();
-  const { c } = t;
+  const p = useTheme();
+  const { c, t } = p;
   const [confirm, setConfirm] = useState(false);
   const { stats, resetProgress } = useGame();
-  const best = stats.best.toLocaleString('ru-RU');
+  const best = stats.best.toLocaleString(t.locale);
 
   return (
     <View style={{ flex: 1 }}>
       <Screen>
-        <TopBar title="Настройки" onBack={() => router.back()} />
+        <TopBar title={t.settings} onBack={() => router.back()} />
         <ScrollView contentContainerStyle={{ gap: space.xxl, paddingBottom: space.xl }} showsVerticalScrollIndicator={false}>
-          <Section title="Тема">
+          <Section title={t.theme}>
             <Segmented<ThemeMode>
-              value={t.mode}
-              onChange={t.setMode}
+              value={p.mode}
+              onChange={p.setMode}
               options={[
-                { value: 'system', label: 'Как в системе' },
-                { value: 'light', label: 'Светлая' },
-                { value: 'dark', label: 'Тёмная' },
+                { value: 'system', label: t.system },
+                { value: 'light', label: t.light },
+                { value: 'dark', label: t.dark },
               ]}
             />
           </Section>
 
-          <Section title="Игра">
+          {/* Each language is written in itself, so it can be found from the other. */}
+          <Section title={t.language}>
+            <Segmented<LangPref>
+              value={p.langPref}
+              onChange={p.setLangPref}
+              options={[
+                { value: 'system', label: t.system },
+                { value: 'ru', label: 'Русский' },
+                { value: 'en', label: 'English' },
+              ]}
+            />
+          </Section>
+
+          <Section title={t.game}>
             <Card>
-              <Row label="Звук">
-                <Toggle label="Звук" value={t.sound} onChange={t.setSound} />
+              <Row label={t.sound}>
+                <Toggle label={t.sound} value={p.sound} onChange={p.setSound} />
               </Row>
-              <Row label="Музыка">
-                <Toggle label="Музыка" value={t.music} onChange={t.setMusic} />
+              <Row label={t.music}>
+                <Toggle label={t.music} value={p.music} onChange={p.setMusic} />
               </Row>
-              <Row label="Вибрация">
-                <Toggle label="Вибрация" value={t.haptics} onChange={t.setHaptics} />
+              <Row label={t.haptics}>
+                <Toggle label={t.haptics} value={p.haptics} onChange={p.setHaptics} />
               </Row>
-              <Row label="Подсказки" note="Доска покажет ход, если долго думать">
-                <Toggle label="Подсказки" value={t.hints} onChange={t.setHints} />
+              <Row label={t.hints} note={t.hintsNote}>
+                <Toggle label={t.hints} value={p.hints} onChange={p.setHints} />
               </Row>
             </Card>
           </Section>
 
-          <Section title="Помощь">
+          <Section title={t.help}>
             <Card>
               <Row
-                label="Пройти обучение"
+                label={t.learn}
                 onPress={() => {
                   router.dismissAll();
                   router.push({ pathname: '/game', params: { learn: '1' } });
                 }}
               />
-              <Row label="Правила" onPress={() => router.push('/howto')} />
+              <Row label={t.rules} onPress={() => router.push('/howto')} />
             </Card>
           </Section>
 
-          <Section title="Рекорд">
+          <Section title={t.recordTitle}>
             <Card>
-              <Row label="Лучший счёт">
+              <Row label={t.best}>
                 <Text style={[type.bodyStrong, { color: c.text, fontVariant: ['tabular-nums'] }]}>{best}</Text>
               </Row>
             </Card>
-            <Button kind="danger" label="Сбросить прогресс" onPress={() => setConfirm(true)} />
+            <Button kind="danger" label={t.reset} onPress={() => setConfirm(true)} />
           </Section>
         </ScrollView>
       </Screen>
@@ -79,20 +93,20 @@ export default function Settings() {
         <View style={StyleSheet.absoluteFill}>
           <Overlay onDismiss={() => setConfirm(false)}>
             <Panel>
-              <Heading>Сбросить прогресс?</Heading>
+              <Heading>{t.resetAsk}</Heading>
               <Body muted style={{ marginTop: space.sm }}>
-                Рекорд {best} и текущая партия будут удалены. Вернуть их не получится.
+                {t.resetText(best)}
               </Body>
               <View style={{ gap: space.md, marginTop: space.xl }}>
                 <Button
                   kind="danger"
-                  label="Удалить прогресс"
+                  label={t.resetYes}
                   onPress={() => {
                     resetProgress();
                     setConfirm(false);
                   }}
                 />
-                <Button label="Оставить" onPress={() => setConfirm(false)} />
+                <Button label={t.resetNo} onPress={() => setConfirm(false)} />
               </View>
             </Panel>
           </Overlay>

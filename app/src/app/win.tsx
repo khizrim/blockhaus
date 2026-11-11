@@ -6,6 +6,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequ
 import { Block } from '@/components/Block';
 import { Button, CountUp, Page } from '@/components/ui';
 import engine from '@/game/engine';
+import { useTheme } from '@/design/theme';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
 
@@ -15,6 +16,7 @@ import { fx } from '@/sound/sfx';
 const GOAL = engine.DEFAULTS.goal;
 export default function Win() {
   const { game, markWinSeen } = useGame();
+  const { t } = useTheme();
   const { width } = useWindowDimensions();
   const goal = Math.max(GOAL, game.bestTile);
   const size = Math.min(180, Math.round((Math.min(width, 440) - 32) * 0.5));
@@ -36,15 +38,15 @@ export default function Win() {
   const st = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateY: y.value }, { scaleX: sx.value }, { scaleY: sy.value }], transformOrigin: 'bottom' }));
   return (
     <Page>
-      <View accessible accessibilityLabel={`Вы собрали ${goal}. ${game.score} очков.`} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24 }}>
+      <View accessible accessibilityLabel={t.won(goal, game.score)} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24 }}>
         <Animated.View style={st}>
           <Block v={goal} size={size} />
         </Animated.View>
         <CountUp to={game.score} />
       </View>
       <View style={{ gap: 12 }}>
-        <Button kind="primary" size="lg" label="Играть дальше" onPress={() => router.back()} />
-        <Button size="lg" label="В меню" onPress={() => router.dismissTo('/')} />
+        <Button kind="primary" size="lg" label={t.keepPlaying} onPress={() => router.back()} />
+        <Button size="lg" label={t.toMenu} onPress={() => router.dismissTo('/')} />
       </View>
     </Page>
   );

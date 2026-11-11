@@ -153,7 +153,7 @@ function aimPush(g: EngineGame, d: Dir): { piece: Piece; ox: number; oy: number 
 const UNIT: Record<Dir, [number, number]> = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
 
 export default function Game() {
-  const { c, hints, isDark } = useTheme();
+  const { c, t, hints, isDark } = useTheme();
   const store = useGame();
   const g = store.game;
   const { width, height } = useWindowDimensions();
@@ -1432,10 +1432,10 @@ export default function Game() {
         {/* The header (2026-11-08): pause key, the score in the middle with
             the cascade's multiplier beside it, the sweep key with its studs. */}
         <View style={{ height: 52, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <IconButton label="Пауза" size={48} onPress={() => router.push('/pause')}>
+          <IconButton label={t.pause} size={48} onPress={() => router.push('/pause')}>
             <Icon name="pause" color={c.text} />
           </IconButton>
-          <Animated.View accessible accessibilityLabel={`Очки: ${g.score}`} style={[{ height: 48, justifyContent: 'center', alignItems: 'center' }, scoreStyle]}>
+          <Animated.View accessible accessibilityLabel={t.score(g.score)} style={[{ height: 48, justifyContent: 'center', alignItems: 'center' }, scoreStyle]}>
             {/* The 1919 stamp: a yellow chip flashes in behind the score. */}
             <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: -space.md, right: -space.md, top: 2, bottom: 2, borderRadius: 12, backgroundColor: '#FFD43B', backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)', boxShadow: '0 3px 0 #C9A21F' }, stampStyle]} />
             {/* No score in the lessons: it teaches nothing there and would
@@ -1459,7 +1459,7 @@ export default function Game() {
               <Animated.View
                 accessible
                 accessibilityRole="header"
-                accessibilityLabel={lesson.title}
+                accessibilityLabel={t.lessons[store.lesson ?? 0] ?? ''}
                 style={[{ height: LESSON_H, justifyContent: 'center', alignItems: 'center' }, lineStyle]}>
                 {/* One pair at a time: the merge the move starts with, then
                     each merge of the chain as it lands (see Lesson.task). */}
@@ -1489,12 +1489,12 @@ export default function Game() {
               ref={boardRef}
               onLayout={measureBoard}
               collapsable={false}
-              accessibilityLabel="Доска. Смахните, чтобы сдвинуть"
+              accessibilityLabel={t.board}
               accessibilityActions={[
-                { name: 'left', label: 'Сдвиг влево' },
-                { name: 'right', label: 'Сдвиг вправо' },
-                { name: 'up', label: 'Сдвиг вверх' },
-                { name: 'down', label: 'Сдвиг вниз' },
+                { name: 'left', label: t.sweepLeft },
+                { name: 'right', label: t.sweepRight },
+                { name: 'up', label: t.sweepUp },
+                { name: 'down', label: t.sweepDown },
               ]}
               onAccessibilityAction={(e) => sweep(e.nativeEvent.actionName as Dir)}>
               <Field w={N} h={N} values={plateValues} cell={cell} gap={gap} look={look} open={lesson?.open} wave={wave} />
@@ -1539,7 +1539,7 @@ export default function Game() {
               ref={(r) => void (slotRefs.current[slot] = r)}
               collapsable={false}
               {...responders[slot].panHandlers}
-              accessibilityLabel={p && !p.used ? `Фигура ${slot + 1}` : `Пустой слот ${slot + 1}`}
+              accessibilityLabel={p && !p.used ? t.piece(slot + 1) : t.emptySlot(slot + 1)}
               style={{
                 flex: 1,
                 alignItems: 'center',
@@ -1623,6 +1623,7 @@ const SlidingTile = memo(function SlidingTile({ m, cell, gap, ms = SLIDE }: { m:
 /** The best tile, drawn as a tile of the board: its fill inside the line. */
 /** Drawn the way a lone tile sits on the board: one cell, framed by one gap. */
 function BestTile({ v, size }: { v: number; size: number; frame?: number }) {
+  const { t } = useTheme();
   const k = useSharedValue(1);
   const first = useRef(true);
   useEffect(() => {
@@ -1633,7 +1634,7 @@ function BestTile({ v, size }: { v: number; size: number; frame?: number }) {
   const st = useAnimatedStyle(() => ({ transform: [{ scale: k.value }] }));
   return (
     <Animated.View
-      accessibilityLabel={v ? `Лучшая плитка ${v}` : 'Лучшей плитки пока нет'}
+      accessibilityLabel={v ? t.bestTile(v) : t.noBestTile}
       style={[{ width: size, height: size, opacity: v ? 1 : 0 }, st]}>
       {v ? <Block v={v} size={size} /> : null}
     </Animated.View>
@@ -1777,11 +1778,12 @@ function LiftTile({ v, d, at, cell, gap, hero, home }: { v: number; d: number; a
 
 /** The shape of the piece coming next into a tray slot, in the slot's corner. */
 function NextShape({ cells, cell, gap }: { cells: [number, number][]; cell: number; gap: number }) {
+  const { t } = useTheme();
   const w = Math.max(...cells.map(([x]) => x)) + 1;
   const h = Math.max(...cells.map(([, y]) => y)) + 1;
   // The shape that comes next, as moulds sunk into the table where it will rise.
   return (
-    <View pointerEvents="none" accessibilityLabel="Следующая фигура" style={{ width: w * cell, height: h * cell, position: 'absolute' }}>
+    <View pointerEvents="none" accessibilityLabel={t.nextPiece} style={{ width: w * cell, height: h * cell, position: 'absolute' }}>
       {cells.map(([x, y], k) => (
         <Socket key={k} size={cell - gap} style={{ position: 'absolute', left: x * cell + gap / 2, top: y * cell + gap / 2 }} />
       ))}
@@ -2212,10 +2214,10 @@ function ScoreNum({ v }: { v: number }) {
 /** The sweep key: a four-way arrow and one stud socket per sweep the game
     can hold; a held sweep is a yellow chip in its socket. */
 function SweepKey({ studs, filled, ghost = false, onPress }: { studs: number; filled: number; ghost?: boolean; onPress: () => void }) {
-  const { c } = useTheme();
+  const { c, t } = useTheme();
   const empty = studs > 0 && filled <= 0;
   return (
-    <Key label={studs ? `Сдвиги: ${Math.max(0, filled)}` : 'Сдвиги'} onPress={onPress}>
+    <Key label={studs ? t.sweepsHeld(Math.max(0, filled)) : t.sweeps} onPress={onPress}>
       <View style={{ opacity: empty ? 0.3 : 1 }}>
         <Icon name="sweep" color={c.text} />
       </View>
