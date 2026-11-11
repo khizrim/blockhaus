@@ -104,12 +104,18 @@
   const rank = v => (v === 1 ? 1 : v === 2 ? 2 : Math.min(11, 3 + Math.round(Math.log2(v / 3))));
 
   const idx = (x, y) => y * N + x;
+  /** The order a tile looks round for a partner: counter-clockwise from
+      9 o'clock, left, down, right, up (2026-11-11, Khizri), so a tie pulls
+      the chain toward the bottom-left corner, where players stack their big
+      tiles. Before it was left, right, up, down. It only settles what the
+      rules leave open: a fork whose ladders run equally long (see cascade). */
+  const AROUND = [[-1, 0], [0, 1], [1, 0], [0, -1]];
   function neighbours(i) {
     const x = i % N, y = (i / N) | 0, out = [];
-    if (x > 0) out.push(i - 1);
-    if (x < N - 1) out.push(i + 1);
-    if (y > 0) out.push(i - N);
-    if (y < N - 1) out.push(i + N);
+    for (const [dx, dy] of AROUND) {
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && ny >= 0 && nx < N && ny < N) out.push(ny * N + nx);
+    }
     return out;
   }
 
@@ -146,9 +152,9 @@
   /** Runs a cascade from the tiles in `frontier`. A tile that can pair with
       two neighbours (a 3 between two 3s) takes the one that lets the chain
       run longest (2026-11-09): the chain always climbs the longest ladder,
-      so a player can read where it goes. Before, the first neighbour in
-      left, right, up, down order won, which no one could see. Ties of
-      equal length keep that order. */
+      so a player can read where it goes. Before, the first
+      neighbour in the board's order won, which no one could see. Ties of
+      equal length still go by that order (AROUND: counter-clockwise from 9). */
   function cascade(board, frontier, absorb, look) {
     const steps = [];
     const join = (b, i, n) => {
