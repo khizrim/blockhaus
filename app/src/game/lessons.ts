@@ -46,6 +46,12 @@ export type Lesson = {
   title: string;
   /** The step as a formula in tiles; the last term is what the move makes. */
   formula: Term[];
+  /** What the line above the board asks before the move: the first merge
+      the move makes, its result an empty cell. While the move plays, the
+      line writes each merge of the chain as it lands, one pair at a time
+      (2026-11-11, Khizri: a newcomer asked why there is no 4, why 6 comes
+      right after 3; long arrow chains were hard to read). */
+  task?: Term[];
   /** The plate: the open cells, [x0, y0, x1, y1] inclusive. */
   open: [number, number, number, number];
   board: number[];
@@ -84,6 +90,7 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Поставьте 1 рядом с 2',
     formula: [1, '+', 2, '=', 3],
+    task: [1, '+', 2, '=', 3],
     open: TINY,
     // The lone 1 sits diagonal to the hole: held there, the 1 is shoved
     // away from it and pulled to the 2, so 1 + 1 fails before it is tried.
@@ -96,6 +103,7 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Поставьте 2 к единице, и тройки сольются',
     formula: [2, '+', 1, '→', 3, '→', 6],
+    task: [2, '+', 1, '=', 3],
     open: TINY,
     // The 2 takes the 1 into a 3, and that 3 sits by the first 3.
     board: board(TINY, [[2, 2, 3], [3, 3, 1]]),
@@ -107,6 +115,7 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Выберите клетку, где цепочка длиннее: три слияния дают сдвиг',
     formula: [1, '→', 3, '→', 6, '→', 12],
+    task: [1, '+', 2, '=', 3],
     open: MID,
     // By the lone 2 the 1 makes one 3. By the 2 under the 3 it runs
     // 1 + 2 = 3, 3 + 3 = 6, 6 + 6 = 12 and earns a sweep.
@@ -119,6 +128,7 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Достройте лесенку двойкой, потом запустите её единицей',
     formula: [1, '→', 3, '→', 6, '→', 12, '→', 24],
+    task: [2, '+', 1, '=', 3],
     open: MID,
     // Three cells for the 2, none of them merges: the player has to see
     // that only the one under the 3 makes the ladder. The 1 then goes

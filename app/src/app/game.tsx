@@ -19,7 +19,7 @@ import { loudOnce, type StudKind } from '@/game/seen';
 import { TileNum } from '@/components/TileNum';
 import { Block, plastic, Socket } from '@/components/Block';
 import { Icon } from '@/components/icons';
-import { Formula } from '@/components/Formula';
+import { Formula, type Term } from '@/components/Formula';
 import { milestonesFor } from '@/components/Track';
 
 /* The game. The rules are the engine the prototype and the balance simulator
@@ -157,6 +157,8 @@ export default function Game() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mvRaw, store.version]);
   const [coach, setCoach] = useState<'task' | 'done'>('task');
+  /** In a lesson, the merge that just landed, written as a pair: a + b = c. */
+  const [eq, setEq] = useState<{ id: string; terms: Term[] } | null>(null);
   /** The lesson whose choice the player last missed. */
   const [missed, setMissed] = useState<number | null>(null);
   /** A choice stood over too long without a try. */
@@ -189,6 +191,7 @@ export default function Game() {
   useEffect(() => {
     setCoach('task');
     setMissed(null);
+    setEq(null);
     if (store.lesson === 0) lessonPeak.current = 0;
     lineIn.value = 1;
     lineIn.value = withTiming(0, { duration: dur.slow, easing: Easing.out(Easing.cubic) });
@@ -455,6 +458,9 @@ export default function Game() {
         // a milestone's bell it waits for the bell to ring out.
         later(milestoneFired ? 520 : 0, () => fx.lessonStep(k));
         setCoach('done');
+        // A step that ends on a stud closes on its own line (square = stud).
+        const goalTerm = (L.task ?? L.formula)[(L.task ?? L.formula).length - 1];
+        if (typeof goalTerm !== 'number') setEq(null);
         kickLine();
         // The formula stays up to be read, then the next step slides in.
         later(milestoneFired ? RIPPLE_MS + 200 + LESSON_READ - 1100 : LESSON_READ, () => advance(k));
@@ -471,6 +477,7 @@ export default function Game() {
           prevEnd.current = g.board.slice();
           // Missed once: the next try shows the move that proves the step.
           setMissed(k);
+          setEq(null);
           store.startLesson(k);
         });
       }
@@ -863,6 +870,9 @@ export default function Game() {
     steps.forEach((st, k) => {
       const t0 = base + pc.base + chainAt(k, pc.gaps);
       const value = frame[st.absorbed[0]];
+      // The pair, small first: what flew in and what took it in.
+      const pair = [...st.absorbed.map((a) => frame[a]), frame[st.anchor]].sort((a, b) => a - b);
+      const terms: Term[] = [...pair.flatMap((v, j) => (j ? ['+' as const, v] : [v])), '=', st.level];
       for (const a of st.absorbed) frame[a] = 0;
       const mid = frame.slice();
       frame[st.anchor] = st.level;
@@ -877,6 +887,11 @@ export default function Game() {
         setShown(snap);
         setFlights((f) => f.filter((x) => !st.absorbed.some((a) => x.m.from === a)));
         land(st.anchor, st.level, marks[k], snap, st.pts, k, last ? steps.length : 0);
+        // A lesson writes each merge above the board on the frame it lands.
+        if (lessonNow.current !== null && pair.every((v) => v > 0)) {
+          setEq({ id: `${t0}-${k}-${Date.now()}`, terms });
+          kickLine();
+        }
       });
     });
     return steps.length ? base + pc.base + chainAt(steps.length - 1, pc.gaps) + pc.fly : base;
@@ -1378,13 +1393,9 @@ export default function Game() {
                 accessibilityRole="header"
                 accessibilityLabel={lesson.title}
                 style={[{ height: LESSON_H, justifyContent: 'center', alignItems: 'center' }, lineStyle]}>
-                {/* Only what the step makes, as a lit mould: the board's own
-                    "this comes here". It fills when the board makes it
-                    (2026-11-11, Khizri: the formulas were hard to read). */}
-                {/* At a board tile's size, grown past the row's height into the slack under the header. */}
-                <View style={{ transform: [{ scale: cell / LESSON_H }] }}>
-                  <Formula terms={lesson.formula.slice(-1)} cell={LESSON_H} gap={gap} open={coach === 'task'} />
-                </View>
+                {/* One pair at a time: the merge the move starts with, then
+                    each merge of the chain as it lands (see Lesson.task). */}
+                <Formula key={eq ? eq.id : 'task'} terms={eq ? eq.terms : (lesson.task ?? lesson.formula)} cell={trayCell} gap={gap} open={!eq && coach === 'task'} fit={col} />
               </Animated.View>
             </View>
           ) : carried ? (

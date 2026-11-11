@@ -56,9 +56,7 @@ function Tiles({ vs, cell, gap, empty }: { vs: number[][]; cell: number; gap: nu
   const st = useAnimatedStyle(() => ({ transform: [{ scale: k.value }] }));
   return (
     <Animated.View style={st}>
-      {/* Still to make: a lit mould of the tile, as the board shows where a
-          piece goes, not a blank socket. */}
-      <Field variant="piece" w={vs[0].length} h={vs.length} values={vs.flat().map((v) => (empty ? 0 : v))} look={empty ? (i) => ({ ghost: vs.flat()[i] }) : undefined} cell={cell} gap={gap} />
+      <Field variant="piece" w={vs[0].length} h={vs.length} values={vs.flat().map((v) => (empty ? 0 : v))} cell={cell} gap={gap} />
     </Animated.View>
   );
 }
@@ -77,8 +75,7 @@ function StudTerm({ cell, gap, empty }: { cell: number; gap: number; empty: bool
   return (
     <Animated.View style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, st]}>
       <Socket size={size} style={{ position: 'absolute' }} />
-      {/* Still to earn: the stud waits faint in its socket. */}
-      {(
+      {empty ? null : (
         <View
           style={{
             width: s,
@@ -88,7 +85,6 @@ function StudTerm({ cell, gap, empty }: { cell: number; gap: number; empty: bool
             backgroundImage: 'linear-gradient(180deg, #FFE27A, #FFD43B)',
             boxShadow: `0 ${Math.max(2, Math.round(s * 0.12))}px 0 #C9A21F, inset 0 1px 0 rgba(255,255,255,0.8)`,
             transform: [{ translateY: -2 }],
-            opacity: empty ? 0.3 : 1,
           }}
         />
       )}
