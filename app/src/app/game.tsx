@@ -54,6 +54,21 @@ const LESSON_PACE: Pace = { base: 100, fly: 520, gaps: [1250] };
 const LENS_MEET = 520; // = LESSON_PACE.fly: the pair meets as the board lands
 const LENS_SLIDE = 190; // ms of the pull itself, on the board and in the line
 const LENS_MS = 1200; // the lens's whole life
+/** The lens's times in lesson k: quicker as the lessons go on (2026-11-11,
+    Khizri), the holds most of all; the pull itself stays near game speed.
+    The last steps run at about half the first one's hang. */
+type LensTimes = { meet: number; slide: number; ms: number; gap: number };
+const LENS_SPEED = [1, 0.85, 0.72, 0.6, 0.52, 0.45];
+/** Within a chain each merge comes quicker than the one before, like notes
+    running up a scale (2026-11-11, Khizri: inside a step it was linear). */
+const LENS_RUN = 0.72;
+const lensTimes = (k: number, merge = 0): LensTimes => {
+  const f = Math.max(0.28, LENS_SPEED[Math.min(k, LENS_SPEED.length - 1)] * Math.pow(LENS_RUN, merge));
+  const slide = Math.round(LENS_SLIDE * Math.sqrt(f));
+  const meet = slide + Math.round((LENS_MEET - LENS_SLIDE) * f);
+  const ms = meet + Math.round((LENS_MS - LENS_MEET) * f);
+  return { meet, slide, ms, gap: meet + Math.round((LESSON_PACE.gaps[0] - LENS_MEET) * f) };
+};
 const chainAt = (k: number, gaps: number[]) => gaps.slice(0, k).reduce((a, b) => a + b, 0) + Math.max(0, k - gaps.length) * gaps[gaps.length - 1];
 const sweepStep = (merges: number) => (merges <= SHORT ? STEP_SHORT : STEP);
 const BURST_MS = 620; // ms the crumbs of a merge fly and fall
@@ -175,7 +190,7 @@ export default function Game() {
   /** In a lesson, the merge that just landed, written as a pair: a + b = c. */
   const [eq, setEq] = useState<{ id: string; terms: Term[] } | null>(null);
   /** The same pairs, each over the tile it made, for a moment. */
-  const [lens, setLens] = useState<{ id: string; at: number; from: number; pair: number[]; r: number; start: LineShown | null } | null>(null);
+  const [lens, setLens] = useState<{ id: string; at: number; from: number; pair: number[]; r: number; start: LineShown | null; tm: LensTimes } | null>(null);
   /** What a pair step's line shows at rest: the move's two tiles, or the
       one tile the last merge made. Null for the sweep and square steps. */
   const lineNow: LineShown | null = !lesson?.task ? null : eq ? { one: eq.terms[0] as number } : { pair: lesson.task.slice(0, -1).filter((t): t is number => typeof t === 'number') };
@@ -896,9 +911,13 @@ export default function Game() {
        (2026-11-11, Khizri). The board is already the move's end here. */
     const L = lessonNow.current !== null ? LESSONS[lessonNow.current] : null;
     const slow = !!L && (L.goal(g) || (!!L.moves && g.moves < L.moves.length));
-    const pc = slow ? LESSON_PACE : paceOf(steps.length);
+    const tms = steps.map((_, k) => lensTimes(lessonNow.current ?? 0, k));
+    const pc = slow ? { base: LESSON_PACE.base, fly: 0, gaps: tms.map((x) => x.gap) } : paceOf(steps.length);
+    // When merge k lands: under the lens each has its own (quicker) beat.
+    const flyOf = (k: number) => (slow ? tms[k].meet : pc.fly);
     steps.forEach((st, k) => {
       const t0 = base + pc.base + chainAt(k, pc.gaps);
+      const tm = tms[k];
       const value = frame[st.absorbed[0]];
       // The pair, small first: what flew in and what took it in.
       const pair = [...st.absorbed.map((a) => frame[a]), frame[st.anchor]].sort((a, b) => a - b);
@@ -909,7 +928,7 @@ export default function Game() {
       frame[st.anchor] = st.level;
       const snap = frame.slice();
       const last = k === steps.length - 1;
-      expect(t0 + pc.fly, st.anchor, k, last ? steps.length : 0);
+      expect(t0 + flyOf(k), st.anchor, k, last ? steps.length : 0);
       later(t0, () => {
         // A lesson's merge comes up under the lens as it starts.
         if (slow && pair.every((v) => v > 0)) {
@@ -919,19 +938,19 @@ export default function Game() {
           const was = lineRef.current;
           let order = pair;
           if (was && 'pair' in was && was.pair.slice().sort((a, b) => a - b).join() === pair.join()) order = was.pair;
-          setLens({ id, at: st.anchor, from: st.absorbed[0], pair: order, r: st.level, start: was });
-          later(LENS_MS, () => setLens((l) => (l?.id === id ? null : l)));
+          setLens({ id, at: st.anchor, from: st.absorbed[0], pair: order, r: st.level, start: was, tm });
+          later(tm.ms, () => setLens((l) => (l?.id === id ? null : l)));
         }
         // Under the lens the board holds still too and moves at game speed
         // with the line: the flight starts so it lands as the pair meets.
         const fly = () => {
           setShown(mid);
-          setFlights((f) => [...f, ...st.absorbed.map((a) => ({ id: `${t0}-${a}-${Date.now()}`, m: { from: a, to: st.anchor, value, merges: true }, ms: slow ? LENS_SLIDE : pc.fly }))]);
+          setFlights((f) => [...f, ...st.absorbed.map((a) => ({ id: `${t0}-${a}-${Date.now()}`, m: { from: a, to: st.anchor, value, merges: true }, ms: slow ? tm.slide : pc.fly }))]);
         };
-        if (slow) later(pc.fly - LENS_SLIDE, fly);
+        if (slow) later(tm.meet - tm.slide, fly);
         else fly();
       });
-      later(t0 + pc.fly, () => {
+      later(t0 + flyOf(k), () => {
         setShown(snap);
         setFlights((f) => f.filter((x) => !st.absorbed.some((a) => x.m.from === a)));
         land(st.anchor, st.level, marks[k], snap, st.pts, k, last ? steps.length : 0);
@@ -943,7 +962,7 @@ export default function Game() {
         }
       });
     });
-    return steps.length ? base + pc.base + chainAt(steps.length - 1, pc.gaps) + pc.fly : base;
+    return steps.length ? base + pc.base + chainAt(steps.length - 1, pc.gaps) + flyOf(steps.length - 1) : base;
   };
 
   const holdRef = useRef<Hold | null>(null);
@@ -1453,7 +1472,7 @@ export default function Game() {
                     changed places). The sweep and square steps keep their
                     formula. */}
                 {lens ? (
-                  <LineLens key={lens.id} pair={lens.pair} r={lens.r} start={lens.start} tile={lineTile} gap={gap} />
+                  <LineLens key={lens.id} pair={lens.pair} r={lens.r} start={lens.start} tm={lens.tm} tile={lineTile} gap={gap} />
                 ) : lineNow ? (
                   <PairLine tiles={'one' in lineNow ? [lineNow.one] : lineNow.pair} tile={lineTile} gap={gap} />
                 ) : (
@@ -1495,7 +1514,7 @@ export default function Game() {
                   <Burst key={b.id} at={b.at} v={b.v} n={b.n} power={b.power} cell={cell} gap={gap} />
                 ))}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
-                {lens ? <PlateDim key={lens.id} plate={lesson?.open} cell={cell} gap={gap} /> : null}
+                {lens ? <PlateDim key={lens.id} plate={lesson?.open} tm={lens.tm} cell={cell} gap={gap} /> : null}
                 {/* Above the wave: the stud is what the eye should follow. */}
                 {studFly ? <StudFlight key={studFly.id} from={studFly.from} to={studFly.to} mode={studFly.mode} loud={studFly.loud} cell={cell} /> : null}
               </View>
@@ -1963,7 +1982,8 @@ function PairLine({ tiles, tile, gap }: { tiles: number[]; tile: number; gap: nu
 
 /** While a lesson's merge plays in the line above, the plate dims, so the
     eye goes up to it. */
-function PlateDim({ plate = [0, 0, N - 1, N - 1], cell, gap }: { plate?: [number, number, number, number]; cell: number; gap: number }) {
+function PlateDim({ plate = [0, 0, N - 1, N - 1], tm, cell, gap }: { plate?: [number, number, number, number]; tm: LensTimes; cell: number; gap: number }) {
+  const { meet: LENS_MEET, ms: LENS_MS } = tm;
   const { c } = useTheme();
   const t = useSharedValue(0);
   useEffect(() => {
@@ -1995,7 +2015,8 @@ function PlateDim({ plate = [0, 0, N - 1, N - 1], cell, gap }: { plate?: [number
     result is born flat and wobbles, damped, into its square, and hangs.
     Every curve eases; nothing moves at a constant speed (Khizri: the
     linearity grates). */
-function LineLens({ pair, r, start, tile, gap }: { pair: number[]; r: number; start: LineShown | null; tile: number; gap: number }) {
+function LineLens({ pair, r, start, tm, tile, gap }: { pair: number[]; r: number; start: LineShown | null; tm: LensTimes; tile: number; gap: number }) {
+  const { meet: LENS_MEET, slide: LENS_SLIDE, ms: LENS_MS } = tm;
   const t = useSharedValue(0);
   useEffect(() => {
     t.value = withTiming(LENS_MS, { duration: LENS_MS, easing: Easing.linear });
@@ -2007,9 +2028,10 @@ function LineLens({ pair, r, start, tile, gap }: { pair: number[]; r: number; st
   const samePair = !!start && 'pair' in start;
   const carried = start && 'one' in start ? pair.indexOf(start.one) : -1;
   const enter = pair.map((_, k) => (samePair ? 'stay' : k === carried ? 'out' : 'drop'));
-  const IN = 200;
   const SLIDE0 = LENS_MEET - LENS_SLIDE;
-  const WIND = 90;
+  // The entry and the lean back share the hang before the pull.
+  const IN = Math.min(200, Math.round(SLIDE0 * 0.55));
+  const WIND = Math.min(90, Math.round(SLIDE0 * 0.3));
   const tileSt = (k: number) =>
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useAnimatedStyle(() => {
