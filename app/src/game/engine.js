@@ -155,14 +155,28 @@
       so a player can read where it goes. Before, the first
       neighbour in the board's order won, which no one could see. Ties of
       equal length still go by that order (AROUND: counter-clockwise from 9). */
-  function cascade(board, frontier, absorb, look) {
+  /* Two equal tiles that are both new this move (both laid, or both made by
+     its merges) have no older one to take the other in. The merge then lands
+     on the lower of the two, or of two side by side on the left one: toward
+     the bottom-left corner, like the partner order (2026-11-11, Khizri: a
+     row of 1s laid over a row of 2s made 3 3 3, and every pair flew right,
+     because the row's cells were looked at from left to right). */
+  const cornerOf = (a, b) => {
+    const ya = (a / N) | 0, yb = (b / N) | 0;
+    if (ya !== yb) return ya > yb ? a : b;
+    return a % N < b % N ? a : b;
+  };
+  function cascade(board, frontier, absorb, look, fresh = new Set(frontier)) {
     const steps = [];
-    const join = (b, i, n) => {
+    const join = (b, i, n, fr) => {
       const lvl = merged(b[i], b[n]);
-      const into = absorb === 'big' && b[n] >= b[i] ? n : i;
+      let into = absorb === 'big' && b[n] >= b[i] ? n : i;
+      if (absorb === 'big' && b[n] === b[i] && fr.has(n)) into = cornerOf(i, n);
       const from = into === i ? n : i;
       b[from] = 0;
       b[into] = lvl;
+      fr.delete(from);
+      fr.add(into);
       return { absorbed: [from], anchor: into, level: lvl };
     };
     while (frontier.length) {
@@ -175,12 +189,13 @@
         let best = -1;
         for (const n of cand) {
           const b = board.slice();
-          const st = join(b, i, n);
-          const len = cascade(b, [...frontier, st.anchor], absorb, false).length;
+          const fr = new Set(fresh);
+          const st = join(b, i, n, fr);
+          const len = cascade(b, [...frontier, st.anchor], absorb, false, fr).length;
           if (len > best) { best = len; partner = n; }
         }
       }
-      const st = join(board, i, partner);
+      const st = join(board, i, partner, fresh);
       steps.push(st);
       frontier.push(st.anchor);
     }
