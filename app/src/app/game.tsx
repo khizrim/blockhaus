@@ -708,8 +708,18 @@ export default function Game() {
   const start = (slot: number, pageX: number, pageY: number) => {
     const p = g.tray[slot];
     if (!p || p.used || g.over) return;
-    // In a lesson only the piece of the move now taught lifts.
-    if (mv && mv.slot !== slot) return;
+    /* In a lesson only the piece of the move now taught lifts. Touching
+       another is answered (2026-11-11, Khizri: with a 1 and a 2 in the tray
+       a touch on the 1 did nothing): it shakes its head, and the piece whose
+       turn it is hops, then the lesson shows its move again. */
+    if (mv && mv.slot !== slot) {
+      fx.repel();
+      lockedShake.value = withSequence(withTiming(-4, { duration: 50 }), withTiming(4, { duration: 80 }), withTiming(-2, { duration: 80 }), withTiming(0, enter(dur.fast)));
+      setLockedSlot(slot);
+      turnHop.value = withSequence(withDelay(150, withTiming(-trayCell * 0.4, enter(dur.fast))), withTiming(0, back(300, 2.4)));
+      setDemoRun((n) => n + 1);
+      return;
+    }
     measureBoard();
     const { ox, oy } = pieceOffset(p);
     dx.value = pageX - ox;
@@ -1235,6 +1245,12 @@ export default function Game() {
   const stuckPulse = useSharedValue(1);
   const [stuckSlot, setStuckSlot] = useState<number | null>(null);
   const stuckStyle = useAnimatedStyle(() => ({ transform: [{ scale: stuckPulse.value }] }));
+  // A lesson's tray: the piece touched out of turn shakes, the one whose turn it is hops.
+  const lockedShake = useSharedValue(0);
+  const turnHop = useSharedValue(0);
+  const [lockedSlot, setLockedSlot] = useState<number | null>(null);
+  const lockedStyle = useAnimatedStyle(() => ({ transform: [{ translateX: lockedShake.value }] }));
+  const turnStyle = useAnimatedStyle(() => ({ transform: [{ translateY: turnHop.value }] }));
   useEffect(() => {
     if (!hints || store.lesson !== null || g.over || hold || sliding) return;
     const free = g.tray.filter((p): p is Piece => !!p && !p.used);
@@ -1362,7 +1378,13 @@ export default function Game() {
                 accessibilityRole="header"
                 accessibilityLabel={lesson.title}
                 style={[{ height: LESSON_H, justifyContent: 'center', alignItems: 'center' }, lineStyle]}>
-                <Formula terms={lesson.formula} cell={trayCell} gap={gap} open={coach === 'task'} fit={col} />
+                {/* Only what the step makes, as a lit mould: the board's own
+                    "this comes here". It fills when the board makes it
+                    (2026-11-11, Khizri: the formulas were hard to read). */}
+                {/* At a board tile's size, grown past the row's height into the slack under the header. */}
+                <View style={{ transform: [{ scale: cell / LESSON_H }] }}>
+                  <Formula terms={lesson.formula.slice(-1)} cell={LESSON_H} gap={gap} open={coach === 'task'} />
+                </View>
               </Animated.View>
             </View>
           ) : carried ? (
@@ -1436,12 +1458,12 @@ export default function Game() {
                 <NextShape cells={g.next[slot]} cell={trayCell} gap={gap} />
               ) : null}
               {p ? (
-                <Animated.View style={slot === stuckSlot ? stuckStyle : undefined}>
+                <Animated.View style={slot === stuckSlot ? stuckStyle : mv && slot === mv.slot ? turnStyle : mv && slot === lockedSlot ? lockedStyle : undefined}>
                 <TrayPiece
                   key={`${trayId.current}-${slot}-${JSON.stringify(p.cells)}`}
                   delay={slot * 60}
                   rise={trayCell}
-                  opacity={p.used || hold?.slot === slot || returning === slot ? 0 : g.over || !fitsSomewhere(g.board, p) ? 0.35 : 1}>
+                  opacity={p.used || hold?.slot === slot || returning === slot ? 0 : g.over || !fitsSomewhere(g.board, p) || (mv && mv.slot !== slot) ? 0.35 : 1}>
                   <Field variant="piece" {...pieceGrid(p)} cell={trayCell} gap={gap} />
                 </TrayPiece>
                 </Animated.View>
