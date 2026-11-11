@@ -42,7 +42,7 @@ const paceOf = (merges: number) => (merges <= SHORT ? SHORT_PACE : LONG_PACE);
 /** In the lessons every merge is a beat of its own, long enough to read
     its pair on the board (2026-11-11: a newcomer asked why 6 comes right
     after 3; at game pace 1 + 2 and 3 + 3 blur into one). */
-const LESSON_PACE: Pace = { base: 120, fly: 760, gaps: [1900] };
+const LESSON_PACE: Pace = { base: 100, fly: 520, gaps: [1250] };
 /* A lesson's merge under a lens (2026-11-11, Khizri: stop, make the tiles
    bigger in the animation and show what happens to them). The pair comes up
    big over the merge, side by side with a plus; they hold, slide into one
@@ -51,9 +51,9 @@ const LESSON_PACE: Pace = { base: 120, fly: 760, gaps: [1900] };
 /* Not slowed down (2026-11-11, Khizri: no slow motion, rather a hang to
    read): every move is at game speed, and the stops between them are holds.
    The pair hangs to be read, the merge itself is quick, the result hangs. */
-const LENS_MEET = 760; // = LESSON_PACE.fly: the pair meets as the board lands
-const LENS_SLIDE = 240; // ms of the pull itself, on the board and in the line
-const LENS_MS = 1800; // the lens's whole life
+const LENS_MEET = 520; // = LESSON_PACE.fly: the pair meets as the board lands
+const LENS_SLIDE = 190; // ms of the pull itself, on the board and in the line
+const LENS_MS = 1200; // the lens's whole life
 const chainAt = (k: number, gaps: number[]) => gaps.slice(0, k).reduce((a, b) => a + b, 0) + Math.max(0, k - gaps.length) * gaps[gaps.length - 1];
 const sweepStep = (merges: number) => (merges <= SHORT ? STEP_SHORT : STEP);
 const BURST_MS = 620; // ms the crumbs of a merge fly and fall
@@ -1973,7 +1973,7 @@ function LineLens({ pair, r, tile, gap }: { pair: number[]; r: number; tile: num
      frame they hit; the result is born squashed from the hit and wobbles
      out of it, damped, into its square. */
   const SLIDE0 = LENS_MEET - LENS_SLIDE;
-  const WIND = 140; // ms of leaning back before the pull
+  const WIND = 100; // ms of leaning back before the pull
   const tileSt = (k: number) =>
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useAnimatedStyle(() => {
