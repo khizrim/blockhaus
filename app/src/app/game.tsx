@@ -42,8 +42,14 @@ const paceOf = (merges: number) => (merges <= SHORT ? SHORT_PACE : LONG_PACE);
 /** In the lessons every merge is a beat of its own, long enough to read
     its pair on the board (2026-11-11: a newcomer asked why 6 comes right
     after 3; at game pace 1 + 2 and 3 + 3 blur into one). */
-const LESSON_PACE: Pace = { base: 120, fly: 220, gaps: [820] };
-const NOTE_MS = 1100; // ms a lesson's merge pair stays over its tile
+const LESSON_PACE: Pace = { base: 120, fly: 750, gaps: [1450] };
+/* A lesson's merge under a lens (2026-11-11, Khizri: stop, make the tiles
+   bigger in the animation and show what happens to them). The pair comes up
+   big over the merge, side by side with a plus; they hold, slide into one
+   another, and on the frame they meet (the board's land, its note and tap)
+   they become the result, which holds and then sinks back into its tile. */
+const LENS_MEET = 750; // = LESSON_PACE.fly: the pair meets as the board lands
+const LENS_MS = 1300; // the lens's whole life
 const chainAt = (k: number, gaps: number[]) => gaps.slice(0, k).reduce((a, b) => a + b, 0) + Math.max(0, k - gaps.length) * gaps[gaps.length - 1];
 const sweepStep = (merges: number) => (merges <= SHORT ? STEP_SHORT : STEP);
 const BURST_MS = 620; // ms the crumbs of a merge fly and fall
@@ -165,7 +171,7 @@ export default function Game() {
   /** In a lesson, the merge that just landed, written as a pair: a + b = c. */
   const [eq, setEq] = useState<{ id: string; terms: Term[] } | null>(null);
   /** The same pairs, each over the tile it made, for a moment. */
-  const [notes, setNotes] = useState<{ id: string; at: number; terms: Term[]; below: boolean }[]>([]);
+  const [lens, setLens] = useState<{ id: string; at: number; from: number; pair: number[]; r: number } | null>(null);
   /** The lesson whose choice the player last missed. */
   const [missed, setMissed] = useState<number | null>(null);
   /** A choice stood over too long without a try. */
@@ -887,6 +893,12 @@ export default function Game() {
       const last = k === steps.length - 1;
       expect(t0 + pc.fly, st.anchor, k, last ? steps.length : 0);
       later(t0, () => {
+        // A lesson's merge comes up under the lens as it starts.
+        if (lessonNow.current !== null && pair.every((v) => v > 0)) {
+          const id = `${t0}-${k}`;
+          setLens({ id, at: st.anchor, from: st.absorbed[0], pair, r: st.level });
+          later(LENS_MS, () => setLens((l) => (l?.id === id ? null : l)));
+        }
         setShown(mid);
         setFlights((f) => [...f, ...st.absorbed.map((a) => ({ id: `${t0}-${a}-${Date.now()}`, m: { from: a, to: st.anchor, value, merges: true }, ms: pc.fly }))]);
       });
@@ -899,13 +911,6 @@ export default function Game() {
           const id = `${t0}-${k}-${Date.now()}`;
           setEq({ id, terms });
           kickLine();
-          // ...and over the tile it made, where the eye is.
-          // On the side away from the next merge, so it hides nothing coming.
-          const nx = steps[k + 1];
-          const y0 = (st.anchor / N) | 0;
-          const below = y0 === 0 || (!!nx && [nx.anchor, ...nx.absorbed].some((i) => ((i / N) | 0) < y0));
-          setNotes((n) => [...n, { id, at: st.anchor, terms, below }]);
-          later(NOTE_MS, () => setNotes((n) => n.filter((x) => x.id !== id)));
         }
       });
     });
@@ -1447,9 +1452,7 @@ export default function Game() {
                   <Burst key={b.id} at={b.at} v={b.v} n={b.n} power={b.power} cell={cell} gap={gap} />
                 ))}
                 {ripple ? <Ripple key={ripple.id} at={ripple.at} v={ripple.v} board={ripple.board} cell={cell} gap={gap} home={ripple.primaries ? null : trackHome(ripple.v)} primaries={ripple.primaries} /> : null}
-                {notes.map((n) => (
-                  <MergeNote key={n.id} at={n.at} terms={n.terms} below={n.below} cell={cell} gap={gap} />
-                ))}
+                {lens ? <MergeLens key={lens.id} at={lens.at} from={lens.from} pair={lens.pair} r={lens.r} plate={lesson?.open} cell={cell} gap={gap} /> : null}
                 {/* Above the wave: the stud is what the eye should follow. */}
                 {studFly ? <StudFlight key={studFly.id} from={studFly.from} to={studFly.to} mode={studFly.mode} loud={studFly.loud} cell={cell} /> : null}
               </View>
@@ -1891,41 +1894,90 @@ function TrayPiece({ delay, opacity, rise, children }: { delay: number; opacity:
   return <Animated.View style={st}>{children}</Animated.View>;
 }
 
-/** A lesson's merge written over the tile it made: a + b = c on a white
-    card, rising a little and fading. Above the tile, or under it (top row,
-    or the next merge comes from above). */
-function MergeNote({ at, terms, below, cell, gap }: { at: number; terms: Term[]; below: boolean; cell: number; gap: number }) {
+/** A lesson's merge under a lens: the pair big, side by side with a plus,
+    over the merge (laid out along the way the tiles meet), then one into the
+    other and the result, which sinks back into its tile. The board dims
+    around it. */
+function MergeLens({ at, from, pair, r, plate = [0, 0, N - 1, N - 1], cell, gap }: { at: number; from: number; pair: number[]; r: number; plate?: [number, number, number, number]; cell: number; gap: number }) {
   const { c } = useTheme();
-  const k = useSharedValue(0);
+  const t = useSharedValue(0);
   useEffect(() => {
-    k.value = withSequence(withTiming(1, back(220, 2)), withDelay(NOTE_MS - 520, withTiming(2, { duration: 300 })));
+    t.value = withTiming(LENS_MS, { duration: LENS_MS, easing: Easing.linear });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const x = at % N;
-  const y = (at / N) | 0;
-  const tile = Math.round(cell * 0.46);
-  const h = tile + 12;
-  const st = useAnimatedStyle(() => ({
-    opacity: k.value <= 1 ? k.value : 2 - k.value,
-    transform: [{ translateY: (below ? 1 : -1) * (Math.min(k.value, 1) * 6 + Math.max(0, k.value - 1) * 6) }, { scale: 0.85 + Math.min(k.value, 1) * 0.15 }],
-  }));
+  const W = cell * N;
+  const big = Math.round(cell * 1.35);
+  const step = big + Math.round(cell * 0.55);
+  // The pair stands the way the tiles meet: across if they meet side to side.
+  const across = from % N !== at % N || pair.length > 2;
+  const ax = gap / 2 + (at % N) * cell + cell / 2;
+  const ay = gap / 2 + ((at / N) | 0) * cell + cell / 2;
+  // The lens stays on the board.
+  const half = (across ? step * (pair.length - 1) + big : big) / 2 + 4;
+  const halfV = (across ? big : step * (pair.length - 1) + big) / 2 + 4;
+  const cx = Math.min(Math.max(ax, half), W - half);
+  const cy = Math.min(Math.max(ay, halfV), W - halfV);
+  const spread = (k: number) => (k - (pair.length - 1) / 2) * step;
+  const dim = useAnimatedStyle(() => {
+    const v = t.value;
+    return { opacity: 0.55 * (v < 150 ? v / 150 : v > LENS_MS - 250 ? Math.max(0, (LENS_MS - v) / 250) : 1) };
+  });
+  const tileSt = (k: number) =>
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useAnimatedStyle(() => {
+      const v = t.value;
+      const appear = Math.min(1, v / 150);
+      // They hold apart, then slide into one another from 450 to the meet.
+      const go = v < 450 ? 0 : Math.min(1, (v - 450) / (LENS_MEET - 450));
+      const e = go * go;
+      const d = spread(k) * (1 - e);
+      return {
+        opacity: v < LENS_MEET ? appear : 0,
+        transform: [{ translateX: across ? d : 0 }, { translateY: across ? 0 : d }, { scale: 0.6 + appear * 0.4 }],
+      };
+    });
+  const pairSt = pair.map((_, k) => tileSt(k));
+  const plusSt = useAnimatedStyle(() => {
+    const v = t.value;
+    return { opacity: v < 150 ? v / 150 : v < 450 ? 1 : Math.max(0, 1 - (v - 450) / 150) };
+  });
+  const resSt = useAnimatedStyle(() => {
+    const v = t.value;
+    if (v < LENS_MEET) return { opacity: 0, transform: [{ translateX: 0 }, { translateY: 0 }, { scale: 1.25 }] };
+    const pop = Math.min(1, (v - LENS_MEET) / 220);
+    // After a hold it sinks back to its own tile's size and place.
+    const back_ = v < LENS_MS - 250 ? 0 : Math.min(1, (v - (LENS_MS - 250)) / 250);
+    const s = (1.25 - 0.25 * (1 - (1 - pop) * (1 - pop))) * (1 - back_) + ((cell - gap) / big) * back_;
+    return {
+      opacity: 1 - back_ * 0.6,
+      transform: [{ translateX: (ax - cx) * back_ }, { translateY: (ay - cy) * back_ }, { scale: s }],
+    };
+  });
+  const box = (st: object, child: React.ReactNode, key?: number) => (
+    <Animated.View key={key} style={[{ position: 'absolute', left: cx - big / 2, top: cy - big / 2, width: big, height: big }, st]}>{child}</Animated.View>
+  );
+  const plusAt = (k: number) => (spread(k) + spread(k + 1)) / 2;
+  const ps = Math.round(cell * 0.4);
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        {
-          position: 'absolute',
-          left: gap / 2 + x * cell + cell / 2 - cell * 2,
-          width: cell * 4,
-          top: below ? gap / 2 + (y + 1) * cell + 2 : gap / 2 + y * cell - h - 2,
-          alignItems: 'center',
-        },
-        st,
-      ]}>
-      <View style={{ height: h, paddingHorizontal: 8, borderRadius: 10, justifyContent: 'center', backgroundColor: c.surface, boxShadow: '0 2px 8px rgba(0,0,0,0.18)' }}>
-        <Formula terms={terms} cell={tile} gap={Math.max(2, Math.round(gap / 2))} />
-      </View>
-    </Animated.View>
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {/* The plate dims around the lens (only the plate: past it is the table). */}
+      <Animated.View
+        style={[
+          { position: 'absolute', left: plate[0] * cell, top: plate[1] * cell, width: (plate[2] - plate[0] + 1) * cell + gap, height: (plate[3] - plate[1] + 1) * cell + gap, backgroundColor: c.canvas, borderRadius: 8 },
+          dim,
+        ]}
+      />
+      {pair.slice(0, -1).map((_, k) => (
+        <Animated.View
+          key={`p${k}`}
+          style={[{ position: 'absolute', left: cx - ps / 2 + (across ? plusAt(k) : 0), top: cy - ps / 2 + (across ? 0 : plusAt(k)), width: ps, height: ps, alignItems: 'center', justifyContent: 'center' }, plusSt]}>
+          <View style={{ position: 'absolute', width: ps, height: Math.max(3, ps * 0.18), borderRadius: 4, backgroundColor: c.text }} />
+          <View style={{ position: 'absolute', height: ps, width: Math.max(3, ps * 0.18), borderRadius: 4, backgroundColor: c.text }} />
+        </Animated.View>
+      ))}
+      {pair.map((v, k) => box(pairSt[k], <Block v={v} size={big} />, k))}
+      {box(resSt, <Block v={r} size={big} />)}
+    </View>
   );
 }
 
