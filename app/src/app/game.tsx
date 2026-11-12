@@ -38,6 +38,11 @@ type Pace = { base: number; fly: number; gaps: number[] };
 /** A cascade speeds up as it goes: the gap before merge k+1. */
 const LONG_PACE: Pace = { base: 90, fly: 110, gaps: [180, 160, 140, 120, 110] };
 const SHORT_PACE: Pace = { base: 50, fly: 80, gaps: [120] };
+/* A tray slot is a three-cell piece plus 0.4 of a cell of air, in tray
+   cells. At 3 (col / 9) two trominoes side by side stood exactly one gap
+   apart, the same gap as inside a piece, and read as one row of six
+   (2026-11-12). */
+const TRAY_SLOT = 3.4;
 const paceOf = (merges: number) => (merges <= SHORT ? SHORT_PACE : LONG_PACE);
 /** In the lessons every merge is a beat of its own, long enough to read
     its pair on the board (2026-11-11: a newcomer asked why 6 comes right
@@ -433,7 +438,7 @@ export default function Game() {
   const inner = Math.min(width, 440) - 32;
   const gap = Math.round(Math.min(7, Math.max(5, width * 0.015)));
   // Tray cells follow the width (three slots, a three-cell piece in each with room).
-  const trayMax = Math.max(24, Math.min(40, Math.floor(inner / 3 / 3.3)));
+  const trayMax = Math.max(24, Math.min(40, Math.floor(inner / 3 / TRAY_SLOT)));
   /* The board takes what is left of the height after the fixed parts:
      header ~64, the lesson card when there is one, the tray, and the 8pt
      paddings around them. Never wider than the screen, never under 240. */
@@ -447,8 +452,8 @@ export default function Game() {
   const col = cell * N + gap;
   // A term of the lesson's line: as big as a board tile, five to the column.
   const lineTile = Math.min(Math.round(cell * 1.1), Math.floor(col / 5.4));
-  // Tray pieces at 0.7 of a board cell, as large as three slots of three cells allow.
-  const trayCell = Math.min(Math.round(cell * 0.7), Math.floor(col / 9));
+  // Tray pieces at 0.7 of a board cell, as large as three slots allow (see TRAY_SLOT).
+  const trayCell = Math.min(Math.round(cell * 0.7), Math.floor(col / 3 / TRAY_SLOT));
   /* The interface unit: the header squares are one board cell, the score is
      set to the cell's height, and the steps between blocks are a share of it,
      so the chrome grows and shrinks with the board instead of staying fixed. */
