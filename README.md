@@ -24,4 +24,4 @@ A merge puzzle on a 6×6 board. Drag pieces from a tray of three onto the board;
 ## Next
 
 - Sound design for the app.
-- Wire `prototype/engine.js` into the app; app icon and splash; Android build via EAS.
+- Google Play release: steps in `docs/release-android.md`, listing in `docs/store-listing.md`.
