@@ -50,7 +50,7 @@ npx eas-cli@latest submit -p android --profile production --latest
 ## Before the first submit
 
 - [ ] Screenshots from a phone (2 to 8), light theme, one with the lesson,
-      one mid-game with a chain, one with the 96.
+      one mid-game with a chain, one with the win screen.
 - [ ] Contact email chosen for the listing.
 - [ ] `docs/privacy.md` is on `main`, so the privacy URL resolves.
 - [ ] A production build installed from the internal track and played once

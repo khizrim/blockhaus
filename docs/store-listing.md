@@ -26,19 +26,19 @@ Art: `app/store/play-icon-512.png` (hi-res icon) and
 
 ## Russian (ru-RU)
 
-**Short description** (80 characters max, this one is 60):
+**Short description** (80 characters max, this one is 61):
 
-> Головоломка 6×6: 1 + 2 = 3, равные удваиваются. Соберите 96.
+> Головоломка 6×6: 1 + 2 = 3, равные удваиваются. Соберите 384.
 
 **Full description** (4000 max) **GUESS**, written from the rules screen:
 
 > Blockhaus — спокойная головоломка на поле 6×6.
 >
-> Перетаскивайте фигуры из лотка на поле. Синяя 1 и красная 2 вместе дают 3, а дальше равные удваиваются: 3, 6, 12, 24, 48, 96. Слияния идут цепочкой, и одна удачная фигура может собрать полполя.
+> Перетаскивайте фигуры из лотка на поле. Синяя 1 и красная 2 вместе дают 3, а дальше равные удваиваются: 3, 6, 12 и дальше до 384. Слияния идут цепочкой, и одна удачная фигура может собрать полполя.
 >
-> Дважды за лоток можно сдвинуть всё поле в одну сторону: встретившиеся пары сольются.
+> Когда тесно, смахните поле: всё съедет в одну сторону, и пары по пути сольются. Сдвиг даётся за каждый лоток и за длинный каскад.
 >
-> Цель — собрать 96. А потом можно играть дальше на очки.
+> Цель — собрать 384. А потом можно играть дальше на очки.
 >
 > • Короткое обучение на живом поле
 > • Светлая и тёмная тема, своя музыка и звуки
@@ -48,19 +48,19 @@ Art: `app/store/play-icon-512.png` (hi-res icon) and
 
 ## English (en-US)
 
-**Short description** (this one is 54):
+**Short description** (this one is 55):
 
-> A 6×6 merge puzzle: 1 + 2 = 3, equals double. Make 96.
+> A 6×6 merge puzzle: 1 + 2 = 3, equals double. Make 384.
 
 **Full description** **GUESS**:
 
 > Blockhaus is a calm merge puzzle on a 6×6 board.
 >
-> Drag pieces from the tray onto the board. A blue 1 and a red 2 make 3, and from there equals double: 3, 6, 12, 24, 48, 96. Merges chain, so one good piece can clear half the board.
+> Drag pieces from the tray onto the board. A blue 1 and a red 2 make 3, and from there equals double: 3, 6, 12 and on up to 384. Merges chain, so one good piece can clear half the board.
 >
-> Twice per tray you can sweep the whole board one way, and pairs that meet merge.
+> When it gets tight, swipe the board: everything slides one way and pairs merge on the way. You earn a sweep with each tray and for a long cascade.
 >
-> The goal is a 96. After that, keep going for score.
+> The goal is a 384. After that, keep going for score.
 >
 > • A short lesson on a live board
 > • Light and dark themes, original music and sounds
