@@ -1,12 +1,12 @@
 # Blockhaus: политика конфиденциальности
 
-Действует с 31 октября 2026 года.
+Действует с 21 ноября 2026 года.
 
 Blockhaus не собирает и не передаёт никаких данных о вас.
 
-- **Что хранится.** Текущая партия, рекорды, пройдено ли обучение и настройки (звук, музыка, вибрация, тема). Всё это лежит только в памяти вашего устройства.
+- **Что хранится.** Текущая партия, рекорды, пройдено ли обучение и настройки (язык, звук, музыка, вибрация, подсказки, тема). Всё это лежит только в памяти вашего устройства.
 - **Что передаётся.** Ничего. В игре нет аккаунтов, рекламы, аналитики и сторонних SDK, которые собирают данные. Игре не нужен интернет.
-- **Разрешения.** Игра не запрашивает доступ к контактам, геопозиции, камере, микрофону или файлам.
+- **Разрешения.** Игра не запрашивает доступ к контактам, геопозиции, камере, микрофону, файлам или уведомлениям. На Android она использует только вибрацию.
 - **Дети.** Игра подходит для любого возраста и не собирает данные детей.
 - **Удаление.** Чтобы удалить всё, нажмите «Сбросить прогресс» в настройках или удалите приложение.
 
@@ -18,15 +18,15 @@ Blockhaus не собирает и не передаёт никаких данн
 
 # Blockhaus: Privacy Policy
 
-Effective October 31, 2026.
+Effective November 21, 2026.
 
 Blockhaus does not collect or share any data about you.
 
-- **What is stored.** Your current game, records, whether you finished the tutorial, and settings (sound, music, vibration, theme). All of it stays on your device.
+- **What is stored.** Your current game, records, whether you finished the tutorial, and settings (language, sound, music, vibration, hints, theme). All of it stays on your device.
 - **What is sent.** Nothing. There are no accounts, ads, analytics or third-party SDKs that collect data. The game works offline.
-- **Permissions.** The game does not ask for contacts, location, camera, microphone or files.
+- **Permissions.** The game does not ask for contacts, location, camera, microphone, files or notifications. On Android it only uses vibration.
 - **Children.** The game is suitable for all ages and collects no data from children.
-- **Deleting.** Tap "Сбросить прогресс" in Settings, or delete the app.
+- **Deleting.** Tap "Reset progress" in Settings, or delete the app.
 
 If any of this changes (for example, analytics or a shared daily leaderboard), this page will be updated with a new date before that version ships.
 

@@ -30,5 +30,5 @@ These are the app's rules (`CASCADE` in the engine).
 
 ## CI
 
-- **Android APK** (`.github/workflows/android-apk.yml`): on pushes to `main` and `claude/**` that touch `app/`, builds a release APK signed with the debug key and publishes it to the `android-latest` pre-release. Store builds go through EAS (`app/eas.json`).
+- **Android APK** (`.github/workflows/android-apk.yml`): on pushes to `main` and `claude/**` that touch `app/`, builds a release APK signed with the debug key and publishes it to the `android-latest` pre-release. Store builds go through EAS (`app/eas.json`); the Google Play release steps are in `docs/release-android.md` and the listing in `docs/store-listing.md`.
 - **Web** (`.github/workflows/web-netlify.yml`): exports the web build and deploys it to Netlify. `main` goes to production, each pull request gets a preview at `https://pr-<number>--blockhaus-game.netlify.app`. Needs the `NETLIFY_AUTH_TOKEN` secret.
