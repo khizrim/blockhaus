@@ -10,7 +10,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
-import { enter, layer } from '@/design/system';
+import { enter, layer, rest } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { mix, rank } from '@/design/tokens';
 import { Block, numSize, plateStyle, RADIUS, Socket } from './Block';
@@ -122,7 +122,7 @@ function Plate({ open, cell, pad, rim, c }: { open: [number, number, number, num
   const pw = useSharedValue(b.w);
   const ph = useSharedValue(b.h);
   useEffect(() => {
-    const go = { duration: 300, easing: Easing.out(Easing.back(1.4)) };
+    const go = rest();
     l.value = withTiming(b.l, go);
     t.value = withTiming(b.t, go);
     pw.value = withTiming(b.w, go);

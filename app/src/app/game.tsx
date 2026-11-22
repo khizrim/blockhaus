@@ -7,7 +7,7 @@ import { Field, WAVE_IDLE, WAVE_STEP, type CellLook, type Wave } from '@/compone
 import { IconButton, Key, Screen } from '@/components/ui';
 import { pieceGrid } from '@/design/mock';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { dur, enter, exit, HIT, layer, space, type } from '@/design/system';
+import { dur, enter, exit, HIT, layer, pop, rest, space, type } from '@/design/system';
 import { useTheme } from '@/design/theme';
 import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Game as EngineGame, type Piece, type Step } from '@/game/engine';
@@ -87,7 +87,6 @@ const STUD_KNOCK = 0.62; // part of STUD_BOUNCE when it hits the full key
 const STUD_OUT = 750; // ms for a spent stud to leave the key and fall
 const STUD_QUIET = 420; // ms for the small hop of a stud the player has seen enough
 const PLATE = 6; // px each sweep layer shows under the board
-const back = (d: number, k = 1.8) => ({ duration: d, easing: Easing.out(Easing.back(k)) });
 
 /** A mouse or trackpad (web on a computer), not a finger. */
 const FINE_POINTER = Platform.OS === 'web' && typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: fine)').matches;
@@ -268,7 +267,7 @@ export default function Game() {
       if (mode === 'bounce') keyShake.value = withSequence(withTiming(-3, { duration: 40 }), withTiming(3, { duration: 60 }), withTiming(0, { duration: 60 }));
       if (mode === 'out') keyZoom.value = withSequence(withTiming(1.06, { duration: 80 }), withTiming(1, { duration: 160 }));
       if (mode !== 'in') return;
-      keyZoom.value = withDelay(STUD_QUIET - 40, withSequence(withTiming(1.1, { duration: 60 }), withTiming(1, back(220, 2))));
+      keyZoom.value = withDelay(STUD_QUIET - 40, withSequence(withTiming(1.1, { duration: 60 }), withTiming(1, pop(220))));
     }
     keyRef.current?.measureInWindow((kx, ky, kw, kh) => {
       const studs = g.cfg.sweepsMax;
@@ -292,13 +291,13 @@ export default function Game() {
   const keyMoment = (mode: StudMode) => {
     const grow = { duration: 200, easing: Easing.out(Easing.cubic) };
     if (mode === 'in') {
-      keyZoom.value = withSequence(withDelay(STUD_FLY * 0.4, withTiming(1.3, grow)), withDelay(STUD_FLY * 0.6 - 200, withTiming(1.45, { duration: 60 })), withTiming(1, back(360, 2.2)));
+      keyZoom.value = withSequence(withDelay(STUD_FLY * 0.4, withTiming(1.3, grow)), withDelay(STUD_FLY * 0.6 - 200, withTiming(1.45, { duration: 60 })), withTiming(1, pop(360)));
     } else if (mode === 'bounce') {
       const at = STUD_BOUNCE * STUD_KNOCK;
       keyZoom.value = withSequence(withDelay(STUD_BOUNCE * 0.28, withTiming(1.3, grow)), withDelay(at - STUD_BOUNCE * 0.28 - 200, withTiming(1.3, { duration: 0 })), withDelay(320, withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) })));
       keyShake.value = withDelay(at, withSequence(withTiming(-7, { duration: 50 }), withTiming(7, { duration: 70 }), withTiming(-4, { duration: 60 }), withTiming(0, { duration: 80 })));
     } else {
-      keyZoom.value = withSequence(withTiming(1.3, { duration: 120, easing: Easing.out(Easing.cubic) }), withTiming(1, back(380, 2.2)));
+      keyZoom.value = withSequence(withTiming(1.3, { duration: 120, easing: Easing.out(Easing.cubic) }), withTiming(1, pop(380)));
     }
   };
   const burstClear = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -561,7 +560,7 @@ export default function Game() {
   };
 
   const kickLine = () => {
-    lineKick.value = withSequence(withTiming(1.12, { duration: 0 }), withTiming(1, back(320, 2.4)));
+    lineKick.value = withSequence(withTiming(1.12, { duration: 0 }), withTiming(1, pop(320)));
   };
 
   /* The end of the lessons. The game goes on from where they ended
@@ -624,7 +623,7 @@ export default function Game() {
       setBursts((e) => [...e.slice(-2), { id, at, v: level, n: 1 + power * 2, power }]);
       if (burstClear.current) clearTimeout(burstClear.current);
       burstClear.current = setTimeout(() => setBursts([]), BURST_MS + 80);
-      if (!milestone) scoreKick.value = withSequence(withTiming(1 + 0.04 * power, { duration: 60 }), withTiming(1, back(260, 2.4)));
+      if (!milestone) scoreKick.value = withSequence(withTiming(1 + 0.04 * power, { duration: 60 }), withTiming(1, pop(260)));
     }
     thump(milestone ? Math.max(level, 192) : level, step);
     if (chainLen >= 3) slam(chainLen);
@@ -671,7 +670,7 @@ export default function Game() {
     if (v < 12 && step < 2) return;
     // A long cascade presses the board harder as it climbs, whatever the tile.
     const k = Math.max(v >= 384 ? 0.06 : v >= 192 ? 0.05 : v >= 96 ? 0.04 : v >= 48 ? 0.03 : v >= 24 ? 0.02 : v >= 12 ? 0.012 : 0, Math.min(0.035, step * 0.007));
-    bump.value = withSequence(withTiming(1 - k, { duration: 60 }), withTiming(1, back(260, 2.5)));
+    bump.value = withSequence(withTiming(1 - k, { duration: 60 }), withTiming(1, pop(260)));
   };
 
   /* ---------- drag ---------- */
@@ -745,7 +744,7 @@ export default function Game() {
       fx.repel();
       lockedShake.value = withSequence(withTiming(-4, { duration: 50 }), withTiming(4, { duration: 80 }), withTiming(-2, { duration: 80 }), withTiming(0, enter(dur.fast)));
       setLockedSlot(slot);
-      turnHop.value = withSequence(withDelay(150, withTiming(-trayCell * 0.4, enter(dur.fast))), withTiming(0, back(300, 2.4)));
+      turnHop.value = withSequence(withDelay(150, withTiming(-trayCell * 0.4, enter(dur.fast))), withTiming(0, rest(300)));
       setDemoRun((n) => n + 1);
       return;
     }
@@ -754,7 +753,7 @@ export default function Game() {
     dx.value = pageX - ox;
     dy.value = pageY - oy + 20;
     dy.value = withTiming(pageY - oy, enter(dur.fast));
-    lift.value = withTiming(1, back(220, 2.4));
+    lift.value = withTiming(1, pop(220));
     origin.current = { x: pageX - ox, y: pageY - oy + 20 };
     setNudge(null);
     setHold({ slot, piece: p });
@@ -1322,14 +1321,14 @@ export default function Game() {
       const lean = (u: number) =>
         withSequence(
           withTiming(u * 10, { duration: 220, easing: Easing.out(Easing.cubic) }),
-          withTiming(0, back(320, 2.2)),
+          withTiming(0, rest(320)),
           withDelay(200, withTiming(u * 10, { duration: 220, easing: Easing.out(Easing.cubic) })),
-          withTiming(0, back(320, 2.2)),
+          withTiming(0, rest(320)),
         );
       sx.value = lean(ux);
       sy.value = lean(uy);
       setStuckSlot(g.tray.findIndex((p) => p && !p.used));
-      const beat = () => withSequence(withTiming(1.18, { duration: 200 }), withTiming(1, back(300, 2.2)));
+      const beat = () => withSequence(withTiming(1.18, { duration: 200 }), withTiming(1, pop(300)));
       stuckPulse.value = withSequence(beat(), withDelay(200, beat()));
     };
     const first = setTimeout(show, 2500);
@@ -1602,7 +1601,7 @@ function BestTile({ v, size }: { v: number; size: number; frame?: number }) {
   const first = useRef(true);
   useEffect(() => {
     if (first.current) return void (first.current = false);
-    k.value = withSequence(withTiming(1.3, { duration: 0 }), withTiming(1, back(320, 2.4)));
+    k.value = withSequence(withTiming(1.3, { duration: 0 }), withTiming(1, pop(320)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [v]);
   const st = useAnimatedStyle(() => ({ transform: [{ scale: k.value }] }));
@@ -1675,7 +1674,7 @@ function LiftTile({ v, d, at, cell, gap, hero, home }: { v: number; d: number; a
       shine.value = withDelay(FLIP * 0.45, withTiming(1, { duration: 320 }));
       if (home) fly.value = withDelay(FLIP + 120, withTiming(1, { duration: FLY_HOME, easing: Easing.in(Easing.cubic) }));
     } else {
-      lift.value = withDelay(delay, withSequence(withTiming(1, { duration: 150, easing: Easing.out(Easing.cubic) }), withTiming(0, back(380, 2.2))));
+      lift.value = withDelay(delay, withSequence(withTiming(1, { duration: 150, easing: Easing.out(Easing.cubic) }), withTiming(0, rest(380))));
       shine.value = withDelay(delay + 40, withTiming(1, { duration: 300 }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1899,7 +1898,7 @@ const Incoming = memo(function Incoming({ piece, ox, oy, dir, delay, cell, gap }
   const far = (ux ? w : h) * cell + gap * 2;
   const k = useSharedValue(0);
   useEffect(() => {
-    k.value = withDelay(delay, withTiming(1, { duration: PUSH_MS, easing: Easing.out(Easing.back(1.4)) }));
+    k.value = withDelay(delay, withTiming(1, rest(PUSH_MS)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const st = useAnimatedStyle(() => ({
