@@ -4,7 +4,7 @@
   "main": "expo-router/entry",
   "reanimated": {
     "staticFeatureFlags": {
-      "IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS": false,
+      "IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS": true,
       "ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS": true
     }
   },

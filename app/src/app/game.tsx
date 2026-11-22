@@ -1107,9 +1107,24 @@ export default function Game() {
   // The board tips like a tray in the hands when swept: 3° toward the way the blocks go.
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
-  const boardStyle = useAnimatedStyle(() => ({
-    transform: [{ perspective: 900 }, { translateX: sx.value }, { translateY: sy.value }, { rotateX: `${tx.value}deg` }, { rotateY: `${ty.value}deg` }, { scale: bump.value }],
-  }));
+  const boardStyle = useAnimatedStyle(() => {
+    if (Platform.OS !== 'ios') {
+      return { transform: [{ perspective: 900 }, { translateX: sx.value }, { translateY: sy.value }, { rotateX: `${tx.value}deg` }, { rotateY: `${ty.value}deg` }, { scale: bump.value }] };
+    }
+    // Project the board as a flat surface. Giving its native layer depth
+    // intersects the iOS screen's background during the sweep.
+    const pitch = tx.value * Math.PI / 180;
+    const yaw = ty.value * Math.PI / 180;
+    const scale = bump.value;
+    const depthX = -Math.cos(pitch) * Math.sin(yaw) * scale;
+    const depthY = Math.sin(pitch) * scale;
+    return { transform: [{ matrix: [
+      Math.cos(yaw) * scale, Math.sin(pitch) * Math.sin(yaw) * scale, 0, -depthX / 900,
+      0, Math.cos(pitch) * scale, 0, -depthY / 900,
+      0, 0, 1, 0,
+      sx.value, sy.value, 0, 1,
+    ] }] };
+  });
   const tilt = (dir: Dir, deg: number, hold: number) => {
     const [ux, uy] = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
     const go = (v: number) => withSequence(withTiming(v, { duration: 90, easing: Easing.out(Easing.quad) }), withDelay(hold, withTiming(0, { duration: 160, easing: Easing.inOut(Easing.quad) })));
