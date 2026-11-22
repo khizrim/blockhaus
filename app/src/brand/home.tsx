@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, type SharedValue, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 
@@ -23,7 +23,8 @@ let splashed = false;
 
 export function Home() {
   const { c, t } = useTheme();
-  const { game, stats, inProgress, newGame, learned } = useGame();
+  const { game, stats, inProgress, newGame, learned, leaveDaily, ready } = useGame();
+  useFocusEffect(useCallback(() => { leaveDaily(); }, [leaveDaily]));
   const [confirm, setConfirm] = useState(false);
   const [splash, setSplash] = useState(!splashed);
   const score = game.score.toLocaleString(t.locale);
@@ -53,17 +54,18 @@ export function Home() {
           {/* The plate is there from the first frame, so nothing moves when the splash lifts; it plays once the splash is gone. */}
           <Demo play={!splash} />
           <Logo />
-          {stats.best > 0 ? <Chip>{t.record(stats.best.toLocaleString(t.locale))}</Chip> : <View style={{ height: 32 }} />}
+          <Chip>{stats.bestTile > 0 ? t.tileRecord(stats.bestTile) : t.tileGoal(24)}</Chip>
         </View>
         <View style={{ gap: 12 }}>
           {inProgress ? (
             <>
-              <Button kind="primary" size="lg" label={t.resume} trailing={score} accessibilityLabel={t.resumeLabel(score, game.score)} onPress={play} />
+              <Button kind="primary" size="lg" label={t.resume} trailing={game.bestTile ? String(game.bestTile) : undefined} accessibilityLabel={game.bestTile ? `${t.resume}. ${t.bestTile(game.bestTile)}` : t.resume} onPress={play} />
               <Button size="lg" label={t.newGame} onPress={() => setConfirm(true)} />
             </>
           ) : (
             <Button kind="primary" size="lg" label={t.play} onPress={fresh} />
           )}
+          <Button size="lg" disabled={!ready} label={t.locale.startsWith('ru') ? 'Игра дня' : 'Daily game'} onPress={() => router.push('./daily')} />
         </View>
       </Page>
 

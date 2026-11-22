@@ -19,6 +19,8 @@ export type Game = {
   merges: number;
   bestTile: number;
   moves: number;
+  /** User actions, including swipes; tracked by the app on new saves. */
+  turns?: number;
   won: boolean;
   over: boolean;
   /** Kept by the app, not the engine: sweeps made in this game. */
@@ -39,7 +41,7 @@ declare const engine: {
   DEFAULTS: Config & { goal: number };
   /** The balance before free sweeps: two per tray, goal 192. */
   LIMITED: Config;
-  /** Sweeps earned by cascades: one per tray, one more for a cascade of four merges, two at most. */
+  /** Main mode: one sweep per tray, one earned for three merges, up to three held. */
   CASCADE: Config;
   /** The game of the day: thirty pieces, six start tiles. */
   DAILY: { pieceLimit: number; startTiles: number };
@@ -63,7 +65,7 @@ declare const engine: {
   lanes(dir: Dir): number[][];
   dealTray(cfg: Config, board: number[], rng: () => number): Piece[];
   /** Three shapes for a tray to come, before any value is chosen. */
-  dealShapes(cfg: Config, rng: () => number): [number, number][][];
+  dealShapes(cfg: Config, rng: () => number, bestTile?: number): [number, number][][];
   newGame(config?: Config, rng?: () => number): Game;
   place(g: Game, slot: number, ox: number, oy: number): PlaceResult | null;
   sweep(g: Game, dir: Dir): SweepResult | null;

@@ -4,24 +4,22 @@ import { useWindowDimensions, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 
 import { Field } from '@/components/Field';
-import { Button, Chip, CountUp, Page } from '@/components/ui';
+import { Block } from '@/components/Block';
+import { Body, Button, Chip, Page } from '@/components/ui';
 import { useTheme } from '@/design/theme';
+import { personalGoal } from '@/game/personal-goal';
 import { useGame } from '@/game/store';
 import { fx } from '@/sound/sfx';
 
-/* Game over (2026-11-08): the board as it was left, small and gone cold;
-   the score counting up; a chip with the record (yellow when this is a new
-   one). Then again, or the menu. */
 export default function Over() {
-  const { game: final, stats, newGame } = useGame();
+  const { game: final, previousBestTile, newGame } = useGame();
   const { t } = useTheme();
   const { width } = useWindowDimensions();
-  const target = final.score;
-  // The first game is always a record, so it is not called one.
-  const record = target >= stats.best && target > 0 && stats.played > 1;
+  const result = final.bestTile ? t.bestTile(final.bestTile) : t.noBestTile;
+  const record = final.bestTile >= personalGoal(previousBestTile);
+  const next = personalGoal(Math.max(previousBestTile, final.bestTile));
   useEffect(() => fx.over(), []);
 
-  // The chip pops in as the count-up ends.
   const k = useSharedValue(0);
   useEffect(() => {
     k.value = withDelay(650, withSequence(withTiming(1.1, { duration: 150 }), withTiming(1, { duration: 110 })));
@@ -32,19 +30,17 @@ export default function Over() {
 
   return (
     <Page>
-      <View accessible accessibilityLabel={t.noRoom(target)} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18 }}>
+      <View accessible accessibilityLabel={`${t.noRoom(final.score)} ${result}. ${record ? t.newRecord + '. ' : ''}${t.tileGoal(next)}.`} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
         <View style={{ opacity: 0.6 }}>
           <Field w={6} h={6} values={final.board} cell={cell} gap={Math.max(3, Math.round(cell * 0.1))} />
         </View>
-        <View style={{ height: 8 }} />
-        <CountUp to={target} />
+        {final.bestTile > 0 && <Block size={68} v={final.bestTile} />}
+        <Body>{result}</Body>
         <Animated.View style={chipSt}>
-          {record ? (
-            <Chip yellow>{t.newRecord}</Chip>
-          ) : stats.played > 1 ? (
-            <Chip>{t.record(stats.best.toLocaleString(t.locale))}</Chip>
-          ) : null}
+          {record ? <Chip yellow>{t.newRecord}</Chip> : <Chip>{t.tileGoal(next)}</Chip>}
         </Animated.View>
+        {record && <Body>{t.tileGoal(next)}</Body>}
+        <Body small muted>{t.score(final.score)}</Body>
       </View>
       <View style={{ gap: 12 }}>
         <Button

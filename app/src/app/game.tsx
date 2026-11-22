@@ -13,10 +13,12 @@ import { font, rank } from '@/design/tokens';
 import engine, { type Dir, type Game as EngineGame, type Piece, type Step } from '@/game/engine';
 import { FIRST_MOVES, LESSONS } from '@/game/lessons';
 import { slideMoves, type Move } from '@/game/slide';
+import { availablePlaces, trappedLowTiles } from '@/game/spaceHints';
 import { useGame } from '@/game/store';
+import { dailyProgress } from '@/game/daily';
+import { milestoneMarks, personalGoal } from '@/game/personal-goal';
 import { fx } from '@/sound/sfx';
 import { loudOnce, type StudKind } from '@/game/seen';
-import { TileNum } from '@/components/TileNum';
 import { Block, plastic, Socket } from '@/components/Block';
 import { Icon } from '@/components/icons';
 import { Formula, type Term } from '@/components/Formula';
@@ -101,14 +103,6 @@ const LESSON_READ = 1300; // ms to read the proved formula before the next step 
 
 type Hold = { slot: number; piece: Piece };
 
-const isMilestone = (v: number) => v >= 24 && Number.isInteger(Math.log2(v / 3));
-
-/** Whether a piece fits anywhere on the board; one that fits nowhere is dimmed in the tray. */
-function fitsSomewhere(board: number[], p: Piece) {
-  const { w, h } = engine.size(p);
-  for (let y = 0; y <= N - h; y++) for (let x = 0; x <= N - w; x++) if (engine.fits(board, p, x, y)) return true;
-  return false;
-}
 
 /** The placement that merges the most, as [cell, value] pairs to hatch. */
 function bestMove(g: { board: number[]; tray: (Piece | null)[]; cfg: { absorb?: 'big' | 'new' } }): [number, number][] | null {
@@ -463,8 +457,10 @@ export default function Game() {
   const afterMove = (ms: number) => {
     if (store.lesson !== null) return lessonCheck(ms);
     studMs.current = 0;
+    if (!g.over) return;
     later(ms + 250, () => {
-      if (g.over) router.push('/over');
+      if (store.mode === 'daily') router.replace('/daily');
+      else router.push('/over');
     });
   };
 
@@ -584,16 +580,9 @@ export default function Game() {
   const milestonesIn = (levels: number[]) => {
     const before = peak.current;
     peak.current = Math.max(before, ...levels);
-    const seen = new Set<number>();
-    const marks = levels.map((l) => {
-      if (l <= before || !isMilestone(l) || seen.has(l)) return false;
-      seen.add(l);
-      return true;
-    });
-    // One wave per move: a long cascade that passes 24, 48 and 96 plays the
-    // full show for the highest only; the ones on the way are plain merges.
-    const last = marks.lastIndexOf(true);
-    marks.forEach((m, k) => (marks[k] = m && k === last));
+    const marks = store.mode === 'daily'
+      ? levels.map(() => false)
+      : milestoneMarks(levels, store.lesson === null ? Math.max(before, store.previousBestTile) : before);
     moveHadMilestone.current = marks.some(Boolean);
     return marks;
   };
@@ -991,9 +980,23 @@ export default function Game() {
   const earns = !!preview && counted && !!g.cfg.chainBonus && preview.merges >= g.cfg.chainBonus && g.sweeps < g.cfg.sweepsMax;
 
   /* ---------- what each cell looks like right now ---------- */
+  const [swiping, setSwiping] = useState(false);
+  // The engine mutates a game in place. Its version advances on each move,
+  // independently of the animation frames and pointer updates on this screen.
+  const room = useMemo(() => ({
+    current: g.tray.map(p => p && !p.used ? availablePlaces(g.board, p) : null),
+    next: g.next?.map(cells => availablePlaces(g.board, {
+      cells: cells.map(([x, y]): [number, number, number] => [x, y, 1]), used: false,
+    })),
+    trapped: trappedLowTiles(g.board),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [g, store.version]);
+  const showRoom = hints && !lesson && !g.over && !hold && !held && !swiping && !aim && !sliding && !incoming &&
+    returning === null && flights.length === 0 && shown.every((value, i) => value === g.board[i]);
   const look = useCallback(
     (i: number): CellLook | undefined => {
       const l: CellLook = { pop: pops[i], land: lands[i] };
+      if (showRoom && room.trapped.has(i)) l.trapped = true;
       if (opened?.has(i)) l.enterDelay = 60 + 40 * Math.max(Math.abs((i % N) - 2.5), Math.abs(((i / N) | 0) - 2.5));
       if (!hold && nudge) {
         const h = nudge.find(([at]) => at === i);
@@ -1052,7 +1055,7 @@ export default function Game() {
       }
       return l;
     },
-    [shown, hold, target, preview, pops, lands, lesson, coach, nudge, aim, opened, mv, hintMv],
+    [shown, hold, target, preview, pops, lands, lesson, coach, nudge, aim, opened, mv, hintMv, showRoom, room],
   );
 
   const values = useMemo(() => {
@@ -1152,7 +1155,7 @@ export default function Game() {
     /* A lesson's board slides only the way it teaches. Another way is not
        silence: the board tips that way and springs back with the lesson's
        soft push, and the finger shows the right way again. */
-    if (lesson?.dirs && !lesson.dirs.includes(dir)) {
+    if (lesson && !lesson.dirs?.includes(dir)) {
       tilt(dir, 1.5, 0);
       fx.repel();
       setDemoRun((n) => n + 1);
@@ -1254,7 +1257,7 @@ export default function Game() {
   const aimAt = (dir: Dir | null) => {
     if (dir === aimDir.current) return;
     aimDir.current = dir;
-    const ok = dir && g.cfg.freeSweeps && g.cfg.sweepCost === 'push' && !g.over && !(lesson?.dirs && !lesson.dirs.includes(dir));
+    const ok = dir && g.cfg.freeSweeps && g.cfg.sweepCost === 'push' && !g.over && (!lesson || !!lesson.dirs?.includes(dir));
     const at = ok ? aimPush(g, dir) : null;
     setAim(at && dir ? { ...at, dir, id: `${dir}-${store.version}` } : null);
   };
@@ -1266,6 +1269,7 @@ export default function Game() {
     return PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) + Math.abs(gs.dy) > 8,
+      onPanResponderGrant: () => setSwiping(true),
       onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_, gs) => {
         const x = axis(gs.dx, gs.dy) === 'x';
@@ -1280,6 +1284,7 @@ export default function Game() {
         aimRef.current(Math.abs(d) < SWIPE ? null : x ? (d > 0 ? 'right' : 'left') : d > 0 ? 'down' : 'up');
       },
       onPanResponderRelease: (_, gs) => {
+        setSwiping(false);
         aimRef.current(null);
         const x = axis(gs.dx, gs.dy) === 'x';
         const d = x ? gs.dx : gs.dy;
@@ -1291,6 +1296,7 @@ export default function Game() {
         sweepRef.current(x ? (d > 0 ? 'right' : 'left') : d > 0 ? 'down' : 'up');
       },
       onPanResponderTerminate: () => {
+        setSwiping(false);
         aimRef.current(null);
         sx.value = withTiming(0, enter(dur.fast));
         sy.value = withTiming(0, enter(dur.fast));
@@ -1415,22 +1421,27 @@ export default function Game() {
   }, [store.lesson, store.version, coach, !!hold, choiceRight]);
 
   const lineStyle = useAnimatedStyle(() => ({ opacity: 1 - Math.abs(lineIn.value), transform: [{ translateX: lineIn.value * 40 }, { scale: lineKick.value }], transformOrigin: 'center' }));
+  const daily = store.mode === 'daily' && store.dailyRun;
+  const bestTile = Math.max(store.previousBestTile, g.bestTile);
+  const goal = personalGoal(bestTile);
+  const headerTitle = daily ? t.score(g.score) : t.tileGoal(goal);
+  const headerDetail = daily ? dailyProgress(daily.key, g.moves, g.score, t.locale)
+    : ripple ? t.newTileRecord(ripple.v)
+    : bestTile >= 24 ? `${t.record(String(bestTile))} · ${t.score(g.score)}` : t.score(g.score);
 
   return (
     <View style={[{ flex: 1 }, noSelect]}>
       <Screen style={{ width: col }}>
-        {/* The header (2026-11-08): pause key, the score in the middle with
-            the cascade's multiplier beside it, the sweep key with its studs. */}
         <View style={{ height: 52, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <IconButton label={t.pause} size={48} onPress={() => router.push('/pause')}>
             <Icon name="pause" color={c.text} />
           </IconButton>
-          <Animated.View accessible accessibilityLabel={t.score(g.score)} style={[{ height: 48, justifyContent: 'center', alignItems: 'center' }, scoreStyle]}>
-            {/* No score in the lessons: it teaches nothing there and would
-                drop to 0 at the first game. No ×2 chip (2026-11-09): nothing
-                taught it; a long chain's reward is the score's jump. */}
-            {store.lesson === null ? <ScoreNum v={g.score} /> : null}
-          </Animated.View>
+          {store.lesson === null && (
+            <View accessible accessibilityLabel={`${headerTitle}. ${headerDetail}`} style={{ flex: 1, height: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
+              <Text adjustsFontSizeToFit numberOfLines={1} style={[type.heading, { color: c.text }]}>{headerTitle}</Text>
+              <Animated.Text numberOfLines={1} adjustsFontSizeToFit style={[type.meta, { color: ripple ? c.text : c.muted }, scoreStyle]}>{headerDetail}</Animated.Text>
+            </View>
+          )}
           <Animated.View style={keyStyle}>
             <View ref={keyRef} collapsable={false}>
               <SweepKey studs={counted ? g.cfg.sweepsMax : 0} filled={g.sweeps - (bonusHeld ? 1 : 0)} ghost={earns} onPress={hintSweep} />
@@ -1477,7 +1488,7 @@ export default function Game() {
               ref={boardRef}
               onLayout={measureBoard}
               collapsable={false}
-              accessibilityLabel={t.board}
+              accessibilityLabel={showRoom && room.trapped.size ? `${t.board}. ${t.trappedLowTiles(room.trapped.size)}` : t.board}
               accessibilityActions={[
                 { name: 'left', label: t.sweepLeft },
                 { name: 'right', label: t.sweepRight },
@@ -1521,37 +1532,49 @@ export default function Game() {
             height: trayCell * 3 + space.xxl,
             flexDirection: 'row',
           }}>
-          {g.tray.map((p, slot) => (
-            <View
-              key={slot}
-              ref={(r) => void (slotRefs.current[slot] = r)}
-              collapsable={false}
-              {...responders[slot].panHandlers}
-              accessibilityLabel={p && !p.used ? t.piece(slot + 1) : t.emptySlot(slot + 1)}
-              style={{
-                flex: 1,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-              {/* What comes into this slot with the next tray: its shape only,
-                  small and grey in the corner. The values are dealt when it
-                  arrives, from the board as it is then. */}
-              {g.next?.[slot] && store.lesson === null && !g.over && (!p || p.used) ? (
-                <NextShape cells={g.next[slot]} cell={trayCell} gap={gap} />
-              ) : null}
-              {p ? (
-                <Animated.View style={slot === stuckSlot ? stuckStyle : mv && slot === mv.slot ? turnStyle : mv && slot === lockedSlot ? lockedStyle : undefined}>
-                <TrayPiece
-                  key={`${trayId.current}-${slot}-${JSON.stringify(p.cells)}`}
-                  delay={slot * 60}
-                  rise={trayCell}
-                  opacity={p.used || hold?.slot === slot || returning === slot ? 0 : g.over || !fitsSomewhere(g.board, p) || (mv && mv.slot !== slot) ? 0.35 : 1}>
-                  <Field variant="piece" {...pieceGrid(p)} cell={trayCell} gap={gap} />
-                </TrayPiece>
-                </Animated.View>
-              ) : null}
-            </View>
-          ))}
+          {g.tray.map((p, slot) => {
+            const active = p && !p.used;
+            const count = active ? room.current[slot] : room.next?.[slot];
+            const warning = showRoom && count != null && count < 3 ? t.spacesNow(count) : null;
+            const label = active ? t.piece(slot + 1) : g.next?.[slot] && !lesson && !g.over ? t.nextPiece : t.emptySlot(slot + 1);
+            return (
+              <View
+                key={slot}
+                ref={(r) => void (slotRefs.current[slot] = r)}
+                collapsable={false}
+                {...responders[slot].panHandlers}
+                accessible
+                accessibilityLabel={warning ? `${label}. ${warning}` : label}
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                {/* What comes into this slot with the next tray: its shape only,
+                    small and grey in the corner. The values are dealt when it
+                    arrives, from the board as it is then. */}
+                {g.next?.[slot] && store.lesson === null && !g.over && (!p || p.used) ? (
+                  <NextShape cells={g.next[slot]} cell={trayCell} gap={gap} />
+                ) : null}
+                {p ? (
+                  <Animated.View style={slot === stuckSlot ? stuckStyle : mv && slot === mv.slot ? turnStyle : mv && slot === lockedSlot ? lockedStyle : undefined}>
+                  <TrayPiece
+                    key={`${trayId.current}-${slot}-${JSON.stringify(p.cells)}`}
+                    delay={slot * 60}
+                    rise={trayCell}
+                    opacity={p.used || hold?.slot === slot || returning === slot ? 0 : g.over || room.current[slot] === 0 || (mv && mv.slot !== slot) ? 0.35 : 1}>
+                    <Field variant="piece" {...pieceGrid(p)} cell={trayCell} gap={gap} />
+                  </TrayPiece>
+                  </Animated.View>
+                ) : null}
+                {warning ? (
+                  <Text accessible={false} pointerEvents="none" style={{ position: 'absolute', bottom: 0, color: c.text, fontFamily: font.bodySemi, fontSize: 12 }}>
+                    {warning}
+                  </Text>
+                ) : null}
+              </View>
+            );
+          })}
         </View>
       </Screen>
 
@@ -2161,36 +2184,6 @@ function progressTo(board: number[], next: number): number {
   let sum = 0;
   for (const v of board) if (v >= next / 4 && v < next) sum += v;
   return Math.min(0.95, sum / next);
-}
-
-/** The score: Rubik 700, one size, counting up with every merge. */
-function ScoreNum({ v }: { v: number }) {
-  const { c } = useTheme();
-  const [shownV, setShownV] = useState(v);
-  const from = useRef(v);
-  useEffect(() => {
-    const a = from.current;
-    if (v <= a) {
-      from.current = v;
-      setShownV(v);
-      return;
-    }
-    const t0 = Date.now();
-    const id = setInterval(() => {
-      const k = Math.min(1, (Date.now() - t0) / 300);
-      const x = Math.round(a + (v - a) * (1 - Math.pow(1 - k, 3)));
-      setShownV(x);
-      if (k >= 1) {
-        clearInterval(id);
-        from.current = v;
-      }
-    }, 16);
-    return () => {
-      clearInterval(id);
-      from.current = v;
-    };
-  }, [v]);
-  return <TileNum v={shownV} size={40} color={c.text} style={{ lineHeight: 48, fontVariant: ['tabular-nums'] }} />;
 }
 
 /** The sweep key: a four-way arrow and one stud socket per sweep the game

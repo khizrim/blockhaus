@@ -317,3 +317,27 @@ Recommendations:
    (each shortens games and lowers 384), and the diagonal pair (within
    noise). The gapped pair is the only new shape that doesn't hurt (thinker
    28% at 384 vs 31%), but it adds nothing either.
+
+## Unlocking shapes and banking three sweeps (2026-11-22)
+
+New draws in the main game start with singles and dominoes. Making a 48
+unlocks trominoes; making a 192 unlocks the square. Each unlocked shape
+retains its previous weight. The current tray and visible preview are
+honoured across unlocks and when resuming an older save. A three-merge
+placement still earns one sweep; the player can now keep three.
+
+`node sim/earn.js phases 300` runs every variant and player on seeds 1–300.
+Lengths are median actions (placements plus swipes), capped at 500 in this
+experiment. Each percentage is the share that reached the tile by that point.
+
+| Deck / sweep cap | Thinker actions | Thinker 192 / 384 | Noisy actions | Noisy 192 / 384 | Random swiper actions |
+|---|---:|---:|---:|---:|---:|
+| Full / 2 (previous) | 239 | 76% / 31% | 207 | 64% / 18% | 48 |
+| Full / 3 | 265 | 79% / 34% | 224 | 68% / 23% | 48 |
+| Phased / 2 | 268 | 86% / 36% | 243 | 74% / 21% | 85 |
+| Phased / 3 (current) | 304 | 90% / 44% | 250 | 82% / 22% | 85 |
+
+The phased deck accounts for most of the improvement at 192. The random
+swiper reached 192 in zero runs in every variant. The bots judge just one
+action ahead, so whether a person deliberately saves the third sweep is
+still a playtest question. Daily uses its original deck and rules.

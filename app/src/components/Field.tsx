@@ -25,6 +25,8 @@ import { TileNum } from './TileNum';
 export type CellLook = {
   /** Not a partner of the held piece: faded toward the socket. */
   dim?: boolean;
+  /** A low tile with no open side or adjacent partner. */
+  trapped?: boolean;
   /** Where a held piece would land: its silhouette in the socket. */
   ghost?: number;
   /** About to be absorbed by a merge. */
@@ -158,7 +160,7 @@ const SocketCell = memo(function SocketCell({ left, top, size, enterDelay }: { l
 const sameLook = (a?: CellLook, b?: CellLook) =>
   a === b ||
   (!!a && !!b &&
-    a.dim === b.dim && a.ghost === b.ghost && a.absorb === b.absorb && a.pop === b.pop && a.land === b.land &&
+    a.dim === b.dim && a.trapped === b.trapped && a.ghost === b.ghost && a.absorb === b.absorb && a.pop === b.pop && a.land === b.land &&
     a.shadow === b.shadow && a.enterDelay === b.enterDelay &&
     (a.lean?.[0] ?? 0) === (b.lean?.[0] ?? 0) && (a.lean?.[1] ?? 0) === (b.lean?.[1] ?? 0));
 const sameCell = (a: CellProps, b: CellProps) =>
@@ -249,7 +251,7 @@ const Cell = memo(function Cell({ i, w, wave, v, left, top, size, numbers, look,
         v={v}
         size={size}
         numbers={numbers}
-        fill={dim ? mix(c.tile[rk], c.canvas, 0.3) : undefined}
+        fill={dim ? mix(c.tile[rk], c.canvas, 0.3) : look?.trapped ? mix(c.tile[rk], '#343437', 0.68) : undefined}
         ink={dim ? c.faint : undefined}
         style={look?.absorb ? { opacity: 0.85 } : undefined}>
         {waves ? <Glint wave={wave!} i={i} w={w} size={size} /> : null}
