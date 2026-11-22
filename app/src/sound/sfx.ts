@@ -67,7 +67,28 @@ export const SOUND_NAMES = Object.keys(SRC) as SoundName[];
 
 /** Two players per sound so a quick repeat (two placements, a chain) never cuts itself off. */
 const VOICES = 2;
-const pool = new Map<SoundName, { players: AudioPlayer[]; next: number }>();
+type Voice = { player: AudioPlayer; request: number; rewind?: Promise<void> };
+const pool = new Map<SoundName, { voices: Voice[]; next: number }>();
+
+function rewind(voice: Voice) {
+  if (!voice.rewind) {
+    voice.rewind = voice.player.seekTo(0, 0, 0).finally(() => { voice.rewind = undefined; });
+  }
+  return voice.rewind;
+}
+
+function createVoice(name: SoundName): Voice {
+  const player = createAudioPlayer(SRC[name]);
+  player.shouldCorrectPitch = false;
+  const voice: Voice = { player, request: 0 };
+  player.addListener('playbackStatusUpdate', (status) => {
+    // Rewind between events, while this voice is idle.
+    if (status.didJustFinish && !player.playing && player.currentTime > 0) {
+      void rewind(voice).catch(() => {});
+    }
+  });
+  return voice;
+}
 
 let soundOn = true;
 let hapticsOn = true;
@@ -116,7 +137,7 @@ function init() {
   mode();
   if (WEB) return initWeb();
   for (const name of SOUND_NAMES) {
-    pool.set(name, { players: Array.from({ length: VOICES }, () => createAudioPlayer(SRC[name])), next: 0 });
+    pool.set(name, { voices: Array.from({ length: VOICES }, () => createVoice(name)), next: 0 });
   }
 }
 
@@ -184,7 +205,7 @@ function kickMusic() {
 /* A cascade's notes ring one over the next, so a long chain piles up into
    a cluster. At most two merge notes ring at once: a third one stops the
    oldest, so the chain stays a climbing line. */
-const ringing: AudioPlayer[] = [];
+const ringing: Voice[] = [];
 const ringingWeb: AudioBufferSourceNode[] = [];
 
 function playWeb(name: SoundName, rate: number) {
@@ -225,19 +246,32 @@ export function play(name: SoundName, rate = 1) {
   if (WEB) return playWeb(name, rate);
   const v = pool.get(name);
   if (!v) return;
-  const p = v.players[v.next];
+  const voice = v.voices[v.next];
   v.next = (v.next + 1) % VOICES;
+  const player = voice.player;
+  const request = ++voice.request;
+  const start = () => {
+    if (voice.request !== request || !soundOn || away) return;
+    player.setPlaybackRate(rate);
+    player.play();
+  };
+
   try {
-    // The pitch moves with the rate: a step up the chain is a step up the scale.
-    p.shouldCorrectPitch = false;
-    p.setPlaybackRate(rate);
-    p.seekTo(0).catch(() => {});
-    p.play();
     if (name.startsWith('merge-')) {
-      const i = ringing.indexOf(p);
+      const i = ringing.indexOf(voice);
       if (i >= 0) ringing.splice(i, 1);
-      ringing.push(p);
-      while (ringing.length > 2) ringing.shift()!.pause();
+      ringing.push(voice);
+      if (ringing.length > 2) {
+        const oldest = ringing.shift()!;
+        oldest.request++;
+        oldest.player.pause();
+      }
+    }
+    if (!voice.rewind && !player.playing && player.currentTime === 0) {
+      start();
+    } else {
+      player.pause();
+      void rewind(voice).then(start).catch(() => {});
     }
   } catch {
     // Sound is a garnish: a failed play never reaches the game.
