@@ -8,11 +8,11 @@ Play it on the web at https://blockhaus-game.netlify.app, or install the Android
 
 These are the app's rules (`CASCADE` in the engine).
 
-- **Pairing (Threes economy):** `1 + 2 → 3`, then equals double: `3 → 6 → 12 → 24 → 48 → 96 → 192 → 384`. `1 + 1` and `2 + 2` do not merge. The bigger tile takes the smaller in.
+- **Pairing (Threes economy):** `1 + 2 → 3`, then equals double: `3 → 6 → 12 → 24 → 48 → 96 → 192 → 384 → 768 → …`. `1 + 1` and `2 + 2` do not merge. The bigger tile takes the smaller in.
 - **Chains:** a tile that has just merged looks again for a partner, so one placement can climb several rungs. At a fork the chain climbs the longer ladder; a tie pulls toward the bottom-left. The third and fourth merges of a chain score double, the fifth and beyond triple.
 - **Sweeps:** a sweep slides the whole board one way, 2048-style, and a tile it merges may merge again down the line. Each tray brings one sweep, a placement whose chain makes three merges earns another, two at most in hand.
 - **Deck:** singles, dominoes, some trominoes and the 2×2 square. The dealer leans toward whichever of 1 and 2 has more open sides to pair with, never hands over an all-same tray, and shows the next tray's shapes ahead.
-- **Goal:** make a 384. The game ends when no piece fits and no sweep merges anything; after the goal the run carries on for score.
+- **Personal best:** build bigger tiles and beat your own score. Reaching a new tile is a milestone, not a victory; the run ends only when no legal move remains.
 
 ## App
 

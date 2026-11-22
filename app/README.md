@@ -15,7 +15,7 @@ Builds: CI makes an Android APK and a Netlify web deploy (see the root README); 
 
 ## What is here
 
-- `src/app/` screens (Expo Router): `index` poster menu, `game`, `pause`, `win`, `over`, `settings`, `howto` (rules in five pages).
+- `src/app/` screens (Expo Router): `index` poster menu, `game`, `pause`, `over`, `settings`, `howto` (rules in five pages).
 - `src/game/` the running game: `engine.js` (the rules), `store.tsx` (game and record), `lessons.ts` (the tutorial), `slide.ts` (sweep animation moves), `seen.ts` (sweep moments play big only the first few times).
 - `src/components/Field.tsx` the one renderer for every grid: board, tray pieces, cover, lesson art. Same-value touching tiles form a field: thick lines between fields, thin folds inside.
 - `src/components/` also: `Block`, `TileNum`, `Track` (the ladder), `Formula` (lesson formulas), `Overlay`, `ui.tsx` (buttons, toggles, wordmark), `icons.tsx`.
@@ -38,7 +38,7 @@ Theme (system, light, dark), language (system, Русский, English), sound, 
 
 ## Sound
 
-The board's sounds are synthesised by `scripts/make-sounds.py` (numpy only) into `assets/sounds/*.wav`; they use no samples. Placing, sweeps and the wall knock match the music (`scripts/music/make-stings.py`): a short low marimba note per piece size, a cabasa roll that swells as the blocks speed up, and a soft felt thump when they hit the wall. Merges, milestones, the win and game over are played by the music's band (`scripts/music/make-stings.py`): a vibraphone climbing the C major pentatonic one step per merge of a chain, D5 upwards, so a cascade audibly climbs, and the music steps back for a moment under a long chain, a new best and the win. `src/sound/sfx.ts` plays them with the matching haptic, follows the Sound and Vibration settings, respects the silent switch and mixes with other apps' audio. On the web, sounds go through Web Audio (`src/sound/webAudio.ts`) so Safari plays them without lag.
+The board's sounds are synthesised by `scripts/make-sounds.py` (numpy only) into `assets/sounds/*.wav`; they use no samples. Placing, sweeps and the wall knock match the music (`scripts/music/make-stings.py`): a short low marimba note per piece size, a cabasa roll that swells as the blocks speed up, and a soft felt thump when they hit the wall. Merges, milestones and game over are played by the music's band (`scripts/music/make-stings.py`): a vibraphone climbing the C major pentatonic one step per merge of a chain, D5 upwards, so a cascade audibly climbs, and the music steps back for a moment under a long chain, a new best. `src/sound/sfx.ts` plays them with the matching haptic, follows the Sound and Vibration settings, respects the silent switch and mixes with other apps' audio. On the web, sounds go through Web Audio (`src/sound/webAudio.ts`) so Safari plays them without lag.
 
 Background music is "Blocks", one 71-second loop from `scripts/music/run.py` (22 kHz mono WAV, loops without a gap): a small wooden band on a 3+3+2 groove at 108 BPM, one bar per move, with marimba, upright bass, a clarinet tune and a bassoon answer, all in C major and below the merge notes. The music and its stings are made from samples: General MIDI instruments from FluidR3_GM (MIT licence), rendered offline with FluidSynth. It has its own Music toggle, fades in and out and dims on pause.
 

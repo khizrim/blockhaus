@@ -47,7 +47,6 @@ const SRC = {
   tap: require('../../assets/sounds/tap.wav'),
   'toggle-on': require('../../assets/sounds/toggle-on.wav'),
   'toggle-off': require('../../assets/sounds/toggle-off.wav'),
-  win: require('../../assets/sounds/win.wav'),
   over: require('../../assets/sounds/over.wav'),
   hum: require('../../assets/sounds/hum.wav'),
   repel: require('../../assets/sounds/repel.wav'),
@@ -321,11 +320,6 @@ export const fx = {
   full: () => {
     play('full');
     buzz(() => Haptics.selectionAsync());
-  },
-  win: () => {
-    play('win');
-    duck(1500);
-    buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
   },
   over: () => {
     play('over');

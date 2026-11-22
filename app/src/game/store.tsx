@@ -7,19 +7,19 @@ import { FIRST_TRAY, LESSONS } from './lessons';
 /* The one running game and the player's record, shared by every screen and
    saved after every move, so closing the app never loses a game. */
 
-export type Stats = { best: number; bestTile: number; played: number; wins: number; total: number };
+export type Stats = { best: number; bestTile: number; played: number; total: number };
 /** How sweeps work in the free game: free (each pushes a piece in) or earned by cascades. */
 export type Rules = 'free' | 'cascade';
 const rulesConfig = (r: Rules) => (r === 'cascade' ? engine.CASCADE : undefined);
 
 const KEY = 'blockhaus:v1';
-const EMPTY: Stats = { best: 0, bestTile: 0, played: 0, wins: 0, total: 0 };
+const EMPTY: Stats = { best: 0, bestTile: 0, played: 0, total: 0 };
 // `used`: sweeps made in this game.
 const FIELDS = ['board', 'tray', 'next', 'sweeps', 'score', 'merges', 'bestTile', 'moves', 'won', 'over', 'used'] as const;
 
 type GameFields = Pick<Game, (typeof FIELDS)[number]>;
 type Saved = {
-  game: GameFields; stats: Stats; winSeen: boolean; learned?: boolean;
+  game: GameFields; stats: Stats; learned?: boolean;
   /** Rules of the free game on the board, and the ones the next free game starts with. */
   gameRules?: Rules; rules?: Rules;
   /** The player chose the rules in the settings (before 2026-11-02 `rules` was always written, as 'free'). */
@@ -32,8 +32,6 @@ type Store = {
   /** Bumps on every change, for memo keys. */
   version: number;
   stats: Stats;
-  /** The win screen was shown for this game; later merges don't show it again. */
-  winSeen: boolean;
   /** A game worth continuing: started and not over. */
   inProgress: boolean;
   /** The first-game lesson was finished or skipped. */
@@ -47,7 +45,6 @@ type Store = {
   place: (slot: number, ox: number, oy: number) => PlaceResult | null;
   sweep: (dir: Dir) => SweepResult | null;
   newGame: () => void;
-  markWinSeen: () => void;
   resetProgress: () => void;
   /** Rules of the game on the board. */
   rules: Rules;
@@ -67,7 +64,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const gRef = useRef<Game>(engine.newGame());
   const [version, setVersion] = useState(0);
   const [stats, setStats] = useState<Stats>(EMPTY);
-  const [winSeen, setWinSeen] = useState(false);
   const [ready, setReady] = useState(false);
   const [learned, setLearned] = useState(false);
   const [lesson, setLesson] = useState<number | null>(null);
@@ -83,8 +79,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (!raw) return;
         const s = JSON.parse(raw) as Saved;
         gRef.current = restore(s.game, rulesConfig(s.gameRules ?? 'free'));
-        setStats({ ...EMPTY, ...s.stats });
-        setWinSeen(!!s.winSeen);
+        // Preserve the personal record from older saves; the old win count is obsolete.
+        const { best, bestTile, played, total } = { ...EMPTY, ...s.stats };
+        setStats({ best, bestTile, played, total });
         setLearned(!!s.learned || (s.stats?.played ?? 0) > 0);
       })
       .catch(() => {})
@@ -102,10 +99,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const fields = (x: Game) => Object.fromEntries(FIELDS.map((f) => [f, x[f]])) as GameFields;
     AsyncStorage.setItem(
       KEY,
-      JSON.stringify({ game: fields(g), stats, winSeen, learned, gameRules: rulesOf(g) } satisfies Saved),
+      JSON.stringify({ game: fields(g), stats, learned, gameRules: rulesOf(g) } satisfies Saved),
     ).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, version, stats, winSeen, learned, lesson]);
+  }, [ready, version, stats, learned, lesson]);
 
   const bump = () => setVersion((v) => v + 1);
 
@@ -117,7 +114,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
       best: Math.max(s.best, g.score),
       bestTile: Math.max(s.bestTile, g.bestTile),
       played: s.played + 1,
-      wins: s.wins + (g.won ? 1 : 0),
     }));
   }, []);
 
@@ -162,7 +158,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setLesson(null);
     saved.current = null;
     gRef.current = engine.newGame(rulesConfig(nextRules));
-    setWinSeen(false);
     bump();
   }, [record, lesson, nextRules]);
 
@@ -217,7 +212,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
       gRef.current = g;
     }
     saved.current = null;
-    setWinSeen(false);
     bump();
   }, [nextRules, record]);
 
@@ -234,7 +228,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
         best: Math.max(stats.best, g.score),
         bestTile: Math.max(stats.bestTile, g.bestTile),
       },
-      winSeen,
       inProgress: lesson === null && g.moves > 0 && !g.over,
       learned,
       lesson,
@@ -243,12 +236,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
       place,
       sweep,
       newGame,
-      markWinSeen: () => setWinSeen(true),
       resetProgress: () => {
         setStats(EMPTY);
         setLearned(false);
         gRef.current = engine.newGame();
-        setWinSeen(false);
         bump();
       },
       loadPosition: (p) => {
@@ -263,12 +254,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         ng.won = ng.bestTile >= ng.cfg.goal;
         ng.over = !engine.anyMove(ng);
         gRef.current = ng;
-        setWinSeen(false);
         bump();
       },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, version, stats, winSeen, place, sweep, newGame, learned, lesson, startLesson, finishLessons]);
+  }, [ready, version, stats, place, sweep, newGame, learned, lesson, startLesson, finishLessons]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
