@@ -262,7 +262,12 @@ right, up, down), and two equal new tiles merge into the lower or left one
 (#42, was always the later one in the row). Every script was rerun on the
 current engine and on a copy from just before #41, same seeds.
 
-**The tie rules change nothing measurable.** Cascade mode, 300 games
+The simulator's historical `win` metric means reaching its configured tile
+threshold. It is a balance benchmark, not a player-facing victory condition.
+The main mode is endless: the player aims to improve their personal best,
+and a run ends only when no legal move remains.
+
+**The tie rules change nothing measurable in the main mode.** Cascade mode, 300 games
 (`node sim/earn.js rules 300`, one-move-ahead "thinker" / blurred "noisy"):
 
 | engine | thinker moves | thinker 96 / 192 / 384 | noisy moves | noisy 96 / 192 / 384 | swiper moves |
@@ -280,7 +285,7 @@ At 60 games the same comparison swung by up to 12 points (cascade thinker
 at 192: 82 → 70%), which looked like a regression and was noise. Use 300
 games or more before reading a difference under ten points.
 
-**Where the main mode stands.** `SWEEPERS=1 node sim/simulate.js 200 freePush cascade`, win % at 384:
+**Where the main mode stands.** `SWEEPERS=1 node sim/simulate.js 200 freePush cascade`, share of runs reaching at least 384 (%):
 
 | rules | casual | regular | expert | swCasual | swRegular | swExpert | swExpert median best |
 |---|---|---|---|---|---|---|---|
@@ -297,12 +302,13 @@ Recommendations:
 
 1. **Keep the rules.** The tie changes need no compensation, and the random
    swiper still dies in under 50 pieces with nothing built.
-2. **Give strong players something past 384 in the main mode.** The
-   sweeper bots finish at 384 in 86–95% of games and keep going to 768.
-   Raising the goal would push the one-move planner from a third to a few
-   percent, so rather keep 384 as the win and treat 768 as the next
-   milestone (a second medal or a "keep going" step), with 1536 as a
-   record.
+2. **Keep the main mode endless, with a personal record as the objective.**
+   The sweeper bots reach 384 in 86–95% of games and the strongest have a
+   median best tile of 768. These are useful balance benchmarks, not fixed
+   targets that define victory. Celebrate 384, 768, 1536 and later tiles as
+   milestones on the same ladder without ending the run or announcing a
+   win. A record is individual: it is the player's own best, not a
+   predefined tile. Play continues until no legal move remains.
 3. **If the main mode should be kinder to a careful player**, the graded
    earn rule is still the strongest lever: a chain of 3 earns one sweep, 4
    two, 6 three, three in hand (`grade`): thinker 31 → 46% at 384, noisy
