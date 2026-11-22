@@ -253,3 +253,67 @@ merge. Now it takes the neighbour that lets the chain run longest. Same
 
 The random swiper is unchanged (44 moves, reaches nothing). While a piece
 is held, the sweep it would earn shows as a half-lit stud on the sweep key.
+
+## Recheck on the current rules (2026-11-21)
+
+Two engine changes landed since the last run, both only about which way a
+tie goes: a tile looks for a partner left, down, right, up (#41, was left,
+right, up, down), and two equal new tiles merge into the lower or left one
+(#42, was always the later one in the row). Every script was rerun on the
+current engine and on a copy from just before #41, same seeds.
+
+The simulator's historical `win` metric means reaching its configured tile
+threshold. It is a balance benchmark, not a player-facing victory condition.
+The main mode is endless: the player aims to improve their personal best,
+and a run ends only when no legal move remains.
+
+**The tie rules change nothing measurable in the main mode.** Cascade mode, 300 games
+(`node sim/earn.js rules 300`, one-move-ahead "thinker" / blurred "noisy"):
+
+| engine | thinker moves | thinker 96 / 192 / 384 | noisy moves | noisy 96 / 192 / 384 | swiper moves |
+|---|---|---|---|---|---|
+| before #41 | 231 | 99 / 77 / 27% | 207 | 94 / 64 / 17% | 44 |
+| now | 239 | 95 / 76 / 31% | 207 | 92 / 64 / 18% | 47 |
+
+The other tables move as little: `thinking.js 300` (cascade thinker 85 →
+83% at 192, 41 → 41% at 384; free sweeps at 384, thinker 89 → 81%, noisy
+89 → 90%), every `earn.js` variant within a few points, and the daily medal
+percentiles within 3% (`daily.js 300 weekdays`, plain bronze / silver /
+gold 402 / 414 / 651 → 405 / 411 / 648), so the medals stay.
+
+At 60 games the same comparison swung by up to 12 points (cascade thinker
+at 192: 82 → 70%), which looked like a regression and was noise. Use 300
+games or more before reading a difference under ten points.
+
+**Where the main mode stands.** `SWEEPERS=1 node sim/simulate.js 200 freePush cascade`, share of runs reaching at least 384 (%):
+
+| rules | casual | regular | expert | swCasual | swRegular | swExpert | swExpert median best |
+|---|---|---|---|---|---|---|---|
+| free sweeps (settings) | 0 | 3 | 15 | 26 | 51 | 54 | 384 |
+| cascade (main mode) | 0 | 2 | 12 | 28 | 86 | 95 | 768 |
+
+The one-move thinkers of `earn.js` / `thinking.js` sit between: 31–41% at
+384. So in the main mode a player who places without swiping rarely gets
+there, a one-move planner gets there in about a third of games, and a
+player who weighs a sweep before every piece nearly always does, with half
+their games going on to 768.
+
+Recommendations:
+
+1. **Keep the rules.** The tie changes need no compensation, and the random
+   swiper still dies in under 50 pieces with nothing built.
+2. **Keep the main mode endless, with a personal record as the objective.**
+   The sweeper bots reach 384 in 86–95% of games and the strongest have a
+   median best tile of 768. These are useful balance benchmarks, not fixed
+   targets that define victory. Celebrate 384, 768, 1536 and later tiles as
+   milestones on the same ladder without ending the run or announcing a
+   win. A record is individual: it is the player's own best, not a
+   predefined tile. Play continues until no legal move remains.
+3. **If the main mode should be kinder to a careful player**, the graded
+   earn rule is still the strongest lever: a chain of 3 earns one sweep, 4
+   two, 6 three, three in hand (`grade`): thinker 31 → 46% at 384, noisy
+   18 → 26%, the swiper still at zero, games about 50 moves longer.
+4. **Not worth it now:** a second 2x2 square, the T, or a four-long bar
+   (each shortens games and lowers 384), and the diagonal pair (within
+   noise). The gapped pair is the only new shape that doesn't hurt (thinker
+   28% at 384 vs 31%), but it adds nothing either.

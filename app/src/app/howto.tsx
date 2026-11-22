@@ -6,9 +6,7 @@ import { Field } from '@/components/Field';
 import { Arrow, Body, Button, Heading, Ladder, Screen, TopBar } from '@/components/ui';
 import { useTheme } from '@/design/theme';
 import { space } from '@/design/system';
-import engine from '@/game/engine';
-
-const GOAL = engine.DEFAULTS.goal;
+import { LADDER } from '@/design/tokens';
 
 /* How to play: five cards, each a tiny board drawn with the real renderer.
    The result of each card pops on a loop so the cause and effect read. */
@@ -46,14 +44,14 @@ const ART: (() => ReactNode)[] = [
   () => <Eq w={3} h={3} a={[1, 0, 2, 0, 12, 0, 6, 0, 0]} b={[3, 0, 0, 12, 0, 0, 6, 0, 0]} cell={34} />,
   () => (
     <View style={{ alignItems: 'center' }}>
-      <Ladder best={GOAL} size={28} animate />
+      <Ladder best={LADDER[LADDER.length - 1]} size={28} animate />
     </View>
   ),
 ];
 
 export default function HowTo() {
   const { c, t } = useTheme();
-  const PAGES = t.rulesPages(GOAL).map((p, k) => ({ ...p, art: ART[k] }));
+  const PAGES = t.rulesPages().map((p, k) => ({ ...p, art: ART[k] }));
   const { width } = useWindowDimensions();
   const pageW = Math.min(width, 440) - 32;
   const [page, setPage] = useState(0);

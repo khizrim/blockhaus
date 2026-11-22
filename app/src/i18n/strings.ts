@@ -64,9 +64,7 @@ export const ru = {
     'Смахните доску влево',
     'Квадрат ставит четыре блока сразу и возвращает сдвиг',
   ],
-  // Win and game over
-  won: (goal: number, n: number) => `Вы собрали ${goal}. ${points(n, String(n))}.`,
-  keepPlaying: 'Играть дальше',
+  // Game over
   noRoom: (n: number) => `Места нет. ${points(n, String(n))}.`,
   again: 'Ещё раз',
   // Settings
@@ -97,7 +95,7 @@ export const ru = {
   step: (k: number, n: number) => `Шаг ${k} из ${n}`,
   next: 'Дальше',
   gotIt: 'Понятно',
-  rulesPages: (goal: number) => [
+  rulesPages: () => [
     {
       title: 'Ставьте фигуры',
       text: 'Перетащите фигуру из лотка на свободные клетки. В лотке три фигуры, порядок выбираете вы.',
@@ -115,8 +113,8 @@ export const ru = {
       text: 'Смахните доску, и всё съедет в одну сторону, а пары по пути сольются. Сдвиги лежат жёлтыми фишками на клавише справа вверху. Один даётся за каждый лоток, ещё один за каскад из пяти слияний. Больше двух не накопить.',
     },
     {
-      title: `Соберите ${goal}`,
-      text: `Доберитесь по лесенке до ${goal}, и победа ваша. Игра кончается, когда фигурам негде встать, а сдвиги ничего не сливают. После ${goal} можно играть дальше на очки.`,
+      title: 'Побейте свой рекорд',
+      text: 'Собирайте всё более крупные плитки и набирайте очки. Партия заканчивается только тогда, когда не остаётся доступных ходов. В следующий раз попробуйте превзойти свой лучший результат.',
     },
   ],
 };
@@ -171,8 +169,6 @@ export const en: Strings = {
     'Swipe the board left',
     'A square places four blocks at once and gives a sweep back',
   ],
-  won: (goal, n) => `You made ${goal}. ${pts(n, String(n))}.`,
-  keepPlaying: 'Keep playing',
   noRoom: (n) => `No room left. ${pts(n, String(n))}.`,
   again: 'Play again',
   theme: 'Theme',
@@ -201,7 +197,7 @@ export const en: Strings = {
   step: (k, n) => `Step ${k} of ${n}`,
   next: 'Next',
   gotIt: 'Got it',
-  rulesPages: (goal) => [
+  rulesPages: () => [
     {
       title: 'Place pieces',
       text: 'Drag a piece from the tray onto empty cells. The tray holds three, in whatever order you like.',
@@ -219,8 +215,8 @@ export const en: Strings = {
       text: 'Swipe the board and everything slides one way, merging pairs as it goes. Sweeps are the yellow chips on the key at the top right. You get one per tray and one more for a cascade of five merges. You can hold two at most.',
     },
     {
-      title: `Make ${goal}`,
-      text: `Climb the ladder to ${goal} and the win is yours. The game ends when no piece fits and no sweep merges anything. After ${goal}, keep playing for points.`,
+      title: 'Beat your best',
+      text: 'Build bigger tiles and earn points. A run ends only when no legal moves remain. Next time, try to beat your own best score.',
     },
   ],
 };

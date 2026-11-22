@@ -206,23 +206,38 @@ test('with spawn sweeps the game ends only when no sweep can change anything', (
   assert.ok(E.anyMove(g));
 });
 
-test('the shipped goal is 384', () => {
-  const g = E.newGame({}, E.seeded(3));
+test('384 is a balance benchmark, not the end of a run', () => {
+  const g = E.newGame(E.CASCADE, E.seeded(3));
   g.board[idx(1, 0)] = 192; g.board[idx(0, 1)] = 192;
   g.tray[0] = piece(192);
   E.place(g, 0, 0, 0);
   assert.equal(g.bestTile, 384);
-  assert.ok(g.won);
+  assert.ok(g.won); // simulator's threshold metric
+  assert.ok(!g.over);
+  assert.ok(E.anyMove(g));
   assert.equal(E.rank(768), 11);
 });
-test('a 768 is the last rung', () => {
-  const g = E.newGame({}, E.seeded(3));
+test('reaching 768 does not end the run either', () => {
+  const g = E.newGame(E.CASCADE, E.seeded(3));
   g.board[idx(1, 0)] = 384; g.board[idx(0, 1)] = 384;
   g.tray[0] = piece(384);
   E.place(g, 0, 0, 0);
   assert.equal(g.bestTile, 768);
   assert.ok(g.won);
+  assert.ok(!g.over);
+  assert.ok(E.anyMove(g));
   assert.equal(E.rank(768), 11);
+});
+
+test('tiles continue climbing beyond the last palette rung', () => {
+  const g = E.newGame(E.CASCADE, E.seeded(3));
+  g.board[idx(1, 0)] = 768;
+  g.tray[0] = piece(768);
+  E.place(g, 0, 0, 0);
+  assert.equal(g.bestTile, 1536);
+  assert.ok(!g.over);
+  assert.ok(E.anyMove(g));
+  assert.equal(E.rank(1536), 11);
 });
 
 test('a limited sweep that moves nothing is refused and costs nothing', () => {
