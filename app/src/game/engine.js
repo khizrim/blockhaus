@@ -274,11 +274,17 @@
   }
 
   /* ---- dealing ------------------------------------------------------------ */
-  function pickShape(cfg, rng) {
-    const total = cfg.shapes.reduce((s, [, w]) => s + w, 0);
+  function shapePool(cfg, bestTile) {
+    if (!cfg.phasedShapes || bestTile >= 192) return cfg.shapes;
+    const maxCells = bestTile >= 48 ? 3 : 2;
+    return cfg.shapes.filter(([shape]) => shape.length <= maxCells);
+  }
+
+  function pickShape(pool, rng) {
+    const total = pool.reduce((s, [, w]) => s + w, 0);
     let r = rng() * total;
-    for (const [shape, w] of cfg.shapes) { if ((r -= w) < 0) return shape; }
-    return cfg.shapes[cfg.shapes.length - 1][0];
+    for (const [shape, w] of pool) { if ((r -= w) < 0) return shape; }
+    return pool[pool.length - 1][0];
   }
 
   /** Chance the next piece is made of 1s. 'coin' is always a half. 'need'
@@ -309,7 +315,7 @@
     return Math.min(1 - lo, Math.max(lo, p));
   }
 
-  function deal(cfg, board, rng, shape = pickShape(cfg, rng)) {
+  function deal(cfg, board, rng, shape = pickShape(shapePool(cfg, Math.max(0, ...board)), rng)) {
     if (shape.length === 1 && cfg.threeChance && rng() < cfg.threeChance) {
       return { cells: [[0, 0, 3]], used: false };
     }
@@ -328,11 +334,14 @@
   const pieceValue = p => (p.cells.every(c => c[2] === p.cells[0][2]) ? p.cells[0][2] : null);
 
   /** Three shapes for a tray to come, before any value is chosen. */
-  const dealShapes = (cfg, rng) => [pickShape(cfg, rng), pickShape(cfg, rng), pickShape(cfg, rng)];
+  function dealShapes(cfg, rng, bestTile = 0) {
+    const pool = shapePool(cfg, bestTile);
+    return [pickShape(pool, rng), pickShape(pool, rng), pickShape(pool, rng)];
+  }
 
   /** A tray: given shapes (from dealShapes) or fresh ones, with values read
       off the board as it is now. */
-  function dealTray(cfg, board, rng, shapes = dealShapes(cfg, rng)) {
+  function dealTray(cfg, board, rng, shapes = dealShapes(cfg, rng, Math.max(0, ...board))) {
     const tray = shapes.map(sh => deal(cfg, board, rng, sh));
     if (cfg.mixedTray) {
       const vals = tray.map(pieceValue);
@@ -376,14 +385,14 @@
       cfg, rng,
       board: new Array(N * N).fill(0),
       tray: [], sweeps: cfg.sweepsPerTray,
-      score: 0, merges: 0, bestTile: 0, moves: 0,
+      score: 0, merges: 0, bestTile: 0, moves: 0, turns: 0,
       won: false, over: false,
     };
     for (const i of cfg.stones || []) g.board[i] = STONE;
     if (cfg.startTiles) setStart(g.board, cfg.startTiles, rng, cfg.startPool);
     g.tray = dealTray(cfg, g.board, rng);
-    if (cfg.peek) g.next = dealShapes(cfg, rng);
     g.bestTile = Math.max(0, ...g.board);
+    if (cfg.peek) g.next = dealShapes(cfg, rng, g.bestTile);
     return g;
   }
 
@@ -456,8 +465,10 @@
     if (res.bonus) g.sweeps++;
     res.refilled = false;
     if (g.tray.every(t => t.used)) {
-      g.tray = dealTray(g.cfg, g.board, g.rng, g.next);
-      if (g.cfg.peek) g.next = dealShapes(g.cfg, g.rng);
+      // Honour the shapes already shown, including in games saved before
+      // phased dealing. Only the next fresh draw uses the unlocked pool.
+      g.tray = dealTray(g.cfg, g.board, g.rng, g.next ?? dealShapes(g.cfg, g.rng, g.bestTile));
+      if (g.cfg.peek) g.next = dealShapes(g.cfg, g.rng, g.bestTile);
       g.sweeps = Math.max(g.sweeps, g.cfg.sweepsPerTray);
       res.refilled = true;
     }
@@ -591,7 +602,8 @@
   // as before (218 placements, was 210) and reaches 384 in a quarter of
   // games, was a sixth. Swiping at random still dies in about 45 pieces.
   const CASCADE = {
-    ...DEFAULTS, freeSweeps: false, sweepCost: 'none', sweepsPerTray: 1, chainBonus: 3, sweepsMax: 2,
+    ...DEFAULTS, freeSweeps: false, sweepCost: 'none', sweepsPerTray: 1, chainBonus: 3, sweepsMax: 3,
+    phasedShapes: true,
     shapes: [...SHIPPED_SHAPES, [S.sq, 0.6]],
   };
 

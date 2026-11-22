@@ -1,7 +1,7 @@
 /* Sweeps earned by chains, and new shapes: one-move-ahead players on
-   cascade rules. `node sim/earn.js rules|shapes|mix [games]`. Variant
-   names and columns as in sim/RESULTS.md (2026-11-09). Baseline is the
-   engine CASCADE, so rerun numbers shift once CASCADE changes. */
+   cascade rules. `node sim/earn.js rules|shapes|mix|phases [games]`. Variant
+   names and columns as in sim/RESULTS.md. The original comparisons keep
+   the pre-phase deck and two-sweep cap for reproducibility. */
 const E = require('../prototype/engine.js');
 const { evaluate } = require('./bot.js');
 const N = 6, D = ['left','right','up','down'];
@@ -58,7 +58,7 @@ function play(cfg, rule, seed, mode, max = 500) {
   }
   return { acts, swipes, best: g.bestTile, score: g.score };
 }
-const C = E.CASCADE;
+const C = { ...E.CASCADE, phasedShapes: false, sweepsMax: 2 };
 const off = { chainBonus: 0 };
 const RULES = {
   now5: [C, null],
@@ -88,7 +88,14 @@ const MIX = {
   at3diag: [{ ...C, chainBonus: 3, shapes: SH.diag }, null],
   at3gap: [{ ...C, chainBonus: 3, shapes: SH.gap }, null],
 };
-const V = which === 'mix' ? MIX : which === 'rules' ? RULES : Object.fromEntries([['now5', RULES.now5], ...Object.entries(SH).map(([k, s]) => [k, [{ ...C, shapes: s }, null]])]);
+// Same seed range, shape weights, evaluator and chain bonus in all four arms.
+const PHASES = {
+  baseline: [{ ...C, phasedShapes: false, sweepsMax: 2 }, null],
+  capOnly: [{ ...C, phasedShapes: false, sweepsMax: 3 }, null],
+  phasesOnly: [{ ...C, phasedShapes: true, sweepsMax: 2 }, null],
+  combined: [E.CASCADE, null],
+};
+const V = which === 'phases' ? PHASES : which === 'mix' ? MIX : which === 'rules' ? RULES : Object.fromEntries([['now5', RULES.now5], ...Object.entries(SH).map(([k, s]) => [k, [{ ...C, shapes: s }, null]])]);
 for (const [name, [cfg, rule]] of Object.entries(V)) for (const mode of ['thinker', 'noisy', 'swiper']) {
   STATS = { earned: 0, earnPl: 0, pl: 0 };
   const rs = []; for (let s = 1; s <= n; s++) rs.push(play({ ...cfg, goal: 1e6 }, rule, s, mode));

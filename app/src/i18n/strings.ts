@@ -52,17 +52,23 @@ export const ru = {
   piece: (k: number) => `Фигура ${k}`,
   emptySlot: (k: number) => `Пустой слот ${k}`,
   bestTile: (v: number) => `Лучшая плитка ${v}`,
+  tileGoal: (v: number) => `Соберите ${v}`,
+  tileRecord: (v: number) => `Рекордная плитка ${v}`,
+  newTileRecord: (v: number) => `Новый рекорд · ${v}`,
   noBestTile: 'Лучшей плитки пока нет',
   nextPiece: 'Следующая фигура',
+  spacesNow: (n: number) => `${n} ${ru3(n, 'место', 'места', 'мест')}`,
+  trappedLowTiles: (n: number) => `Единицы и двойки без свободной стороны или пары: ${n}`,
   sweeps: 'Сдвиги',
   sweepsHeld: (n: number) => `Сдвиги: ${n}`,
   lessons: [
     'Поставьте 1 рядом с 2',
     'Поставьте 2 к единице, и тройки сольются',
-    'Выберите клетку, где цепочка длиннее: три слияния дают сдвиг',
+    'Смахните вверх. Единица и двойка сольются в тройку и освободят клетку.',
+    'Поставьте единицу так, чтобы получить 12. За три слияния вы получите сдвиг.',
     'Достройте лесенку двойкой, потом запустите её единицей',
-    'Смахните доску влево',
-    'Квадрат ставит четыре блока сразу и возвращает сдвиг',
+    'Смахните влево, чтобы соединить две плитки 24. Ещё один сдвиг останется про запас.',
+    'На 48 открываются фигуры из трёх клеток. Приставьте уголок к двум двойкам, чтобы пополнить запас сдвигов.',
   ],
   // Game over
   noRoom: (n: number) => `Места нет. ${points(n, String(n))}.`,
@@ -98,7 +104,7 @@ export const ru = {
   rulesPages: () => [
     {
       title: 'Ставьте фигуры',
-      text: 'Перетащите фигуру из лотка на свободные клетки. В лотке три фигуры, порядок выбираете вы.',
+      text: 'В лотке три фигуры. Перетаскивайте их на свободные клетки в любом порядке. Сначала вам выпадают одиночки и домино. Соберите 48, чтобы открыть фигуры из трёх клеток, а на 192 появится квадрат.',
     },
     {
       title: '1 + 2 = 3',
@@ -109,12 +115,12 @@ export const ru = {
       text: 'Дальше равные плитки сливаются в следующую: 3 и 3 дают 6, 6 и 6 дают 12. Слияния идут цепочкой, и длинная цепочка выгоднее: третье и четвёртое слияние приносят вдвое больше очков, пятое и дальше втрое.',
     },
     {
-      title: 'Сдвиг',
-      text: 'Смахните доску, и всё съедет в одну сторону, а пары по пути сольются. Сдвиги лежат жёлтыми фишками на клавише справа вверху. Один даётся за каждый лоток, ещё один за каскад из пяти слияний. Больше двух не накопить.',
+      title: 'Сдвигайте поле',
+      text: 'Смахните влево, чтобы соединить 1 и 2 в верхнем ряду и освободить клетку. Жёлтые фишки показывают запас. Если он пуст, новый лоток даёт один сдвиг. За три слияния подряд при выкладке вы получите ещё один. Можно накопить три и приберечь один для тесного поля.',
     },
     {
       title: 'Побейте свой рекорд',
-      text: 'Собирайте всё более крупные плитки и набирайте очки. Партия заканчивается только тогда, когда не остаётся доступных ходов. В следующий раз попробуйте превзойти свой лучший результат.',
+      text: 'В основной игре цель — следующая плитка после вашего рекорда. Если вы уже собирали 96, попробуйте собрать 192. Партия продолжается, пока есть ходы.',
     },
   ],
 };
@@ -157,17 +163,23 @@ export const en: Strings = {
   piece: (k) => `Piece ${k}`,
   emptySlot: (k) => `Empty slot ${k}`,
   bestTile: (v) => `Best tile ${v}`,
+  tileGoal: (v) => `Make ${v}`,
+  tileRecord: (v) => `Tile record ${v}`,
+  newTileRecord: (v) => `New best · ${v}`,
   noBestTile: 'No best tile yet',
   nextPiece: 'Next piece',
+  spacesNow: (n: number) => `${n} ${n === 1 ? 'spot' : 'spots'}`,
+  trappedLowTiles: (n: number) => `Ones and twos without an open side or a partner: ${n}`,
   sweeps: 'Sweeps',
   sweepsHeld: (n) => `Sweeps: ${n}`,
   lessons: [
     'Put the 1 next to the 2',
     'Put the 2 by the 1, and the threes merge',
-    'Pick the cell with the longer chain: three merges earn a sweep',
+    'Swipe up. The 1 and 2 merge into a 3 and free a cell.',
+    'Place the 1 where it will make a 12. Three merges earn a sweep.',
     'Finish the ladder with the 2, then fire it with the 1',
-    'Swipe the board left',
-    'A square places four blocks at once and gives a sweep back',
+    'Swipe left to bring the two 24s together. You still have one sweep in reserve.',
+    'At 48, three-cell pieces enter the tray. Fit the corner next to the two 2s to earn another sweep.',
   ],
   noRoom: (n) => `No room left. ${pts(n, String(n))}.`,
   again: 'Play again',
@@ -200,7 +212,7 @@ export const en: Strings = {
   rulesPages: () => [
     {
       title: 'Place pieces',
-      text: 'Drag a piece from the tray onto empty cells. The tray holds three, in whatever order you like.',
+      text: 'Drag the three pieces from the tray onto empty cells in any order. You start with singles and dominoes. Make a 48 to unlock three-cell pieces and a 192 to unlock the square.',
     },
     {
       title: '1 + 2 = 3',
@@ -211,12 +223,12 @@ export const en: Strings = {
       text: 'From there, equal tiles merge into the next one: 3 and 3 make 6, 6 and 6 make 12. Merges run in chains, and longer chains pay more: the third and fourth merges score double, the fifth and beyond triple.',
     },
     {
-      title: 'Sweep',
-      text: 'Swipe the board and everything slides one way, merging pairs as it goes. Sweeps are the yellow chips on the key at the top right. You get one per tray and one more for a cascade of five merges. You can hold two at most.',
+      title: 'Sweep the board',
+      text: 'Swipe left to bring the 1 and 2 together in the top row and free a cell. The yellow chips show your sweeps. An empty key gets one with the next tray. Three merges in a single placement earn another. You can hold three and save one for a tight spot.',
     },
     {
       title: 'Beat your best',
-      text: 'Build bigger tiles and earn points. A run ends only when no legal moves remain. Next time, try to beat your own best score.',
+      text: 'In the main game, aim for the tile above your personal best. If you’ve made a 96 before, go for 192. Keep playing as long as you have a move.',
     },
   ],
 };

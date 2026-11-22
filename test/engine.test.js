@@ -417,7 +417,7 @@ test('merges made by the slide of a sweep score their plain level', () => {
   assert.equal(g.score, 18 + res.pushed.steps.reduce((s, st) => s + st.pts, 0));
 });
 
-test('cascade mode: one sweep a tray, a cascade of three earns one more, two at most', () => {
+test('cascade mode: one sweep a tray and a cascade of three earns one more', () => {
   const g = E.newGame(E.CASCADE, E.seeded(5));
   assert.equal(g.sweeps, 1);
   assert.equal(g.cfg.freeSweeps, false);
@@ -443,9 +443,57 @@ test('cascade mode: one sweep a tray, a cascade of three earns one more, two at 
   assert.ok(!g.tray[2].used);
 });
 
-test('cascade mode deals the 2x2 square', () => {
-  assert.ok(E.CASCADE.shapes.some(([sh]) => sh === E.SHAPES.sq));
-  assert.ok(!E.DEFAULTS.shapes.some(([sh]) => sh === E.SHAPES.sq));
+test('a cascade can bank a third sweep, and refilling a tray never banks a fourth', () => {
+  const g = E.newGame(E.CASCADE, E.seeded(5));
+  g.sweeps = 2;
+  for (let slot = 0; slot < 3; slot++) {
+    g.board = empty();
+    g.board[idx(1, 0)] = 2; g.board[idx(2, 0)] = 3; g.board[idx(3, 0)] = 6;
+    g.tray[slot] = piece(1);
+    const result = E.place(g, slot, 0, 0);
+    assert.equal(result.steps.length, 3);
+    assert.equal(result.bonus, slot === 0);
+    assert.equal(g.sweeps, 3);
+  }
+});
+
+test('the main deck unlocks trominoes at 48 and the square at 192', () => {
+  const lastDraw = () => 0.9999;
+  const g = E.newGame(E.CASCADE, lastDraw);
+  assert.ok(g.tray.every(p => p.cells.length === 2));
+  assert.ok(g.next.every(sh => sh.length === 2));
+  for (const [best, max] of [[24, 2], [48, 3], [96, 3], [192, 4], [384, 4]]) {
+    assert.equal(E.dealShapes(E.CASCADE, lastDraw, best)[0].length, max);
+  }
+  // The short daily mode remains on the full, independently calibrated deck.
+  const daily = E.newGame(E.DAILY, E.seeded(4));
+  assert.equal(E.dealShapes(daily.cfg, lastDraw, 0)[0].length, 3);
+});
+
+test('new unlocks affect the next preview, including on the move that refills the tray', () => {
+  const g = E.newGame(E.CASCADE, () => 0.9999);
+  for (const [value, unlockedSize] of [[24, 3], [96, 4]]) {
+    const shown = structuredClone(g.next);
+    g.board = empty();
+    g.board[idx(1, 0)] = value;
+    g.bestTile = value;
+    g.tray = [piece(value), { ...piece(1), used: true }, { ...piece(1), used: true }];
+    assert.ok(E.place(g, 0, 0, 0).refilled);
+    assert.deepEqual(g.tray.map(p => p.cells.map(([x, y]) => [x, y])), shown);
+    assert.equal(g.bestTile, 2 * value);
+    assert.ok(g.next.every(sh => sh.length === unlockedSize));
+  }
+});
+
+test('restored early games deal their saved preview even if it contains a late shape', () => {
+  const g = E.newGame(E.CASCADE, () => 0.9999);
+  g.next = [E.SHAPES.sq, E.SHAPES.triH, E.SHAPES.domV];
+  for (let slot = 0; slot < 3; slot++) {
+    g.board = empty();
+    assert.ok(E.place(g, slot, 0, 0));
+  }
+  assert.deepEqual(g.tray.map(p => p.cells.length), [4, 3, 2]);
+  assert.ok(g.next.every(sh => sh.length <= 2));
 });
 
 test('a stone walls a sweep and never merges', () => {

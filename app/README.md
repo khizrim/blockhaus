@@ -26,15 +26,15 @@ Builds: CI makes an Android APK and a Netlify web deploy (see the root README); 
 
 ## Rules and saving
 
-The game runs `src/game/engine.js`, a verbatim copy of `prototype/engine.js` (the engine the tests and the balance simulator use; `npm test` at the repo root fails if the copy drifts), with the `CASCADE` balance: one sweep per tray, one more for a chain of three merges, two at most in hand. `src/game/store.tsx` holds the running game and the record, saved to AsyncStorage after every move, so closing the app never loses a game. A placement shows the laid piece, then each merge of the chain one beat apart with its note, and the board stays playable while a chain runs. Holding a piece shows how far each spot's chain would run and whether it earns a sweep.
+The game runs `src/game/engine.js`, a verbatim copy of `prototype/engine.js` (the engine the tests and the balance simulator use; `npm test` at the repo root fails if the copy drifts). In the main `CASCADE` mode, a new tray refills an empty sweep key to one. A placement with at least three merges earns one sweep, up to three in hand. `src/game/store.tsx` holds the running game and the record, saved to AsyncStorage after every move, so closing the app never loses a game. A placement shows the laid piece, then each merge of the chain one beat apart with its note, and the board stays playable while a chain runs. Holding a piece shows how far each spot's chain would run and whether it earns a sweep.
 
 ## Tutorial
 
-The first game teaches itself (`src/game/lessons.ts`): no cards, one thing at a time on a board that grows from 2×2 to 4×4 to the full 6×6. It teaches `1 + 2 = 3`, the first chain, choosing the longer chain, building one and firing it, the swipe, and the 2×2 square, then the game carries on from that board. A wrong move replays the step. Lessons can be skipped from the pause menu and replayed from Settings → Help; the rules pages are there too.
+The first game teaches itself on a board that grows from 2×2 to 4×4 to the full 6×6 (`src/game/lessons.ts`). After the first chain, swipe up to make room. Then place pieces to earn a sweep, slide two 24s together while keeping a sweep for later, and use the first three-cell piece at 48. The game continues on that board. A wrong placement replays the step. Lessons can be skipped from the pause menu and replayed from Settings → Help; the rules pages are there too.
 
 ## Settings
 
-Theme (system, light, dark), language (system, Русский, English), sound, music, vibration and hints, all saved on the device. The record (best score) can be wiped from the same screen.
+Theme, language, sound, music, vibration and hints are saved on the device. Settings shows the best tile, best score and local run history. Players can share the history as CSV or reset their progress.
 
 ## Sound
 

@@ -10,9 +10,10 @@ These are the app's rules (`CASCADE` in the engine).
 
 - **Pairing (Threes economy):** `1 + 2 → 3`, then equals double: `3 → 6 → 12 → 24 → 48 → 96 → 192 → 384 → 768 → …`. `1 + 1` and `2 + 2` do not merge. The bigger tile takes the smaller in.
 - **Chains:** a tile that has just merged looks again for a partner, so one placement can climb several rungs. At a fork the chain climbs the longer ladder; a tie pulls toward the bottom-left. The third and fourth merges of a chain score double, the fifth and beyond triple.
-- **Sweeps:** a sweep slides the whole board one way, 2048-style, and a tile it merges may merge again down the line. Each tray brings one sweep, a placement whose chain makes three merges earns another, two at most in hand.
-- **Deck:** singles, dominoes, some trominoes and the 2×2 square. The dealer leans toward whichever of 1 and 2 has more open sides to pair with, never hands over an all-same tray, and shows the next tray's shapes ahead.
-- **Personal best:** build bigger tiles and beat your own score. Reaching a new tile is a milestone, not a victory; the run ends only when no legal move remains.
+- **Sweeps:** swipe in the direction that brings pairs together or clears room for a piece. A moving tile can merge several times in a line. A new tray replenishes an empty sweep key to one. A placement with three or more merges earns one sweep, up to three in reserve.
+- **Deck:** the main game starts with singles and dominoes. A best tile of 48 unlocks trominoes for future deals, and 192 unlocks the 2×2 square. The dealer leans toward whichever of 1 and 2 has more open sides to pair with, never hands over an all-same tray, and shows the next tray's shapes ahead.
+- **Personal best:** aim for 24, then for one rung above your best tile. A new record advances the target immediately. The run ends when no legal move remains.
+- **Daily game:** the local date determines the starting board and random seed. One run of up to 30 pieces earns a medal by score. It can be paused and resumed independently of the main game.
 
 ## App
 

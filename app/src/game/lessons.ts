@@ -3,7 +3,7 @@ import engine, { type Dir, type Game, type Piece } from './engine';
 
 /* The first game teaches itself on a board that grows (2026-11-09, after
    Threes' tutorial: learn by doing, one thing at a time, on a tiny board),
-   and it teaches above all to build chains and to think in them.
+   alternating between placing pieces and sweeping the board.
 
    It starts as a plate of 2×2 sockets in the middle of the board. The board
    is never reset between steps: what the last move made stays, and the next
@@ -17,22 +17,21 @@ import engine, { type Dir, type Game, type Piece } from './engine';
      meets, → is a merge of the chain; the stud enters a formula only on
      the last step, after the swipe has shown what it is for.)
 
-     3  4×4  choose the chain     two cells are open; the board shows, while
+     3  2×2  swipe up             the new tray supplies a sweep; use it to
+                                  bring 1 and 2 together and free a socket
+     4  4×4  choose the chain     two cells are open; the board shows, while
                                   the piece is held, how far each one runs and
                                   whether it earns a sweep. The short one plays
                                   out and the step comes back.
-     4  4×4  build, then fire     the 2 may go to three cells and merges
+     5  4×4  build, then fire     the 2 may go to three cells and merges
                                   with nothing in any of them; only beside the
                                   3 does it finish the ladder. The 1 then goes
                                   beside it: a run to 24, or one short merge
                                   and the step comes back. A real choice.
-     5  6×6  the swipe            spends a stud: 24 + 24 = 48
-     6  6×6  the 2×2 square       four 1s at once, a chain of three: its stud
-                                  sets into the socket the swipe emptied, so
-                                  the lessons end on a full key (2026-11-09,
-                                  after the game designer's review: earned,
-                                  spent, earned again). The game goes on
-                                  from this board: no new board, no reset.
+     6  6×6  swipe left           merge 24 + 24 = 48; keep one sweep in hand
+     7  6×6  the first tromino    three 1s at once. The chain of three adds
+                                  a sweep to the one kept in reserve. The
+                                  game goes on from this board.
 
    Only the taught moves are possible: a piece goes in only at its step's
    cells, the board slides only the taught way. Cells outside the plate hold
@@ -113,6 +112,17 @@ export const LESSONS: Lesson[] = [
     goal: has(6),
   },
   {
+    // A fresh tray guarantees one sweep. The vertical pair shows what the
+    // gesture can do even on the first, tiny board. Its 3 stays for step 4.
+    formula: ['swipeV', 1, '+', 2, '=', 3],
+    open: TINY,
+    board: board(TINY, [[2, 2, 6], [3, 2, 1], [3, 3, 2]]),
+    tray: [none(), none(), none()],
+    sweeps: 1,
+    dirs: ['up'],
+    goal: (g) => g.board[at(3, 2)] === 3 && g.board[at(3, 3)] === 0,
+  },
+  {
     // Выберите клетку, где цепочка длиннее: три слияния дают сдвиг
     formula: [1, '→', 3, '→', 6, '→', 12],
     task: [1, '+', 2, '=', 3],
@@ -151,17 +161,18 @@ export const LESSONS: Lesson[] = [
     tray: [none(), none(), none()],
     sweeps: 2,
     dirs: ['left'],
-    goal: has(48),
+    goal: (g) => g.board[at(0, 2)] === 48 && g.sweeps === 1,
   },
   {
-    // Квадрат ставит четыре блока сразу и возвращает сдвиг
-    formula: [{ grid: [[1, 1], [1, 1]] }, '=', 'stud'],
+    // At 48 the dealer introduces trominoes. Keep the spare sweep and
+    // earn a second one by placing this corner against both twos.
+    formula: [{ grid: [[1, 1], [1]] }, '=', 'stud'],
     open: FULL,
-    // A 2 and a 3 come in under the 48. Two of the square's 1s find the
+    // A 2 and a 3 come in under the 48. Two of the tromino's 1s find the
     // two 2s and their 3s make a 6: three merges, and the stud fills the
     // socket the swipe emptied. The new 3 waits under the 6 for the game.
     board: board(FULL, [[0, 2, 48], [0, 3, 2], [0, 4, 2], [0, 5, 3]]),
-    tray: [none(), piece([[0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]]), none()],
+    tray: [none(), piece([[0, 0, 1], [1, 0, 1], [0, 1, 1]]), none()],
     sweeps: 1,
     moves: [{ slot: 1, at: [at(1, 3)] }],
     goal: (g) => g.sweeps >= 2,
@@ -169,10 +180,10 @@ export const LESSONS: Lesson[] = [
 ];
 
 /** The lessons do not hand over to a new board: the first game goes on from
-    the last step's board, with its full key (2026-11-09, Khizri: «Хочется,
+    the last step's board, with its remaining sweeps (2026-11-09, Khizri: «Хочется,
     чтобы игра продолжалась дальше с тем же набором и с той же доской»).
-    Step 6 leaves 48, a 6 with a 3 under it and two 1s; the first tray holds
-    a 2 and two 1s (fixed, so the opening is the same for everyone), so the first thing the player can do alone is what step 4
+    Step 7 leaves 48, a 6 with a 3 under it and a 1; the first tray holds
+    a 2 and two 1s (fixed, so the opening is the same for everyone), so the first thing the player can do alone is what step 5
     taught: lay the 2 by the 3 where it merges with nothing, then fire the 1
     between them, 1 → 3 → 6 → 12. */
 export const FIRST_TRAY: Piece[] = [piece([[0, 0, 2]]), piece([[0, 0, 1]]), piece([[0, 0, 1]])];
